@@ -1,0 +1,92 @@
+/* ModScope Springtime Theme - Simplified Core Palette */
+
+[data-theme='springtime'] {
+    /* Core Palette */
+    --color-primary: #1F4B99;
+    --color-secondary: #1D7324;
+    --color-accent: #3E7DA4;
+    --color-text: #5E9636;
+    --color-text-muted: #6CACB9;
+    --color-bg: #96BA61;
+    --color-surface: #ACD8D6;
+    --color-error: #CDDDA3;
+    --color-border: #FFFFFF;
+
+    /* Derived semantic variables */
+    --tab-active-bg: var(--color-accent);
+    --tab-active-border: var(--color-primary);
+    --tab-active-text: var(--color-text);
+    --tab-bg: var(--color-surface);
+    --tab-border: var(--color-border);
+    --tab-text: var(--color-text-muted);
+    --tab-hover: var(--color-primary);
+
+    --btn-primary-bg: var(--color-primary);
+    --btn-primary-text: #3E7DA4;
+    --btn-primary-hover: #4a7dd6;
+    --btn-primary-active: #133674;
+
+    --nav-bg: var(--color-surface);
+    --nav-border: var(--color-text-muted);
+    --nav-item-text: var(--color-text-muted);
+    --nav-item-hover: var(--color-primary);
+    --nav-item-active-bg: var(--color-secondary);
+    --nav-item-active-text: var(--color-primary);
+
+    --text-primary: var(--color-text);
+    --text-secondary: var(--color-text);
+    --text-muted: var(--color-text-muted);
+
+    --card-bg: var(--color-surface);
+    --card-border: var(--color-border);
+    --card-header-text: var(--color-text);
+    --card-body-text: var(--color-text);
+
+    --border-default: var(--color-border);
+    --border-strong: var(--color-text-muted);
+    --border-subtle: var(--color-border);
+
+    --bg-surface: var(--color-surface);
+    --bg-card: var(--color-surface);
+
+    /* Chart & Visualization Colors */
+    --chart-primary: var(--color-primary);
+    --chart-secondary: var(--color-secondary);
+    --chart-tertiary: #3E7DA4;
+    --chart-light: #6CACB9;
+    --chart-accent: var(--color-accent);
+    --chart-highlight: var(--color-error);
+
+    /* Heatmap gradient (light to dark) */
+    --heatmap-0: #adecb2;
+    --heatmap-1: #95e69d;
+    --heatmap-2: #7ce084;
+    --heatmap-3: #6ccc72;
+    --heatmap-4: #5bba63;
+    --heatmap-5: #57af5e;
+    --heatmap-6: #52a259;
+    --heatmap-7: #4d9553;
+    --heatmap-8: #1D7324;
+    --heatmap-9: #185e1d;
+
+    --spacing-xs: 2px;
+    --spacing-sm: 4px;
+    --spacing-md: 8px;
+    --spacing-lg: 12px;
+    --spacing-xl: 16px;
+
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 8px;
+
+    --shadow-sm: 0 1px 3px rgba(42, 42, 42, 0.1);
+    --shadow-md: 0 2px 8px rgba(42, 42, 42, 0.15);
+    --shadow-lg: 0 4px 16px rgba(42, 42, 42, 0.2);
+
+    /* Schedule View Semantics */
+    --summary-bg: var(--color-bg);
+    --summary-text: var(--color-text);
+    --summary-header-text: var(--color-primary);
+    --summary-border: var(--color-border);
+    --primary-contrast-text: var(--color-surface);
+}

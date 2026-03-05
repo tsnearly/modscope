@@ -1,0 +1,41 @@
+{
+    "$schema": "https://developers.reddit.com/schema/config-file.v1.json",
+    "name": "modscope",
+    "post": {
+        "dir": "dist/client",
+        "entrypoints": {
+            "default": {
+                "inline": true,
+                "entry": "dashboard.html"
+            }
+        }
+    },
+    "server": {
+        "dir": "dist/server",
+        "entry": "index.cjs"
+    },
+    "media": {
+        "dir": "assets"
+    },
+    "menu": {
+        "items": [
+            {
+                "label": "Open ModScope Dashboard",
+                "description": "View subreddit analytics and insights",
+                "location": "subreddit",
+                "forUserType": "moderator",
+                "endpoint": "/internal/menu/open-dashboard"
+            }
+        ]
+    },
+    "triggers": {
+        "onAppInstall": "/internal/on-app-install"
+    },
+    "scheduler": {
+        "tasks": {
+            "snapshot_worker": {
+                "endpoint": "/internal/tasks/snapshot_worker"
+            }
+        }
+    }
+}

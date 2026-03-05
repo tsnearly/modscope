@@ -1,0 +1,16 @@
+{
+  "snapshot_id": "uuid",
+  "subreddit": "QuizPlanetGame",
+  "timestamp": "2026-01-15T14:00:00Z",
+  "stats": {
+    "subscribers": 138233,
+    "posts_per_day": 34,
+    "comments_per_day": 415,
+    "avg_score": 6,
+    "velocity": {...}
+  },
+  "top_posts": [...],  // Top 25 only
+  "engagement_scores": [...],  // Top 25 only
+  "flair_distribution": [...],
+  "keywords": [...]
+}

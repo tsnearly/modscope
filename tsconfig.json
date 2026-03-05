@@ -1,0 +1,16 @@
+{
+  "extends": "@devvit/public-api/devvit.tsconfig.json",
+  "compilerOptions": {
+    "skipLibCheck": true,
+    "types": []
+  },
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "src/client",
+    "src/server"
+  ]
+}

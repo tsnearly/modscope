@@ -1,0 +1,379 @@
+/* ModScope - Main Styles (Theme-agnostic) */
+
+/* Import theme */
+@import '../../themes/modscopeflow-theme.css';
+@import '../../themes/clockwork-theme.css';
+@import '../../themes/frozenmist-theme.css';
+@import '../../themes/amber-theme.css';
+@import '../../themes/nocturne-theme.css';
+@import '../../themes/springtime-theme.css';
+
+/* Import table styles */
+@import './tables.css';
+
+/* Import accordion styles */
+@import './accordion.css';
+
+@import './overrides.css';
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: var(--color-bg);
+}
+
+/* Box-sizing reset only — do NOT zero out margin/padding universally.
+   That pattern beats Tailwind's @layer utilities and causes invisible padding bugs.
+   Each component is responsible for its own spacing. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: var(--color-bg);
+  color: var(--text-primary);
+  height: 100%;
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--color-bg);
+}
+
+/* App Container */
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--color-bg);
+}
+
+.content-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0;
+  /* Full bleed */
+  padding-bottom: 50px;
+  /* Just enough for tabs */
+}
+
+/* Navigation Toolbar - Primary Navigation (Top) */
+.nav-toolbar {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-start;
+  align-items: center;
+  background-color: var(--nav-bg);
+  border-bottom: 2px solid var(--nav-border);
+  padding: 4px var(--spacing-sm);
+  box-shadow: var(--shadow-md);
+  z-index: 1000;
+  min-height: 55px;
+  max-height: 55px;
+}
+
+.nav-button {
+  display: flex;
+  flex-direction: row;
+  /* Horizontal layout */
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  /* Space between icon and text */
+  padding: 8px 12px;
+  background: var(--btn-primary-bg);
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  color: var(--btn-primary-text);
+  font-size: 11px;
+  font-weight: 500;
+  min-height: 38px;
+  /* Reduced height */
+  min-width: 80px;
+  border-radius: var(--radius-md);
+}
+
+.nav-button:hover {
+  background: var(--btn-primary-hover);
+  transform: translateY(-1px);
+}
+
+.nav-button.active {
+  background: var(--nav-item-active-bg);
+  color: var(--nav-item-active-text);
+  border: 2px solid var(--border-strong);
+  font-weight: 700;
+}
+
+.nav-icon {
+  width: 16px;
+  /* Smaller icon size */
+  height: 16px;
+  object-fit: contain;
+  filter: brightness(0) invert(1);
+  transition: filter 0.3s ease;
+}
+
+.nav-button.active .nav-icon {
+  filter: none;
+}
+
+.nav-label {
+  font-size: 11px;
+  /* Slightly larger for readability */
+  text-transform: capitalize;
+  /* Cleaner look */
+  letter-spacing: 0.3px;
+  font-weight: 600;
+  color: inherit;
+  margin-top: 0;
+  /* Remove top margin from previous vertical layout */
+}
+
+/* Headers */
+.header {
+  margin-bottom: var(--spacing-md);
+}
+
+.header h1 {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-xs);
+}
+
+.subheader {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* Tab Navigation - Secondary Navigation (Bottom) */
+.tab-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  gap: var(--spacing-sm);
+  overflow-x: auto;
+  background-color: var(--tab-bg);
+  border-top: 2px solid var(--tab-border);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  box-shadow: 0 -4px 6px rgba(39, 60, 43, 0.1);
+  z-index: 998;
+}
+
+.tab-button {
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--tab-text);
+  transition: all 0.2s ease;
+  border-top: 3px solid transparent;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.tab-button:hover {
+  color: var(--tab-hover);
+}
+
+.tab-button.active {
+  color: var(--tab-active-text);
+  border-top-color: var(--tab-active-border);
+  background-color: var(--tab-active-bg);
+}
+
+/* Tab Content */
+.tab-content {
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tab-content h2 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-md);
+}
+
+.tab-content p {
+  font-size: 10px;
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-md);
+}
+
+/* Cards */
+.card {
+  background-color: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-lg);
+  margin-bottom: var(--spacing-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.card-header {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--card-header-text);
+  margin-bottom: var(--spacing-sm);
+}
+
+.card-body {
+  font-size: 10px;
+  color: var(--card-body-text);
+  margin-bottom: 0px;
+}
+
+.card-list {
+  list-style: none;
+  padding-left: 0;
+}
+
+.card-list-item {
+  font-size: 10px;
+  color: var(--text-secondary);
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.card-list-item:last-child {
+  border-bottom: none;
+}
+
+/* Buttons */
+.button-primary {
+  background-color: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
+  border: none;
+  padding: var(--spacing-sm) var(--spacing-lg);
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.button-primary:hover {
+  background-color: var(--btn-primary-hover);
+}
+
+.button-primary:active {
+  background-color: var(--btn-primary-active);
+}
+
+.button-secondary {
+  background-color: var(--btn-secondary-bg);
+  color: var(--btn-secondary-text);
+  border: 1px solid var(--border-default);
+  padding: var(--spacing-sm) var(--spacing-lg);
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.button-secondary:hover {
+  background-color: var(--btn-secondary-hover);
+}
+
+/* Alerts */
+.alert {
+  padding: var(--spacing-md);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--spacing-md);
+  border-left: 4px solid;
+}
+
+.alert-error {
+  background-color: var(--alert-error-bg);
+  border-color: var(--alert-error-border);
+  color: var(--alert-error-text);
+}
+
+.alert-warning {
+  background-color: var(--alert-warning-bg);
+  border-color: var(--alert-warning-border);
+  color: var(--alert-warning-text);
+}
+
+.alert-success {
+  background-color: var(--alert-success-bg);
+  border-color: var(--alert-success-border);
+  color: var(--alert-success-text);
+}
+
+.view-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-lg);
+}
+
+/* View Content */
+.view-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  padding: var(--spacing-lg);
+}
+
+/* About View - Inner Border */
+.about-view {
+  max-width: 100%;
+}
+
+.about-view .view-content {
+  padding: var(--spacing-lg);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .content-area {
+    padding: var(--spacing-sm);
+  }
+
+  .nav-label {
+    display: none;
+  }
+
+  .nav-button {
+    padding: var(--spacing-sm);
+  }
+
+  .tab-button {
+    font-size: 11px;
+    padding: var(--spacing-xs) var(--spacing-sm);
+  }
+}

@@ -1,0 +1,65 @@
+// Palette
+#D5D8DD
+#5CA2BE
+#135487
+#2A4353
+#989DA4
+// Tints
+#5ca2be
+#70acc5
+#83b6cc
+#96c0d3
+#a7cbdb
+#b9d5e2
+#cbdfe9
+#dceaf0
+#eef4f8
+#ffffff
+// Shades
+#5ca2be
+#528fa7
+#497c90
+#3f697a
+#365765
+#2d4650
+#24353d
+#1a252a
+#111619
+#000000
+// Tones
+#5ca2be
+#629eb7
+#689ab0
+#6d97a9
+#7193a2
+#758f9b
+#788b94
+#7b888d
+#7e8487
+#808080
+// Color Harmonies
+// complementary
+#5CA2BE
+#be785c
+// analogous
+#5CA2BE
+#5cbea9
+#5c71be
+// split complementary
+#5CA2BE
+#be5c71
+#bea95c
+// triad
+#5CA2BE
+#be5ca2
+#a2be5c
+// square
+#5CA2BE
+#a95cbe
+#be785c
+#71be5c
+// rectangle
+#5CA2BE
+#785cbe
+#be785c
+#a2be5c

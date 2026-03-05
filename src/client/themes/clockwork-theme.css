@@ -1,0 +1,92 @@
+/* ModScope Clockwork Theme - Simplified Core Palette */
+
+[data-theme='clockwork'] {
+    /* Core Palette */
+    --color-primary: #E56515;
+    --color-secondary: #FBA45C;
+    --color-accent: #CDCDCB;
+    --color-text: #2a2a2a;
+    --color-text-muted: #919599;
+    --color-bg: #F8F8F8;
+    --color-surface: #F8F8F8;
+    --color-error: #dc3545;
+    --color-border: #CDCDCB;
+
+    /* Derived semantic variables */
+    --tab-active-bg: var(--color-accent);
+    --tab-active-border: var(--color-primary);
+    --tab-active-text: var(--color-text);
+    --tab-bg: var(--color-surface);
+    --tab-border: var(--color-border);
+    --tab-text: var(--color-text-muted);
+    --tab-hover: var(--color-primary);
+
+    --btn-primary-bg: var(--color-primary);
+    --btn-primary-text: #ffffff;
+    --btn-primary-hover: #d45a10;
+    --btn-primary-active: #c34f0b;
+
+    --nav-bg: var(--color-surface);
+    --nav-border: var(--color-text-muted);
+    --nav-item-text: var(--color-text-muted);
+    --nav-item-hover: var(--color-primary);
+    --nav-item-active-bg: var(--color-secondary);
+    --nav-item-active-text: var(--color-primary);
+
+    --text-primary: var(--color-text);
+    --text-secondary: var(--color-text);
+    --text-muted: var(--color-text-muted);
+
+    --card-bg: var(--color-surface);
+    --card-border: var(--color-border);
+    --card-header-text: var(--color-text);
+    --card-body-text: var(--color-text);
+
+    --border-default: var(--color-border);
+    --border-strong: var(--color-text-muted);
+    --border-subtle: var(--color-border);
+
+    --bg-surface: var(--color-surface);
+    --bg-card: var(--color-surface);
+
+    /* Chart & Visualization Colors */
+    --chart-primary: var(--color-primary);
+    --chart-secondary: var(--color-secondary);
+    --chart-tertiary: #D4A574;
+    --chart-light: #F5D5A8;
+    --chart-accent: var(--color-accent);
+    --chart-highlight: var(--color-error);
+
+    /* Heatmap gradient (light to dark) */
+    --heatmap-0: #F8F8F8;
+    --heatmap-1: #f7e8d0;
+    --heatmap-2: #F5D5A8;
+    --heatmap-3: #f8bd82;
+    --heatmap-4: #FBA45C;
+    --heatmap-5: #f08538;
+    --heatmap-6: #E56515;
+    --heatmap-7: #d45a10;
+    --heatmap-8: #c34f0b;
+    --heatmap-9: #a04008;
+
+    --spacing-xs: 2px;
+    --spacing-sm: 4px;
+    --spacing-md: 8px;
+    --spacing-lg: 12px;
+    --spacing-xl: 16px;
+
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 8px;
+
+    --shadow-sm: 0 1px 3px rgba(42, 42, 42, 0.1);
+    --shadow-md: 0 2px 8px rgba(42, 42, 42, 0.15);
+    --shadow-lg: 0 4px 16px rgba(42, 42, 42, 0.2);
+
+    /* Schedule View Semantics */
+    --summary-bg: var(--color-bg);
+    --summary-text: var(--color-text);
+    --summary-header-text: var(--color-primary);
+    --summary-border: var(--color-border);
+    --primary-contrast-text: var(--color-surface);
+}
