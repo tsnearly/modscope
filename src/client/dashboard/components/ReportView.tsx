@@ -159,7 +159,17 @@ function ReportView({ data: propData, isPrintMode = false, onPrint, officialAcco
             new Map(allPosts.map((p: PostData) => [p.url, p])).values()
         );
 
-        const stopWords = new Set(['the', 'and', 'for', 'with', 'from', 'about', 'quiz', 'trivia', 'knowledge', 'game', 'games', 'question', 'questions', 'answer', 'answers', 'test', 'challenge', 'round', 'results', 'score', 'random', 'general', 'discussion', 'opinion', 'help', 'easy', 'medium', 'hard', 'easier', 'harder', 'easiest', 'hardest', 'advanced', 'beginner', 'level', 'levels', 'short', 'long', 'large', 'small', 'tiny', 'today', 'modern', 'classic', 'forgotten', 'popular', 'famous', 'edition', 'version', 'part', 'parts', 'series', 'episode', 'you', 'your', 'know', 'what', 'new', 'fun', 'let', 'this', 'these', 'how', 'find', 'enjoy', 'lets', 'its', 'are', 'all', 'guess', 'can', 'that', 'one', 'who', 'which', 'out', 'day', 'now', 'todays', 'name', 'play', 'start', 'top', 'old', 'quick', 'basic', 'lowest', 'weird', 'odd', 'pointless']);
+        const stopWords = new Set([
+            'a', 'an', 'the', 'and', 'for', 'with', 'got', 'here', 'from', 'about', 'quiz', 'trivia',
+            'knowledge', 'game', 'games', 'question', 'questions', 'answer', 'answers', 'test', 'challenge', 'round',
+            'results', 'score', 'random', 'general', 'discussion', 'opinion', 'help', 'easy', 'medium', 'hard', 'easier',
+            'harder', 'easiest', 'hardest', 'advanced', 'beginner', 'level', 'levels', 'short', 'long', 'large', 'small',
+            'tiny', 'today', 'modern', 'classic', 'forgotten', 'popular', 'famous', 'edition', 'version', 'part', 'parts',
+            'series', 'episode', 'you', 'your', 'know', 'what', 'new', 'fun', 'let', 'this', 'these', 'how', 'find',
+            'enjoy', 'lets', 'its', 'are', 'all', 'guess', 'can', 'that', 'one', 'who', 'which', 'out', 'day', 'now',
+            'todays', 'name', 'play', 'start', 'top', 'old', 'quick', 'basic', 'lowest', 'weird', 'odd', 'pointless',
+            'some', 'than', 'get'
+        ]);
 
         const wordCounts: Record<string, number> = {};
 
@@ -258,7 +268,10 @@ function ReportView({ data: propData, isPrintMode = false, onPrint, officialAcco
                 const bestTimes = getBestTimes();
 
                 // Calculate floor/ceiling for tooltips
-                const pool = analytics.analysis_pool;
+                const pool = excludeOfficial
+                    ? analytics.analysis_pool.filter(p => !effectiveOfficials.includes(p.author) && p.author !== officialAccount && p.author !== 'None')
+                    : analytics.analysis_pool;
+
                 const postsByDay: Record<string, number> = {};
                 const commentsByDay: Record<string, number> = {};
                 const engagementScores: number[] = [];
@@ -295,16 +308,16 @@ function ReportView({ data: propData, isPrintMode = false, onPrint, officialAcco
                                 { label: 'Subscribers', value: Number(analytics.stats.subscribers).toLocaleString(), color: 'text-foreground' },
                                 { label: 'Active Users', value: analytics.stats.active, color: 'text-foreground' },
                                 { label: 'Rules', value: analytics.stats.rules_count, color: 'text-foreground' },
-                                { label: 'Avg Vote', value: analytics.stats.avg_votes, color: '--accent-foreground:', title: `Min: ${minVote} | Max: ${maxVote}` },
+                                { label: 'Avg Score', value: analytics.stats.avg_score, color: '--accent-foreground:', title: `Min: ${minVote} | Max: ${maxVote}` },
                                 { label: 'Posts/Day', value: analytics.stats.posts_per_day, color: 'text-foreground', title: `Min: ${minPosts} | Max: ${maxPosts}` },
                                 { label: 'Comments/Day', value: analytics.stats.comments_per_day, color: 'text-foreground', title: `Min: ${minComments} | Max: ${maxComments}` },
                                 {
                                     label: 'Velocity',
-                                    value: `${analytics.stats.velocity.combined_velocity}/hr`,
+                                    value: `${analytics.stats.combined_velocity}/hr`,
                                     color: '--accent-foreground:',
-                                    title: `Score: ${analytics.stats.velocity.score_velocity}/hr | Comments: ${analytics.stats.velocity.comment_velocity}/hr`,
+                                    title: `Score: ${analytics.stats.score_velocity}/hr | Comments: ${analytics.stats.comment_velocity}/hr`,
                                 },
-                                { label: 'Avg Score', value: avgScore, color: '--accent-foreground:', title: `Min: ${minScore} | Max: ${maxScore}` }
+                                { label: 'Avg Engagement', value: avgScore, color: '--accent-foreground:', title: `Min: ${minScore} | Max: ${maxScore}` }
                             ].map((metric, idx) => (
                                 <TooltipProvider key={idx} delayDuration={200}>
                                     <TooltipRoot>
@@ -767,21 +780,21 @@ function ReportView({ data: propData, isPrintMode = false, onPrint, officialAcco
 
                         <Chart
                             title="Velocity Breakdown"
-                            icon={<Icon src={getDataGroupingIcon('velocity_breakdown', iconContext)} color={iconContext === 'printed' ? '#ef4444' : undefined} size={16} />}
+                            icon={<Icon src={getDataGroupingIcon('velocity_breakdown', iconContext)} {...(iconContext === 'printed' ? { color: '#ef4444' } : {})} size={16} />}
                             height="auto"
                             className="shrink-0"
                         >
                             <div className="p-4 flex gap-4 justify-around">
                                 <div style={{ textAlign: 'center' }}>
-                                    <div className="text-2xl font-bold text-foreground">{analytics.stats.velocity.score_velocity.toFixed(2)}</div>
+                                    <div className="text-2xl font-bold text-foreground">{analytics.stats.score_velocity.toFixed(2)}</div>
                                     <div className="text-xs text-muted-foreground">Score Velocity</div>
                                 </div>
                                 <div style={{ textAlign: 'center' }}>
-                                    <div className="text-2xl font-bold text-foreground">{analytics.stats.velocity.comment_velocity.toFixed(2)}</div>
+                                    <div className="text-2xl font-bold text-foreground">{analytics.stats.comment_velocity.toFixed(2)}</div>
                                     <div className="text-xs text-muted-foreground">Comment Velocity</div>
                                 </div>
                                 <div style={{ textAlign: 'center' }}>
-                                    <div className="text-2xl font-bold text-foreground">{analytics.stats.velocity.combined_velocity.toFixed(2)}</div>
+                                    <div className="text-2xl font-bold text-foreground">{analytics.stats.combined_velocity.toFixed(2)}</div>
                                     <div className="text-xs text-muted-foreground">Combined</div>
                                 </div>
                             </div>
@@ -1029,11 +1042,11 @@ function ReportView({ data: propData, isPrintMode = false, onPrint, officialAcco
                                     { label: 'Subscribers', value: Number(analytics.stats.subscribers).toLocaleString() },
                                     { label: 'Active Users', value: analytics.stats.active },
                                     { label: 'Rules', value: analytics.stats.rules_count },
-                                    { label: 'Avg Vote', value: analytics.stats.avg_votes, color: 'text-blue-700' },
+                                    { label: 'Avg Score', value: analytics.stats.avg_score, color: 'text-blue-700' },
                                     { label: 'Posts/Day', value: analytics.stats.posts_per_day },
                                     { label: 'Comments/Day', value: analytics.stats.comments_per_day },
-                                    { label: 'Velocity (24h)', value: `${analytics.stats.velocity.combined_velocity}/hr` },
-                                    { label: 'Avg Score', value: printAvgScore, color: 'text-blue-700' }
+                                    { label: 'Velocity (24h)', value: `${analytics.stats.combined_velocity}/hr` },
+                                    { label: 'Avg Engagement', value: printAvgScore, color: 'text-blue-700' }
                                 ].map((m, i) => (
                                     <div key={i} className="flex flex-col justify-center items-center py-4 px-2 border-l-4 border-slate-200 bg-slate-50/50">
                                         <div className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">{m.label}</div>
