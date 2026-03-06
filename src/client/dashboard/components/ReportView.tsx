@@ -81,14 +81,12 @@ function ReportView({ data: propData, isPrintMode = false, onPrint, officialAcco
 
     // Calculate best posting times
     const getBestTimes = () => {
-        if (!analytics.lists) return [];
-        const allPosts = [
-            ...(analytics.lists.top_posts || []),
-            ...(analytics.lists.most_discussed || []),
-            ...(analytics.lists.most_engaged || [])
-        ];
+        if (!analytics.analysis_pool || analytics.analysis_pool.length === 0) return [];
 
-        const timeStats: Record<string, { scores: number[]; day: string; hour: number }> = {};
+        // Use the full pool rather than just top 25 lists to find accurate averages
+        const allPosts = analytics.analysis_pool;
+
+        const timeStats: Record<string, { engagement_scores: number[]; day: string; hour: number }> = {};
 
         allPosts.forEach(post => {
             const dt = new Date(post.created_utc * 1000);
@@ -98,19 +96,38 @@ function ReportView({ data: propData, isPrintMode = false, onPrint, officialAcco
 
             const dayStr = day || 'Unknown'; // Ensure day is always a string
             if (!timeStats[key]) {
-                timeStats[key] = { scores: [], day: dayStr, hour };
+                timeStats[key] = { engagement_scores: [], day: dayStr, hour };
             }
-            timeStats[key]!.scores.push(post.score);
+            // Use engagement score if available since UI labels it "historical engagement scores"
+            timeStats[key]!.engagement_scores.push(post.engagement_score !== undefined ? post.engagement_score : post.score);
         });
 
-        const avgStats = Object.values(timeStats).map(stat => ({
-            day: stat.day,
-            hour: stat.hour,
-            hour_fmt: `${stat.hour % 12 || 12} ${stat.hour < 12 ? 'AM' : 'PM'}`,
-            score: Math.round(stat.scores.reduce((a, b) => a + b, 0) / stat.scores.length)
-        }));
+        const maxPostsInSlot = Math.max(...Object.values(timeStats).map(s => s.engagement_scores.length), 1);
+        // Require a reasonable sample size if the subreddit is highly active
+        const targetMinPosts = Math.max(2, Math.floor(maxPostsInSlot * 0.15));
 
-        return avgStats.sort((a, b) => b.score - a.score).slice(0, 3);
+        let avgStats = Object.values(timeStats).map(stat => {
+            const avgScore = stat.engagement_scores.reduce((a, b) => a + b, 0) / stat.engagement_scores.length;
+            const count = stat.engagement_scores.length;
+
+            // Weight the score by confidence (volume of posts) to prevent 1-post wonders from dominating
+            const confidence = Math.min(count / targetMinPosts, 1);
+            const sortWeight = avgScore * confidence;
+
+            return {
+                day: stat.day,
+                hour: stat.hour,
+                hour_fmt: `${stat.hour % 12 || 12} ${stat.hour < 12 ? 'AM' : 'PM'}`,
+                score: Math.round(avgScore),
+                sortWeight,
+                count
+            };
+        });
+
+        // Sort by our volume-weighted metric
+        avgStats = avgStats.sort((a, b) => b.sortWeight - a.sortWeight).slice(0, 3);
+
+        return avgStats;
     };
 
     // Calculate activity heatmap
