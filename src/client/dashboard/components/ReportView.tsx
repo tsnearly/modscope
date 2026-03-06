@@ -308,16 +308,16 @@ function ReportView({ data: propData, isPrintMode = false, onPrint, officialAcco
                                 { label: 'Subscribers', value: Number(analytics.stats.subscribers).toLocaleString(), color: 'text-foreground' },
                                 { label: 'Active Users', value: analytics.stats.active, color: 'text-foreground' },
                                 { label: 'Rules', value: analytics.stats.rules_count, color: 'text-foreground' },
-                                { label: 'Avg Score', value: analytics.stats.avg_score, color: '--accent-foreground:', title: `Min: ${minVote} | Max: ${maxVote}` },
-                                { label: 'Posts/Day', value: analytics.stats.posts_per_day, color: 'text-foreground', title: `Min: ${minPosts} | Max: ${maxPosts}` },
-                                { label: 'Comments/Day', value: analytics.stats.comments_per_day, color: 'text-foreground', title: `Min: ${minComments} | Max: ${maxComments}` },
+                                { label: 'Avg Score', value: analytics.stats.avg_score, color: '--accent-foreground:', title: `Lowest Post: ${minVote} | Highest Post: ${maxVote}` },
+                                { label: 'Posts/Day', value: analytics.stats.posts_per_day, color: 'text-foreground', title: `Lowest Day: ${minPosts} | Highest Day: ${maxPosts}` },
+                                { label: 'Comments/Day', value: analytics.stats.comments_per_day, color: 'text-foreground', title: `Lowest Day: ${minComments} | Highest Day: ${maxComments}` },
                                 {
                                     label: 'Velocity',
                                     value: `${analytics.stats.combined_velocity}/hr`,
                                     color: '--accent-foreground:',
                                     title: `Score: ${analytics.stats.score_velocity}/hr | Comments: ${analytics.stats.comment_velocity}/hr`,
                                 },
-                                { label: 'Avg Engagement', value: avgScore, color: '--accent-foreground:', title: `Min: ${minScore} | Max: ${maxScore}` }
+                                { label: 'Avg Engagement', value: avgScore, color: '--accent-foreground:', title: `Lowest Post: ${minScore} | Highest Post: ${maxScore}` }
                             ].map((metric, idx) => (
                                 <TooltipProvider key={idx} delayDuration={200}>
                                     <TooltipRoot>
