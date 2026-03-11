@@ -16,7 +16,13 @@ A native, data-driven community insight and moderation assistant developed for R
 
 ### Step 1: Select your Subreddit Preset
 Navigate to the **Settings** tab in the upper menu. 
-Here, you will find the configuration engine where you can choose between community archetypes (Discussion, Image/Meme, Gaming, Support/Help, News). This dictates what ModScope values algorithmically when processing data to distinguish what "quality" engagement looks like for your specific community. 
+Here, you will find the configuration engine where you can choose between community archetypes. This dictates what ModScope values algorithmically when processing data to distinguish what "quality" engagement looks like for your specific community. 
+
+- **Discussion-Heavy**: Heavily weights deep comment trees and sustained debate. Suppresses simple image upvotes.
+- **Image/Meme**: Prioritizes upvote velocity and visual engagement front-page churn, scaling back the requirement for deep comments.
+- **Gaming**: A balanced matrix for subreddits that mix media/image drops with intense patch-note discussions.
+- **Support/Help**: Focuses heavily on OP participation and resolution, rewarding deep question-and-answer chains.
+- **News**: Tracks velocity and controversial chatter to identify breaking events before they hit the front page.
 
 While the preset handles most configuration for you, you can select the **"Custom"** preset to unlock and override individual settings like "Comment Weight" or "Logarithmic Decay". If you make any changes, **you must press the Save button** at the top right of the view page to apply them.
 
@@ -27,9 +33,11 @@ While you can click **"Initiate Snapshot Now"** to immediately generate a report
 
 To create an automated schedule:
 1. Click **"New Job"**.
-2. Select a daily time to execute the snapshot.
+2. Select a daily time to execute the snapshot. ModScope automatically converts your local browser time into the required server time.
 3. Choose how many days to retain the snapshot data.
 4. Press the **"Initialize Schedule"** button.
+
+*Tip: **Daily** scanning is recommended for 90% of communities to catch daily peaks. **Every 12 Hours** is for incredibly active subreddits with high front-page churn. **Weekly** is a low-impact setting for smaller communities looking for long-term health metrics.*
 
 Once scheduled, jobs appear in the Active Jobs section where they can be **Edited** or **Canceled** at any time using the action buttons.
 
@@ -61,7 +69,7 @@ If you want to quickly check the current status of the app, open the **About** v
 
 ---
 
-### Bonus: Theming
+### Bonus: Themes
 
 ModScope supports a custom UI engine designed for different modding environments. Open the Settings panel, click the **Theme** section and choose between custom profiles such as:
 - **Nocturne** (for low-light late-night queue clears)
