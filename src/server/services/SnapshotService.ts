@@ -52,13 +52,11 @@ export class SnapshotService {
                 rules_count: rules_count,
                 posts_per_day: 0,
                 comments_per_day: 0,
-                avg_score: 0,
-                avg_votes: 0, // Changed from avg_votes to avg_upvotes to match original
-                velocity: {
-                    score_velocity: 0,
-                    comment_velocity: 0,
-                    combined_velocity: 0
-                },
+                avg_engagement: 0, // Calculates engagement based on settings
+                avg_score: 0,      // Raw Reddit upvote score
+                score_velocity: 0,
+                comment_velocity: 0,
+                combined_velocity: 0,
                 created: about.createdAt ? new Date(about.createdAt).toLocaleDateString('en-US', {
                     month: 'short', day: '2-digit', year: 'numeric'
                 }) : 'Unknown'
@@ -109,9 +107,17 @@ export class SnapshotService {
             [...allNew, ...allTop, ...allHot].forEach(p => uniquePosts.set(p.id, p));
 
             // Devvit Post#createdAt is a Date object — convert to unix seconds for comparison
+            const botList = ['AutoModerator', 'reddit', 'redditads']; // Basic bot list
             const poolRaw = Array.from(uniquePosts.values()).filter(p => {
                 const postSec = p.createdAt instanceof Date ? Math.floor(p.createdAt.getTime() / 1000) : (p.createdUtc || 0);
-                return postSec > cutoffSec;
+                if (postSec <= cutoffSec) return false;
+
+                const author = p.authorName || '';
+                if (settings.excludeBots && botList.includes(author)) return false;
+                if (settings.excludeOfficial && officialAccounts.includes(author)) return false;
+                if (settings.excludeUsers && settings.excludeUsers.includes(author)) return false;
+
+                return true;
             });
 
             // Separate posts into deep-analysis (top N by engagement signals) and shallow (metadata only).
@@ -160,7 +166,7 @@ export class SnapshotService {
                             // Devvit's getComments returns a nested tree. We flatten it recursively,
                             // tracking depth during traversal (not post-hoc) for accuracy.
                             const allComments: { comment: any; depth: number }[] = [];
-                            const scanDepthMax = settings.depthMax || DEFAULT_CALCULATION_SETTINGS.fetchDepth;
+                            const scanDepthMax = settings.fetchDepth || DEFAULT_CALCULATION_SETTINGS.fetchDepth;
                             const flattenReplies = async (listing: any, depth: number) => {
                                 if (allComments.length >= 100 || depth > scanDepthMax) return;
                                 try {
@@ -281,8 +287,8 @@ export class SnapshotService {
             const totalPosts = analysisPool.length;
             stats.posts_per_day = totalPosts > 0 ? Math.round(totalPosts / 30) : 0;
             stats.comments_per_day = totalPosts > 0 ? Math.round(totalComments / 30) : 0;
-            stats.avg_score = totalPosts > 0 ? Math.round(totalEngagement / totalPosts) : 0;
-            stats.avg_votes = totalPosts > 0 ? parseFloat((totalScore / totalPosts).toFixed(2)) : 0;
+            stats.avg_engagement = totalPosts > 0 ? Math.round(totalEngagement / totalPosts) : 0;
+            stats.avg_score = totalPosts > 0 ? parseFloat((totalScore / totalPosts).toFixed(2)) : 0;
 
             const recent24h = analysisPool.filter(p => (nowSec - p.created_utc) < 86400);
             if (recent24h.length > 0) {
@@ -293,9 +299,9 @@ export class SnapshotService {
                     totalSv += p.score / age;
                     totalCv += p.comments / age;
                 });
-                stats.velocity.score_velocity = parseFloat((totalSv / recent24h.length).toFixed(2));
-                stats.velocity.comment_velocity = parseFloat((totalCv / recent24h.length).toFixed(2));
-                stats.velocity.combined_velocity = parseFloat((stats.velocity.score_velocity + stats.velocity.comment_velocity).toFixed(2));
+                stats.score_velocity = parseFloat((totalSv / recent24h.length).toFixed(2));
+                stats.comment_velocity = parseFloat((totalCv / recent24h.length).toFixed(2));
+                stats.combined_velocity = parseFloat((stats.score_velocity + stats.comment_velocity).toFixed(2));
             }
 
             // 5. Generate Lists — all derived from existing data (no additional API calls)
@@ -325,26 +331,26 @@ export class SnapshotService {
             };
 
             // Hot: derived from the initial allHot fetch (already in memory)
-            const hotList = allHot.slice(0, 25).map(rawToPostData);
+            const hotList = allHot.slice(0, 100).map(rawToPostData);
 
             // Rising: recent posts (last 48h) sorted by score velocity
             const risingList = [...analysisPool]
                 .filter(p => (nowSec - p.created_utc) < 172800) // last 48h
                 .map(p => ({ post: p, velocity: p.score / Math.max(0.5, (nowSec - p.created_utc) / 3600) }))
                 .sort((a, b) => b.velocity - a.velocity)
-                .slice(0, 25)
+                .slice(0, 100)
                 .map(v => v.post);
 
             // Controversial: high comment-to-score ratio (lots of discussion relative to upvotes)
             const controversialList = [...analysisPool]
                 .filter(p => p.score > 0 && p.comments > 0)
                 .sort((a, b) => (b.comments / b.score) - (a.comments / a.score))
-                .slice(0, 25);
+                .slice(0, 100);
 
             const lists: PostLists = {
-                top_posts: [...analysisPool].sort((a, b) => b.score - a.score).slice(0, 25),
-                most_discussed: [...analysisPool].sort((a, b) => b.comments - a.comments).slice(0, 25),
-                most_engaged: [...analysisPool].sort((a, b) => b.engagement_score - a.engagement_score).slice(0, 25),
+                top_posts: [...analysisPool].sort((a, b) => b.score - a.score).slice(0, 100),
+                most_discussed: [...analysisPool].sort((a, b) => b.comments - a.comments).slice(0, 100),
+                most_engaged: [...analysisPool].sort((a, b) => b.engagement_score - a.engagement_score).slice(0, 100),
                 rising: risingList,
                 hot: hotList,
                 controversial: controversialList

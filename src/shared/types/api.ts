@@ -26,13 +26,11 @@ export type SubredditStats = {
   rules_count: number;
   posts_per_day: number;
   comments_per_day: number;
+  avg_engagement: number;
   avg_score: number;
-  avg_votes: number;
-  velocity: {
-    score_velocity: number;
-    comment_velocity: number;
-    combined_velocity: number;
-  };
+  score_velocity: number;
+  comment_velocity: number;
+  combined_velocity: number;
   created: string;
 };
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { EntityTitle } from './ui/entity-title';
 import { Button } from './ui/button';
 import { Switch } from './ui/switch';
@@ -17,32 +17,37 @@ interface ConfigViewProps {
 
 function ConfigView({ initialConfig }: ConfigViewProps) {
     const { changeTheme } = useTheme();
-    const { settings, updateSettings } = useSettings();
+    const { settings, loading: settingsLoading, updateSettings } = useSettings();
     const [localSettings, setLocalSettings] = useState<{ settings: CalculationSettings, display: UserSettings }>(() => {
-        if (initialConfig?.settings && initialConfig?.display) return initialConfig;
+        if (initialConfig?.settings) {
+            return {
+                settings: { ...DEFAULT_CALCULATION_SETTINGS, ...initialConfig.settings },
+                display: initialConfig.display ? { ...DEFAULT_USER_SETTINGS, ...initialConfig.display } : DEFAULT_USER_SETTINGS
+            };
+        }
         return { settings: DEFAULT_CALCULATION_SETTINGS, display: DEFAULT_USER_SETTINGS };
     });
     const [loading, setLoading] = useState(false);
     const [isDirty, setIsDirty] = useState(false);
+    const hasAppliedServerSettings = useRef(false);
 
     useEffect(() => {
-        if (settings) {
-            // Apply defensive merging to ensure new fields are present
-            setLocalSettings(_prev => {
-                const merged = {
-                    settings: {
-                        ...DEFAULT_CALCULATION_SETTINGS,
-                        ...(settings.settings || {})
-                    },
-                    display: {
-                        ...DEFAULT_USER_SETTINGS,
-                        ...(settings.display || {})
-                    }
-                };
-                return merged;
-            });
+        // Only apply server-fetched settings once the fetch completes (loading=false),
+        // and never again within the same mount (prevents overwriting user edits after save).
+        if (!settingsLoading && settings && !hasAppliedServerSettings.current) {
+            hasAppliedServerSettings.current = true;
+            setLocalSettings(_prev => ({
+                settings: {
+                    ...DEFAULT_CALCULATION_SETTINGS,
+                    ...(settings.settings || {})
+                },
+                display: {
+                    ...DEFAULT_USER_SETTINGS,
+                    ...(settings.display || {})
+                }
+            }));
         }
-    }, [settings]);
+    }, [settingsLoading, settings]);
 
     const handleCalcChange = <K extends keyof CalculationSettings>(key: K, value: CalculationSettings[K]) => {
         setLocalSettings(prev => {
@@ -50,8 +55,8 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
             const nextSettings = { ...(prev?.settings || DEFAULT_CALCULATION_SETTINGS), [key]: value };
 
             // Only allow non-preset changes when in custom mode
-            if (key !== 'preset') {
-                if (nextSettings.preset !== 'custom') return prev; // silently block
+            if (key !== 'id') {
+                if (nextSettings.id !== 'custom') return prev; // silently block
                 // already custom — no preset flip needed
             }
             return { ...prev, settings: nextSettings };
@@ -70,20 +75,21 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
 
     const handlePresetChange = (preset: AnalysisPreset) => {
         if (preset === 'custom') {
-            handleCalcChange('preset', preset);
+            handleCalcChange('id', preset);
             return;
         }
 
         // Apply preset defaults based on the exported PRESETS
         const presetDef = PRESETS.find(p => p.id === preset);
         const newCalcSettings: Partial<CalculationSettings> = {
-            preset,
+            id: preset,
             ...(presetDef?.weights || {})
         };
 
         setLocalSettings(prev => ({
             ...prev,
-            settings: { ...prev.settings, ...newCalcSettings }
+            settings: { ...prev.settings, ...newCalcSettings },
+            storage: { ...prev.storage, ...(presetDef?.storage || {}) } as StorageSettings
         }));
         setIsDirty(true);
     };
@@ -104,8 +110,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
         setIsDirty(true);
     };
 
-
-    const isCustom = localSettings?.settings?.preset === 'custom';
+    const isCustom = localSettings?.settings?.id === 'custom';
 
     return (
         <div className="config-view h-full flex flex-col bg-muted text-left">
@@ -139,7 +144,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                                             <label className="text-sm font-semibold text-gray-900 block mb-1">Community Preset</label>
                                             <p className="text-xs text-gray-500 mb-3">Load a pre-configured analysis strategy optimized for specific subreddit types.</p>
                                             <Select
-                                                value={localSettings?.settings?.preset ?? 'discussion'}
+                                                value={localSettings?.settings?.id ?? 'discussion'}
                                                 onValueChange={(val) => handlePresetChange(val as AnalysisPreset)}
                                             >
                                                 <SelectTrigger className="w-full">
@@ -157,7 +162,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                                         <div className="p-3 bg-primary/10 rounded-md border border-primary/30">
                                             <p className="text-xs text-primary-foreground font-medium" style={{ color: 'var(--color-text)' }}>
                                                 <span className="font-bold">Current Mode: </span>
-                                                {PRESETS.find(p => p.id === (localSettings?.settings?.preset))?.desc || 'Custom settings'}
+                                                {PRESETS.find(p => p.id === (localSettings?.settings?.id))?.desc || 'Custom settings'}
                                             </p>
                                         </div>
                                     </div>
@@ -176,18 +181,18 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                                             <span className="w-1 h-4 rounded-full" style={{ backgroundColor: 'var(--color-secondary)' }}></span>
                                             Scoring Factors
                                         </h3>
-                                        <div className="space-y-6">
+                                        <div className="space-y-3">
                                             {/* Comment Weight */}
-                                            <div className="px-6 py-4 bg-gray-50 rounded-lg border border-gray-100">
+                                            <div className="px-4 py-3 bg-gray-50 rounded-lg border border-gray-100">
                                                 <div className="flex justify-between items-center mb-2">
                                                     <label className="text-xs font-semibold text-gray-700 uppercase">Comment Weight</label>
                                                     <span className="text-xs font-bold px-2 py-1 rounded">{localSettings?.settings?.commentWeight ?? 1}x</span>
                                                 </div>
                                                 <input
                                                     type="range"
-                                                    min="0.1" max="10" step="0.1"
-                                                    value={localSettings?.settings?.commentWeight ?? 1}
-                                                    onChange={(e) => handleCalcChange('commentWeight', parseFloat(e.target.value))}
+                                                    min="1" max="10" step="1"
+                                                    value={localSettings?.settings?.commentWeight ?? 8}
+                                                    onChange={(e) => handleCalcChange('commentWeight', parseInt(e.target.value))}
                                                     className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600 mb-1"
                                                 />
                                                 <div className="flex justify-between text-[10px] text-gray-400 font-medium font-mono">
@@ -198,16 +203,16 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                                             </div>
 
                                             {/* Upvote Weight */}
-                                            <div className="px-6 py-4 bg-gray-50 rounded-lg border border-gray-100">
+                                            <div className="px-4 py-3 bg-gray-50 rounded-lg border border-gray-100">
                                                 <div className="flex justify-between items-center mb-2">
                                                     <label className="text-xs font-semibold text-gray-700 uppercase">Upvote Weight</label>
                                                     <span className="text-xs font-bold px-2 py-1 rounded">{localSettings?.settings?.upvoteWeight ?? 1}x</span>
                                                 </div>
                                                 <input
                                                     type="range"
-                                                    min="0.1" max="10" step="0.1"
+                                                    min="1" max="10" step="1"
                                                     value={localSettings?.settings?.upvoteWeight ?? 1}
-                                                    onChange={(e) => handleCalcChange('upvoteWeight', parseFloat(e.target.value))}
+                                                    onChange={(e) => handleCalcChange('upvoteWeight', parseInt(e.target.value))}
                                                     className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600 mb-1"
                                                 />
                                                 <div className="flex justify-between text-[10px] text-gray-400 font-medium font-mono">
@@ -218,7 +223,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                                             </div>
 
                                             {/* Velocity Configuration */}
-                                            <div className="px-6 py-4 bg-gray-50 rounded-lg border border-gray-100">
+                                            <div className="px-4 py-3 bg-gray-50 rounded-lg border border-gray-100">
                                                 <div className="flex justify-between items-center mb-4">
                                                     <label className="text-xs font-semibold text-gray-700 uppercase">Velocity Impact</label>
                                                     <div className="flex gap-2">
@@ -235,8 +240,8 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                                                         </div>
                                                         <input
                                                             type="range"
-                                                            min="1" max="48" step="1"
-                                                            value={localSettings?.settings?.velocityHours ?? 24}
+                                                            min="3" max="72" step="1"
+                                                            value={localSettings?.settings?.velocityHours ?? 48}
                                                             onChange={(e) => handleCalcChange('velocityHours', parseInt(e.target.value))}
                                                             className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-400"
                                                         />
@@ -248,8 +253,8 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                                                         </div>
                                                         <input
                                                             type="range"
-                                                            min="1" max="3" step="0.1"
-                                                            value={localSettings?.settings?.velocityWeight ?? 1.5}
+                                                            min="0.5" max="4.0" step="0.25"
+                                                            value={localSettings?.settings?.velocityWeight ?? 1.3}
                                                             onChange={(e) => handleCalcChange('velocityWeight', parseFloat(e.target.value))}
                                                             className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-400"
                                                         />
@@ -258,15 +263,15 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                                             </div>
 
                                             {/* Creator Bonus */}
-                                            <div className="px-6 py-4 bg-gray-50 rounded-lg border border-gray-100">
+                                            <div className="px-4 py-3 bg-gray-50 rounded-lg border border-gray-100">
                                                 <div className="flex justify-between items-center mb-2">
                                                     <label className="text-xs font-semibold text-gray-700 uppercase">Creator Bonus</label>
                                                     <span className="text-xs font-bold px-2 py-1 rounded">+{localSettings?.settings?.creatorBonus ?? 5} pts</span>
                                                 </div>
                                                 <input
                                                     type="range"
-                                                    min="0" max="10" step="1"
-                                                    value={localSettings?.settings?.creatorBonus ?? 5}
+                                                    min="0" max="15" step="1"
+                                                    value={localSettings?.settings?.creatorBonus ?? 10}
                                                     onChange={(e) => handleCalcChange('creatorBonus', parseInt(e.target.value))}
                                                     className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600 mb-1"
                                                 />
@@ -278,7 +283,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                                             </div>
 
                                             {/* Depth Scaling */}
-                                            <div className="px-6 py-4 bg-gray-50 rounded-lg border border-gray-100">
+                                            <div className="px-4 py-3 bg-gray-50 rounded-lg border border-gray-100">
                                                 <label className="text-xs font-semibold text-gray-700 uppercase block mb-3">Engagement Decay</label>
                                                 <RadioGroup
                                                     value={localSettings?.settings?.depthScaling ?? 'logarithmic'}
@@ -303,21 +308,22 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                                                                                     method === 'logarithmic' ? localSettings?.settings?.depthLogarithmic :
                                                                                         localSettings?.settings?.depthExponential;
                                                                                 if (val === undefined) return '0';
-                                                                                if (method === 'logarithmic') return (val / 10).toFixed(1);
-                                                                                return (val / 100).toFixed(2);
+                                                                                return method === 'exponential' ? val : Number(val).toFixed(2);
                                                                             })()}</span>
                                                                         </div>
                                                                         <input
                                                                             type="range"
-                                                                            min="1" max={method === 'linear' ? "50" : "25"} step="1"
+                                                                            min={method === 'exponential' ? "5" : "0.1"}
+                                                                            max={method === 'exponential' ? "25" : "0.5"}
+                                                                            step={method === 'exponential' ? "1" : "0.05"}
                                                                             value={(method === 'linear' ? localSettings?.settings?.depthLinear :
                                                                                 method === 'logarithmic' ? localSettings?.settings?.depthLogarithmic :
-                                                                                    localSettings?.settings?.depthExponential) ?? 0}
+                                                                                    localSettings?.settings?.depthExponential) ?? (method === 'exponential' ? 5 : 0.1)}
                                                                             onChange={(e) => handleCalcChange(
                                                                                 method === 'linear' ? 'depthLinear' :
                                                                                     method === 'logarithmic' ? 'depthLogarithmic' :
                                                                                         'depthExponential',
-                                                                                parseInt(e.target.value)
+                                                                                method === 'exponential' ? parseInt(e.target.value) : parseFloat(e.target.value)
                                                                             )}
                                                                             className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary"
                                                                         />
@@ -325,12 +331,12 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                                                                     <div>
                                                                         <div className="flex justify-between text-[10px] text-gray-500 mb-1">
                                                                             <span>Maximum Depth Cap</span>
-                                                                            <span>{localSettings?.settings?.depthMax ?? 3} Levels</span>
+                                                                            <span>{localSettings?.settings?.depthMax ?? 20} Levels</span>
                                                                         </div>
                                                                         <input
                                                                             type="range"
-                                                                            min="1" max="5" step="1"
-                                                                            value={localSettings?.settings?.depthMax ?? 3}
+                                                                            min="3" max="50" step="1"
+                                                                            value={localSettings?.settings?.depthMax ?? 20}
                                                                             onChange={(e) => handleCalcChange('depthMax', parseInt(e.target.value))}
                                                                             className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary"
                                                                         />
@@ -352,12 +358,12 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                         <Section title="Data Scope" icon="lucide:layers">
                             <SectionCard>
                                 <form>
-                                    <div className="space-y-6">
+                                    <div className="space-y-3">
                                         {/* Fetch Depth */}
-                                        <div className="px-6 py-4 bg-gray-50 rounded-lg border border-gray-100">
+                                        <div className="px-4 py-3 bg-gray-50 rounded-lg border border-gray-100">
                                             <div className="flex justify-between items-center mb-2">
                                                 <label className="text-sm font-semibold text-gray-900">Scanning Depth</label>
-                                                <span className="text-xs font-bold px-2 py-1 rounded">{localSettings?.settings?.fetchDepth ?? 3} Levels</span>
+                                                <span className="text-xs font-bold px-2 py-1 rounded shadow-sm border border-gray-200 bg-white">{['Fast', 'Light', 'Balanced', 'Thorough', 'Complete'][(localSettings?.settings?.fetchDepth ?? 3) - 1] || 'Balanced'}</span>
                                             </div>
                                             <p className="text-xs text-gray-500 mb-3 block">Maximum depth of nested comment trees to fetch.</p>
                                             <input
@@ -374,7 +380,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                                         </div>
 
                                         {/* Analysis Days */}
-                                        <div className="px-6 py-4 bg-gray-50 rounded-lg border border-gray-100">
+                                        <div className="px-4 py-3 bg-gray-50 rounded-lg border border-gray-100">
                                             <div className="flex justify-between items-center mb-2">
                                                 <label className="text-sm font-semibold text-gray-900">Analysis Window</label>
                                             </div>
@@ -382,7 +388,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                                             <div className="flex items-center gap-3">
                                                 <input
                                                     type="number"
-                                                    min="1" max="365"
+                                                    min="7" max="90" step="1"
                                                     value={localSettings?.settings?.analysisDays ?? 30}
                                                     onChange={(e) => handleCalcChange('analysisDays', parseInt(e.target.value))}
                                                     className="w-20 px-3 py-1.5 border border-gray-300 rounded text-sm font-semibold"
@@ -400,7 +406,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                                                 Filters & Exclusions
                                             </h3>
 
-                                            <div className="flex items-center justify-between px-6 py-4 bg-gray-50 rounded-lg border border-gray-100">
+                                            <div className="flex items-center justify-between px-4 py-3 bg-gray-50 rounded-lg border border-gray-100">
                                                 <div>
                                                     <span className="text-xs font-medium text-gray-800 block">Ignore Official Accounts</span>
                                                     <span className="text-[10px] text-gray-500">Exclude moderators and admin posts.</span>
@@ -411,7 +417,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                                                 />
                                             </div>
 
-                                            <div className="flex items-center justify-between px-6 py-4 bg-gray-50 rounded-lg border border-gray-100">
+                                            <div className="flex items-center justify-between px-4 py-3 bg-gray-50 rounded-lg border border-gray-100">
                                                 <div>
                                                     <span className="text-xs font-medium text-gray-800 block">Ignore Bots</span>
                                                     <span className="text-[10px] text-gray-500">Exclude known bot accounts.</span>

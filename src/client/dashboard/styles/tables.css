@@ -6,6 +6,7 @@
     background-color: var(--bg-surface);
     border-radius: var(--radius-md);
     overflow: hidden;
+    overflow-x: auto;
 }
 
 .data-table thead {

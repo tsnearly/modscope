@@ -1,38 +1,125 @@
+export const FetchDepth = [
+    { value: 1, label: 'fast', limit: 1 },
+    { value: 2, label: 'light', limit: 8 },
+    { value: 3, label: 'balanced', limit: 16 },
+    { value: 4, label: 'thorough', limit: 32 },
+    { value: 5, label: 'complete', limit: 0 }
+];
 export const PRESETS = [
     {
         id: 'discussion',
         label: 'Discussion-Heavy',
-        desc: 'Prioritizes comments and text depth',
-        weights: { commentWeight: 7, upvoteWeight: 1, depthScaling: 'logarithmic' }
+        desc: 'Comments and thread depth define success here.',
+        weights: {
+            commentWeight: 8,
+            upvoteWeight: 1,
+            depthScaling: 'logarithmic',
+            depthLogarithmic: 0.35,
+            depthMax: 20,
+            fetchDepth: 4,
+            creatorBonus: 10,
+            velocityHours: 48,
+            velocityWeight: 1.3,
+            analysisPoolSize: 25,
+            analysisDays: 30
+        },
+        storage: {
+            snapshotFrequency: 'daily',
+            retentionDays: 180
+        }
     },
     {
         id: 'meme',
         label: 'Image/Meme',
-        desc: 'Prioritizes upvotes and visual velocity',
-        weights: { commentWeight: 2, upvoteWeight: 3, depthScaling: 'linear' }
+        desc: 'Upvotes and early velocity are what matter.',
+        weights: {
+            commentWeight: 2,
+            upvoteWeight: 4,
+            depthScaling: 'linear',
+            depthLinear: 10,
+            depthMax: 5,
+            fetchDepth: 2,
+            creatorBonus: 2,
+            velocityHours: 12,
+            velocityWeight: 2.5,
+            analysisPoolSize: 25,
+            analysisDays: 14
+        },
+        storage: {
+            snapshotFrequency: '12hours',
+            retentionDays: 60
+        }
     },
     {
         id: 'gaming',
-        label: 'Gaming',
-        desc: 'Balanced mix of media and discussion',
-        weights: { commentWeight: 5, upvoteWeight: 2, depthScaling: 'logarithmic' }
+        label: 'Gaming Community',
+        desc: 'Balanced mix of visuals, discussion, and OP interaction.',
+        weights: {
+            commentWeight: 5,
+            upvoteWeight: 2,
+            depthScaling: 'logarithmic',
+            depthLogarithmic: 0.30,
+            depthMax: 15,
+            fetchDepth: 3,
+            creatorBonus: 7,
+            velocityHours: 36,
+            velocityWeight: 1.5,
+            analysisPoolSize: 25,
+            analysisDays: 30
+        },
+        storage: {
+            snapshotFrequency: 'daily',
+            retentionDays: 180
+        }
     },
     {
         id: 'support',
         label: 'Support/Help',
-        desc: 'Focus on unanswered questions and resolution',
-        weights: { commentWeight: 8, upvoteWeight: 1, depthScaling: 'linear' }
+        desc: 'Answers and OP follow-through are the real success signals.',
+        weights: {
+            commentWeight: 9,
+            upvoteWeight: 1,
+            depthScaling: 'logarithmic',
+            depthLogarithmic: 0.40,
+            depthMax: 20,
+            fetchDepth: 5,
+            creatorBonus: 15,
+            velocityHours: 72,
+            velocityWeight: 1.0,
+            analysisPoolSize: 25,
+            analysisDays: 30
+        },
+        storage: {
+            snapshotFrequency: 'daily',
+            retentionDays: 365
+        }
     },
     {
         id: 'news',
         label: 'News',
-        desc: 'Tracks velocity and controversial chatter',
-        weights: { commentWeight: 6, upvoteWeight: 2, depthScaling: 'exponential' }
+        desc: 'Breaking fast — velocity and reaction volume drive relevance.',
+        weights: {
+            commentWeight: 4,
+            upvoteWeight: 3,
+            depthScaling: 'exponential',
+            depthExponential: 15,
+            depthMax: 10,
+            fetchDepth: 3,
+            creatorBonus: 3,
+            velocityHours: 6,
+            velocityWeight: 3.0,
+            analysisPoolSize: 30,
+            analysisDays: 14
+        },
+        storage: {
+            snapshotFrequency: '12hours',
+            retentionDays: 90
+        }
     },
     {
         id: 'custom',
         label: 'Custom',
-        desc: 'Manually configured settings'
+        desc: 'Manually configured for your specific community.'
     }
 ];
 export const THEMES = [
@@ -43,25 +130,31 @@ export const THEMES = [
     { id: 'nocturne', label: 'Nocturne' },
     { id: 'springtime', label: 'Springtime' }
 ];
+export const DEFAULT_STORAGE_SETTINGS = {
+    snapshotFrequency: 'daily',
+    retentionDays: 180 // 30-365 by 30
+};
+// Each parameter has a default value and a range of values that can be set by the user.
+// The default value is the value that is set by the user.
+// The range of values are noted by each paraameter as a comment using min-max by step.
 export const DEFAULT_CALCULATION_SETTINGS = {
-    preset: 'discussion',
-    commentWeight: 3,
-    upvoteWeight: 1,
-    depthScaling: 'linear',
-    depthLinear: 10,
-    depthLogarithmic: 3,
-    depthExponential: 15,
-    depthMax: 10,
-    fetchDepth: 3,
-    creatorBonus: 5,
-    velocityHours: 48,
-    velocityWeight: 1.5,
-    analysisPoolSize: 25,
-    analysisDays: 30,
-    excludeOfficial: false,
-    excludeBots: false,
-    excludeUsers: [],
-    retentionDays: 365
+    id: 'discussion',
+    commentWeight: 8, // 1-10 by 1
+    upvoteWeight: 1, // 1-10 by 1
+    depthScaling: 'logarithmic', // linear, logarithmic, exponential
+    depthLinear: 0.35, // 0.1-0.5 by 0.05
+    depthLogarithmic: 0, // 0.1-0.5 by 0.05
+    depthExponential: 0, // 5-25 by 1
+    depthMax: 20, // 3-50 by 1
+    fetchDepth: 4, // 1-5 by 1
+    creatorBonus: 10, // 0-15 by 1
+    velocityHours: 48, // 3-72 by 1
+    velocityWeight: 1.3, // 0.5-4.0 by 0.25
+    analysisPoolSize: 25, // 10-50 by 5
+    analysisDays: 30, // 7-90 by 1 
+    excludeOfficial: false, // true, false
+    excludeBots: false, // true, false
+    excludeUsers: [] // array of user ids
 };
 export const DEFAULT_USER_SETTINGS = {
     theme: 'modscopeflow'

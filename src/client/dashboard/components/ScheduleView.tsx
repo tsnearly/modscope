@@ -138,20 +138,23 @@ function ScheduleView({ initialJobs = [], initialHistory = [], onRunComplete }: 
     }
 
     // Schedule configuration
-    const [scheduleType, setScheduleType] = useState<ScheduleType>('daily');
+    const [scheduleType, setScheduleType] = useState<ScheduleType>(settings?.storage?.snapshotFrequency === '12hours' ? '12h' : (settings?.storage?.snapshotFrequency as ScheduleType) || 'daily');
     const [name, setName] = useState('');
     const [_startDate, _setStartDate] = useState(getTodayDate());
     const [startTime, setStartTime] = useState(getCurrentTime());
     const [recurringInterval, _setRecurringInterval] = useState(1);
     const [daysOfWeek, setDaysOfWeek] = useState<number[]>([1]); // Default to Monday
     const [customCron, setCustomCron] = useState('');
-    const [retention, setRetention] = useState(settings?.settings?.retentionDays || 30);
+    const [retention, setRetention] = useState(settings?.storage?.retentionDays || 180);
 
     useEffect(() => {
-        if (settings?.settings?.retentionDays) {
-            setRetention(settings.settings.retentionDays);
+        if (settings?.storage?.retentionDays) {
+            setRetention(settings.storage.retentionDays);
         }
-    }, [settings?.settings?.retentionDays]);
+        if (settings?.storage?.snapshotFrequency) {
+            setScheduleType(settings.storage.snapshotFrequency === '12hours' ? '12h' : (settings.storage.snapshotFrequency as ScheduleType));
+        }
+    }, [settings?.storage]);
 
     useEffect(() => {
         fetchJobs();
@@ -285,9 +288,15 @@ function ScheduleView({ initialJobs = [], initialHistory = [], onRunComplete }: 
             // Local Time to UTC Cron Calculation
             const generateUtcCron = (type: string, timeStr: string, intervalStr: number, days: number[]) => {
                 if (type === 'custom') return customCron;
-                const timeParts = timeStr.split(':').map(Number);
-                const localHour = timeParts[0] || 0;
+                const isPM = timeStr.toLowerCase().includes('pm');
+                const isAM = timeStr.toLowerCase().includes('am');
+                const timeParts = timeStr.replace(/\s*[a-zA-Z]+/, '').split(':').map(Number);
+                let localHour = timeParts[0] || 0;
                 const minute = timeParts[1] || 0;
+
+                if (isPM && localHour < 12) localHour += 12;
+                if (isAM && localHour === 12) localHour = 0;
+
                 const offsetMinutes = new Date().getTimezoneOffset(); // Local timezone offset
                 let utcHour = Math.floor((localHour as number) + (offsetMinutes / 60));
                 let dayShift = 0;

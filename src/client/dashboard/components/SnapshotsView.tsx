@@ -13,8 +13,8 @@ interface Snapshot {
     subscribers: number;
     postsPerDay: number;
     commentsPerDay: number;
+    avgEngagement: number;
     avgScore: number;
-    avgVotes: number;
     poolSize: number;
 }
 
@@ -217,13 +217,13 @@ export function SnapshotsView({ onSelectSnapshot, onDeleteSnapshot }: SnapshotsV
                                         </Tooltip>
                                     </TableHead>
                                     <TableHead className="w-[100px] text-right">
-                                        <Tooltip content="Average calculated score per post">
-                                            Avg Score
+                                        <Tooltip content="Average calculated engagement per post">
+                                            Avg Engagement
                                         </Tooltip>
                                     </TableHead>
                                     <TableHead className="w-[100px] text-right">
                                         <Tooltip content="Average upvotes per post">
-                                            Avg Vote
+                                            Avg Score
                                         </Tooltip>
                                     </TableHead>
                                     <TableHead className="w-[80px] text-right">
@@ -249,15 +249,15 @@ export function SnapshotsView({ onSelectSnapshot, onDeleteSnapshot }: SnapshotsV
                                         <TableCell className="py-1.5 text-xs text-right">{snapshot.subscribers}</TableCell>
                                         <TableCell className="py-1.5 text-xs text-right">{snapshot.postsPerDay.toFixed(1)}</TableCell>
                                         <TableCell className="py-1.5 text-xs text-right">{snapshot.commentsPerDay.toFixed(1)}</TableCell>
-                                        <TableCell className="py-1.5 text-xs text-right">{snapshot.avgScore.toFixed(1)}</TableCell>
-                                        <TableCell className="py-1.5 text-xs text-right">{snapshot.avgVotes ? snapshot.avgVotes.toFixed(1) : '—'}</TableCell>
+                                        <TableCell className="py-1.5 text-xs text-right">{snapshot.avgEngagement?.toFixed(1) ?? '—'}</TableCell>
+                                        <TableCell className="py-1.5 text-xs text-right">{snapshot.avgScore?.toFixed(1) ?? '—'}</TableCell>
                                         <TableCell className="py-1.5 text-xs text-right">{snapshot.poolSize ?? '—'}</TableCell>
                                     </TableRow>
                                 ))}
                             </TableBody>
                         </Table>
 
-                        <div className="flex items-center gap-4 pt-4 mt-auto">
+                        <div className="snapshot-actions flex flex-wrap items-center gap-2 pt-2 mt-auto flex-shrink-0">
                             <div className="flex items-center gap-3 mr-auto">
                                 {pendingDelete ? (
                                     <>
@@ -283,7 +283,7 @@ export function SnapshotsView({ onSelectSnapshot, onDeleteSnapshot }: SnapshotsV
                                         onClick={() => setPendingDelete(true)}
                                         disabled={bootstrapping || selectedId === null}
                                         variant="outline"
-                                        className="w-32 border-red-500/30 text-red-400 hover:bg-red-500/10"
+                                        className="border-red-500/30 text-red-400 hover:bg-red-500/10 text-xs"
                                         icon="lucide:trash-2"
                                     >
                                         Delete
@@ -317,15 +317,15 @@ export function SnapshotsView({ onSelectSnapshot, onDeleteSnapshot }: SnapshotsV
                                     onClick={() => setPendingClear(true)}
                                     disabled={bootstrapping || snapshots.length === 0}
                                     variant="outline"
-                                    className="w-32 border-red-500/30 text-red-400 hover:bg-red-500/10"
+                                    className="border-red-500/30 text-red-400 hover:bg-red-500/10 text-xs"
                                     icon="lucide:trash"
                                 >
-                                    Clear All
+                                    Clear<span className="snapshot-btn-label"> All</span>
                                 </Button>
                             )}
                             <Button
                                 onClick={fetchSnapshots}
-                                className="w-32"
+                                className="text-xs"
                                 icon="lucide:refresh-ccw"
                             >
                                 Refresh
@@ -333,10 +333,10 @@ export function SnapshotsView({ onSelectSnapshot, onDeleteSnapshot }: SnapshotsV
                             <Button
                                 onClick={handleViewReport}
                                 disabled={selectedId === null}
-                                className="w-32"
+                                className="text-xs"
                                 icon="lucide:bar-chart-2"
                             >
-                                View Report
+                                View<span className="snapshot-btn-label"> Report</span>
                             </Button>
                         </div>
                     </div>

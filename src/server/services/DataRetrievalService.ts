@@ -1,4 +1,4 @@
-import { AnalyticsSnapshot, PostData } from '../../shared/types/api';
+import { AnalyticsSnapshot, PostData, SubredditStats, PostLists } from '../../shared/types/api';
 import type { RedisClient } from '@devvit/redis';
 
 export class DataRetrievalService {
@@ -76,18 +76,16 @@ export class DataRetrievalService {
         };
 
         const baseStats = {
-            subscribers: stats.subscribers || '0',
+            subscribers: parseInt(stats.subscribers || '0'),
             active: stats.active || '0',
             rules_count: parseInt(stats.rules_count || '0'),
             posts_per_day: parseFloat(stats.posts_per_day || '0'),
             comments_per_day: parseFloat(stats.comments_per_day || '0'),
+            avg_engagement: parseFloat(stats.avg_engagement || '0'),
             avg_score: parseFloat(stats.avg_score || '0'),
-            avg_votes: parseFloat(stats.avg_votes || '0'),
-            velocity: {
-                score_velocity: parseFloat(stats.score_velocity || '0'),
-                comment_velocity: parseFloat(stats.comment_velocity || '0'),
-                combined_velocity: parseFloat(stats.combined_velocity || '0'),
-            },
+            score_velocity: parseFloat(stats.score_velocity || '0'),
+            comment_velocity: parseFloat(stats.comment_velocity || '0'),
+            combined_velocity: parseFloat(stats.combined_velocity || '0'),
             created: stats.created || '',
         };
 
@@ -99,8 +97,8 @@ export class DataRetrievalService {
                 console.log(`[RETRIEVER] ✓ Loaded ${parsed.analysis_pool?.length || 0} posts from JSON blob for scan ${scanId}`);
                 return {
                     meta: baseMeta,
-                    stats: baseStats,
-                    lists: parsed.lists || {},
+                    stats: baseStats as SubredditStats,
+                    lists: parsed.lists as PostLists || {} as PostLists,
                     analysis_pool: parsed.analysis_pool || [],
                 };
             } catch (e) {
@@ -152,8 +150,8 @@ export class DataRetrievalService {
 
         return {
             meta: baseMeta,
-            stats: baseStats,
-            lists,
+            stats: baseStats as SubredditStats,
+            lists: lists as PostLists,
             analysis_pool: allPosts,
         };
     }

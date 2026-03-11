@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import * as React from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { context as devvitContext } from '@devvit/web/client';
 import './styles/main.css';
 import ReportView from './components/ReportView';
@@ -307,20 +308,8 @@ export const App = () => {
 
       <div className="app-container" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: 'var(--color-bg)' }}>
         {/* Top Navigation */}
-        <div className="nav-toolbar" style={{
-          display: 'flex',
-          flexDirection: 'row',
-          justifyContent: 'flex-start',
-          alignItems: 'center',
-          padding: '12px 24px',
-          height: '65px',
-          background: '#ffffff',
-          borderBottom: '2px solid #e2e8f0',
-          boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
-          flexShrink: 0,
-          zIndex: 50
-        }}>
-          <div className="inline-flex rounded-md shadow-sm bg-muted/50 border border-border p-1" role="group" style={{ display: 'flex', flexDirection: 'row' }}>
+        <div className="nav-toolbar">
+          <div className="nav-group" role="group">
             {[{ view: 'report', label: 'Report', icon: 'glass-trend.png', disabled: !reportData },
             { view: 'snapshots', label: 'Snapshots', icon: 'glass-database.png', disabled: !reportData },
             { view: 'config', label: 'Config', icon: 'glass-adjustments.png' },
@@ -334,27 +323,18 @@ export const App = () => {
                   onClick={() => setActiveView(view as View)}
                   disabled={disabled}
                   className={cn(
-                    "nav-button flex flex-row items-center justify-start gap-2 px-4 py-2 transition-all duration-200 rounded-sm",
+                    "nav-button",
                     isActive
-                      ? "active z-10 font-semibold bg-background text-primary shadow-sm"
-                      : "bg-transparent hover:bg-background/50 text-muted-foreground hover:text-foreground",
+                      ? "active"
+                      : "",
                   )}
-                  style={{
-                    height: '38px',
-                    minWidth: '120px',
-                    border: 'none',
-                    display: 'flex',
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'flex-start'
-                  }}
                 >
                   <Icon
                     name={icon}
                     size={16}
-                    style={{ width: '16px', height: '16px', objectFit: 'contain' }}
+                    className="nav-icon"
                   />
-                  <span style={{ fontSize: '13px', color: 'inherit' }}>{label}</span>
+                  <span className="nav-label">{label}</span>
                 </Button>
               );
             })}

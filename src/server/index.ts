@@ -1,6 +1,6 @@
 import express from 'express';
-import { AnalyticsResponse, AnalyticsSnapshot } from '../shared/types/api';
-import { DEFAULT_CALCULATION_SETTINGS, DEFAULT_USER_SETTINGS, CalculationSettings, UserSettings } from '../shared/types/settings';
+import { AnalyticsResponse } from '../shared/types/api';
+import { DEFAULT_CALCULATION_SETTINGS, DEFAULT_USER_SETTINGS, DEFAULT_STORAGE_SETTINGS, CalculationSettings, UserSettings, StorageSettings } from '../shared/types/settings';
 import { redis, reddit, createServer, context, getServerPort, scheduler } from '@devvit/web/server';
 import { Devvit } from '@devvit/public-api';
 import { createPost } from './core/post';
@@ -9,7 +9,6 @@ import { DataRetrievalService } from './services/DataRetrievalService';
 import { SnapshotService } from './services/SnapshotService';
 import { getOfficialAccounts } from './services/OfficialAccountsService';
 import { HistoryService } from './services/HistoryService';
-import { ConfigService } from './services/ConfigService';
 import { SchedulerService } from './services/SchedulerService';
 
 // Use Devvit's built-in Redis instance (works in both local and production)
@@ -36,7 +35,7 @@ const snapshotter = new SnapshotService(normalizer);
 // Initialize new services
 const historyService = new HistoryService(storage as any);
 export const schedulerService = new SchedulerService(scheduler);
-const configService = new ConfigService(storage as any);
+// configService removed to satisfy unused variable lint
 
 const app = express();
 
@@ -212,7 +211,14 @@ router.post('/api/jobs', async (req, res) => {
     let runAt: Date | undefined;
 
     // Parse time components
-    const [hour, minute] = (startTime || '08:00').split(':').map(Number);
+    const isPM = (startTime || '').toLowerCase().includes('pm');
+    const isAM = (startTime || '').toLowerCase().includes('am');
+    const timeParts = (startTime || '08:00').replace(/\s*[a-zA-Z]+/, '').split(':').map(Number);
+    let hour = timeParts[0] || 0;
+    const minute = timeParts[1] || 0;
+
+    if (isPM && hour < 12) hour += 12;
+    if (isAM && hour === 12) hour = 0;
 
     // Generate cron pattern based on schedule type
     switch (scheduleType) {
@@ -422,7 +428,7 @@ router.put('/api/jobs/:id', async (req, res) => {
     // This allows the single POST logic block to handle name mapping, cron, etc.
     // Instead of duplicating it, we just act as a proxy.
     req.url = '/api/jobs';
-    app.handle(req, res);
+    (app as any).handle(req, res);
   } catch (error) {
     console.error('Error updating job:', error);
     res.status(500).json({ status: 'error', message: 'Failed to update job' });
@@ -607,9 +613,8 @@ router.get('/api/snapshots', async (_req, res) => {
             subscribers: stats?.subscribers || '0',
             postsPerDay: parseFloat(stats?.posts_per_day || '0') || 0,
             commentsPerDay: parseFloat(stats?.comments_per_day || '0') || 0,
+            avgEngagement: parseFloat(stats?.avg_engagement || '0') || 0,
             avgScore: parseFloat(stats?.avg_score || '0') || 0,
-            avgUpvotes: parseFloat(stats?.avg_upvotes || '0') || 0,
-            avgVotes: parseFloat(stats?.avg_votes || '0') || 0,
             poolSize: typeof poolSize === 'number' ? poolSize : 0
           });
         }
@@ -755,15 +760,17 @@ router.get('/api/settings', async (_req, res) => {
       return;
     }
 
-    const [settingsStr, displayStr] = await Promise.all([
+    const [settingsStr, displayStr, storageStr] = await Promise.all([
       storage.get(`subreddit:${subreddit}:settings`),
-      storage.get(`user:${username}:display`)
+      storage.get(`user:${username}:display`),
+      storage.get(`subreddit:${subreddit}:storage`)
     ]);
 
     const settings: CalculationSettings = settingsStr ? JSON.parse(settingsStr) : DEFAULT_CALCULATION_SETTINGS;
     const display: UserSettings = displayStr ? JSON.parse(displayStr) : DEFAULT_USER_SETTINGS;
+    const storageSettings: StorageSettings = storageStr ? JSON.parse(storageStr) : DEFAULT_STORAGE_SETTINGS;
 
-    res.json({ settings, display });
+    res.json({ settings, display, storage: storageSettings });
   } catch (error) {
     console.error('Error fetching settings:', error);
     res.status(500).json({ status: 'error', message: 'Failed to fetch settings' });
@@ -780,7 +787,7 @@ router.post('/api/settings', async (req, res) => {
       return;
     }
 
-    const { settings, display } = req.body;
+    const { settings, display, storage: storageSettings } = req.body;
 
     const promises = [];
     if (settings) {
@@ -791,6 +798,11 @@ router.post('/api/settings', async (req, res) => {
     if (display) {
       console.log(`[SETTINGS] Saving display preferences for ${username}`);
       promises.push(storage.set(`user:${username}:display`, JSON.stringify(display)));
+    }
+
+    if (storageSettings) {
+      console.log(`[SETTINGS] Saving storage preferences for r/${subreddit} by ${username}`);
+      promises.push(storage.set(`subreddit:${subreddit}:storage`, JSON.stringify(storageSettings)));
     }
 
     await Promise.all(promises);
@@ -933,22 +945,14 @@ async function ensureBootstrap(username?: string) {
       console.log('[BOOTSTRAP] ✓ Storage reset to schema version 3');
     }
 
-    const [scanCount, firstScanMeta] = await Promise.all([
-      storage.get('global:scan_counter'),
-      storage.hGetAll('run:1:meta')
-    ]);
+    const scanCount = await storage.get('global:scan_counter');
 
-    if (!scanCount || !firstScanMeta.subreddit) {
+    if (!scanCount || parseInt(scanCount) === 0) {
       console.log('[BOOTSTRAP] No data detected. Waiting for first scheduled or manual scan.');
 
       // Cleanup any partial data just in case
       await normalizer.resetStorage();
       await storage.set('global:schema_version', '3'); // Ensure version is set after reset
-
-      // NOTE: Automatic initial test data ingestion has been disabled via user request.
-      // const jsonData = bootstrapData as unknown as AnalyticsSnapshot;
-      // const scanId = await normalizer.normalizeSnapshot(jsonData);
-      // console.log(`[BOOTSTRAP] ✓ Successfully ingested initial report as scan #${scanId}`);
     } else {
       // Count actual valid scans (scan_counter is a monotonic ID, not a count of existing scans)
       let validCount = 0;
@@ -958,6 +962,13 @@ async function ensureBootstrap(username?: string) {
         if (meta?.subreddit) validCount++;
       }
       console.log(`[BOOTSTRAP] Redis contains ${validCount} valid scans (last ID: ${scanCount}).`);
+
+      // If all scans were evicted but counter persists, reset cleanly
+      if (validCount === 0) {
+        console.log('[BOOTSTRAP] Counter exists but no valid scans found. Resetting counter.');
+        await normalizer.resetStorage();
+        await storage.set('global:schema_version', '3');
+      }
     }
     bootstrapComplete = true;
   } catch (error) {
@@ -993,9 +1004,16 @@ router.post('/internal/tasks/snapshot_worker', async (_req, res): Promise<void> 
     console.log(`[WORKER] HTTP-triggered snapshot for r/${subreddit}...`);
 
     let settings = DEFAULT_CALCULATION_SETTINGS;
-    const settingsStr = await storage.get(`subreddit:${subreddit}:settings`);
+    let storageSettings = DEFAULT_STORAGE_SETTINGS;
+    const [settingsStr, storageStr] = await Promise.all([
+      storage.get(`subreddit:${subreddit}:settings`),
+      storage.get(`subreddit:${subreddit}:storage`)
+    ]);
     if (settingsStr) {
       settings = JSON.parse(settingsStr);
+    }
+    if (storageStr) {
+      storageSettings = JSON.parse(storageStr);
     }
 
     // 3. Execute
@@ -1006,7 +1024,7 @@ router.post('/internal/tasks/snapshot_worker', async (_req, res): Promise<void> 
 
     // 4. Sweep old snapshots based on retention limit
     // @ts-ignore
-    const retentionDays = _req.body?.data?.retention || settings.retentionDays || 30;
+    const retentionDays = _req.body?.data?.retention || storageSettings.retentionDays || 30;
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
     let deletedCount = 0;
@@ -1039,7 +1057,11 @@ router.post('/internal/tasks/snapshot_worker', async (_req, res): Promise<void> 
     historyEntry.scanId = scanId;
     historyEntry.endTime = endTime;
     historyEntry.duration = duration;
-    historyEntry.details = `Auto-scan completed [${scanId}]. Cleaned up ${deletedCount} old snapshots.`;
+    if (deletedCount > 0) {
+      historyEntry.details = `Auto-scan completed [${scanId}]. Cleaned up ${deletedCount} old snapshots.`;
+    } else {
+      historyEntry.details = `Auto-scan completed [${scanId}].`;
+    }
 
     historyEntryStr = JSON.stringify(historyEntry);
     await redis.zAdd('jobs:history', { member: historyEntryStr, score: startTime });

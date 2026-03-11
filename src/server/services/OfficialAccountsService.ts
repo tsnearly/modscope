@@ -8,7 +8,7 @@ export async function getOfficialAccounts(reddit: RedditAPIClient, subredditName
 
         if (moderators && moderators.length > 0) {
             // First mod is usually creator/oldest
-            official.push(moderators[0].username);
+            official.push(moderators[0]?.username || '');
 
             // Dynamic Official Account Detection (Based on original spec design)
             const patterns = ['bot', 'automod', subredditName.toLowerCase()];
@@ -21,8 +21,8 @@ export async function getOfficialAccounts(reddit: RedditAPIClient, subredditName
                 const normalizedSubName = subredditName.toLowerCase().replace(/[^a-z0-9]/g, '');
 
                 if (patterns.some(p => modName.includes(p)) || normalizedModName.includes(normalizedSubName)) {
-                    if (!official.includes(mod.username)) {
-                        official.push(mod.username);
+                    if (!official.includes(mod.username || '')) {
+                        official.push(mod.username || '');
                     }
                 }
             }

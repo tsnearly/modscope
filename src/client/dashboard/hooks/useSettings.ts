@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { CalculationSettings, UserSettings, DEFAULT_CALCULATION_SETTINGS, DEFAULT_USER_SETTINGS } from '../../../shared/types/settings';
+import { CalculationSettings, UserSettings, StorageSettings, DEFAULT_CALCULATION_SETTINGS, DEFAULT_USER_SETTINGS, DEFAULT_STORAGE_SETTINGS } from '../../../shared/types/settings';
 import { useTheme } from '../../hooks/useTheme';
 
 export function useSettings() {
-    const [settings, setSettings] = useState<{ settings: CalculationSettings, display: UserSettings }>({
+    const [settings, setSettings] = useState<{ settings: CalculationSettings, display: UserSettings, storage: StorageSettings }>({
         settings: DEFAULT_CALCULATION_SETTINGS,
-        display: DEFAULT_USER_SETTINGS
+        display: DEFAULT_USER_SETTINGS,
+        storage: DEFAULT_STORAGE_SETTINGS
     });
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -18,10 +19,11 @@ export function useSettings() {
                 if (!response.ok) throw new Error('Failed to fetch settings');
                 const data = await response.json();
 
-                // Backend returns { settings, display }
+                // Backend returns { settings, display, storage }
                 const fetchedSettings = {
                     settings: data.settings || DEFAULT_CALCULATION_SETTINGS,
-                    display: data.display || DEFAULT_USER_SETTINGS
+                    display: data.display || DEFAULT_USER_SETTINGS,
+                    storage: data.storage || DEFAULT_STORAGE_SETTINGS
                 };
                 setSettings(fetchedSettings);
 
@@ -40,7 +42,7 @@ export function useSettings() {
         fetchSettings();
     }, []);
 
-    const updateSettings = async (newSettings: { settings?: CalculationSettings, display?: UserSettings }) => {
+    const updateSettings = async (newSettings: { settings?: CalculationSettings, display?: UserSettings, storage?: StorageSettings }) => {
         try {
             const response = await fetch('/api/settings', {
                 method: 'POST',
@@ -51,7 +53,8 @@ export function useSettings() {
 
             setSettings(prev => ({
                 settings: newSettings.settings || prev.settings,
-                display: newSettings.display || prev.display
+                display: newSettings.display || prev.display,
+                storage: newSettings.storage || prev.storage
             }));
 
             // Sync theme if it changed

@@ -365,7 +365,7 @@ function ReportView({ data: propData, isPrintMode = false, onPrint, officialAcco
                         </div>
 
                         {/* Best times and word cloud - Side by Side Containers */}
-                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 1fr) 2fr', gap: '12px', marginBottom: '16px', alignItems: 'start' }}>
+                        <div className="report-best-times-cloud">
 
                             {/* Prime Posting Times Container */}
                             <Chart
@@ -581,7 +581,7 @@ function ReportView({ data: propData, isPrintMode = false, onPrint, officialAcco
                 return (
 
                     <div style={{ padding: '12px', overflowY: 'auto', height: '100%' }}>
-                        <div style={{ padding: '8px 8px 8px 8px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                        <div className="report-users-grid">
                             <Chart
                                 title="Top Contributors"
                                 icon={<Icon src={getDataGroupingIcon('top_contributor', iconContext)} size={16} />}
@@ -732,7 +732,7 @@ function ReportView({ data: propData, isPrintMode = false, onPrint, officialAcco
 
                 return (
                     <div className="flex flex-col gap-4 p-3 h-full overflow-y-auto">
-                        <div className="grid grid-cols-2 gap-4 shrink-0">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 shrink-0">
                             <Chart
                                 title="Post Types"
                                 icon={<Icon src={getDataGroupingIcon('post_type', iconContext)} size={16} />}
@@ -979,22 +979,9 @@ function ReportView({ data: propData, isPrintMode = false, onPrint, officialAcco
                         />
                     </div>
 
-                    <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ReportTab)} className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                        {/* Scrollable Content Area */}
-                        <div className="flex-1 overflow-hidden relative">
-                            {tabs.map(t => (
-                                <TabsContent
-                                    key={t.tab}
-                                    value={t.tab}
-                                    className="h-full w-full overflow-y-auto pb-[30px]" style={{ background: 'var(--color-bg)' }}
-                                >
-                                    {activeTab === t.tab && renderTabContent(t.tab)}
-                                </TabsContent>
-                            ))}
-                        </div>
-
-                        {/* Fixed Bottom Tabs Container */}
-                        <div className="absolute bottom-0 left-0 right-0 border-t border-border px-1 flex items-start justify-start z-50 h-[30px] shadow-[0_-2px_10px_rgba(0,0,0,0.03)] gap-0.5" style={{ background: 'var(--color-accent)' }}>
+                    <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ReportTab)} className="report-tabs-wrapper flex-1 flex flex-col min-h-0 overflow-hidden">
+                        {/* Tab Bar - top on mobile, bottom on desktop via CSS order */}
+                        <div className="report-tabs-bar flex-shrink-0 border-b border-border px-1 flex items-end justify-start z-50 h-[30px] gap-0.5 overflow-x-auto" style={{ background: 'var(--color-accent)' }}>
                             {tabs.map(t => {
                                 const isActive = activeTab === t.tab;
                                 return (
@@ -1002,12 +989,12 @@ function ReportView({ data: propData, isPrintMode = false, onPrint, officialAcco
                                         key={t.tab}
                                         onClick={() => setActiveTab(t.tab)}
                                         className={`
-                                            relative px-4 py-1 text-xs font-medium transition-all
-                                            border-b border-l border-r rounded-b-lg mb-auto mt-0 mx-0.5
-                                            min-w-[100px] flex justify-center items-center
+                                            relative px-3 py-1 text-xs font-medium transition-all
+                                            border-t border-l border-r rounded-t-lg mt-auto mb-0 mx-0.5
+                                            min-w-[50px] flex justify-center items-center whitespace-nowrap
                                             ${isActive
-                                                ? 'h-[32px] -translate-y-[1px] z-10 pt-1 shadow-sm'
-                                                : 'bg-card border-transparent text-muted-foreground hover:text-foreground hover:bg-muted h-[28px] pt-1'
+                                                ? 'h-[28px] translate-y-[1px] z-10 pb-0.5 shadow-sm'
+                                                : 'bg-card border-transparent text-muted-foreground hover:text-foreground hover:bg-muted h-[24px] pb-0.5'
                                             }
                                         `}
                                         style={isActive ? {
@@ -1018,11 +1005,24 @@ function ReportView({ data: propData, isPrintMode = false, onPrint, officialAcco
                                     >
                                         {t.label}
                                         {isActive && (
-                                            <div className="absolute top-[-1px] left-0 right-0 h-[1px]" style={{ backgroundColor: 'var(--tab-active-bg)' }} />
+                                            <div className="absolute bottom-[-1px] left-0 right-0 h-[1px]" style={{ backgroundColor: 'var(--tab-active-bg)' }} />
                                         )}
                                     </button>
                                 );
                             })}
+                        </div>
+
+                        {/* Scrollable Content Area */}
+                        <div className="report-tabs-content flex-1 overflow-hidden">
+                            {tabs.map(t => (
+                                <TabsContent
+                                    key={t.tab}
+                                    value={t.tab}
+                                    className="h-full w-full overflow-y-auto" style={{ background: 'var(--color-bg)' }}
+                                >
+                                    {activeTab === t.tab && renderTabContent(t.tab)}
+                                </TabsContent>
+                            ))}
                         </div>
                     </Tabs>
                 </>
@@ -1120,15 +1120,15 @@ function ReportView({ data: propData, isPrintMode = false, onPrint, officialAcco
                                     icon={<Icon src={getDataGroupingIcon('word_cloud', 'printed')} size={20} />}
                                     height="auto"
                                 >
-                                    <div className="flex flex-wrap gap-4 items-center justify-center p-8 bg-slate-50/50 rounded-lg">
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 6px', alignItems: 'baseline', justifyContent: 'center', padding: '12px', background: '#f8fafc', borderRadius: '4px' }}>
                                         {getWordCloudData().map((item) => (
                                             <span
                                                 key={item.word}
                                                 style={{
                                                     fontWeight: 'bold',
                                                     color: '#334155',
-                                                    lineHeight: 1,
-                                                    fontSize: `${item.size * 1.2}em`,
+                                                    lineHeight: 0.85,
+                                                    fontSize: `${item.size}em`,
                                                     opacity: item.opacity
                                                 }}
                                             >
