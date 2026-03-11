@@ -25,7 +25,7 @@ function AboutView({ appVersion = '0.0.1' }: AboutViewProps) {
                             <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">Version Information</h3>
                             <p className="text-sm font-medium text-primary">ModScope v{appVersion}</p>
                             <p className="text-xs text-muted-foreground mt-1">Build: {new Date().toISOString().split('T')[0]}</p>
-                            <p className="text-xs text-muted-foreground">Phase 3: Scheduling Trials</p>
+                            <p className="text-xs text-muted-foreground">Phase 4: Limited Rollout</p>
                         </div>
                         <div className="flex-1" style={{ padding: '1.5rem' }}>
                             <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">Support</h3>
