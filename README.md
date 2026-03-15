@@ -14,7 +14,10 @@ A native, data-driven community insight and moderation assistant developed for R
 
 ## Getting Started with ModScope
 
-1. **Access ModScope**: Once installed from the Reddit Developer directory, click on your subreddit's mod tools menu and choose "Open ModScope Dashboard". If this is your first time, you will start on the Settings menu.
+1. **Access ModScope**: Once installed from the Reddit Developer directory, click on your subreddit's mod tools menu and choose "Open ModScope Dashboard". 
+
+   > [!NOTE]
+   > ModScope uses a **Mod-Only Launcher Post** architecture. The first time the app is launched, it creates a persistent, stickied post that is intentionally marked as spam. This keeps the dashboard invisible to regular users and out of the community feed, while remaining easily accessible to moderators via the mod tools menu.
 
 ### Step 1: Select your Subreddit Preset
 Navigate to the **Settings** tab in the upper menu. Here, you will find the configuration engine where you can choose between community archetypes. This dictates what ModScope values algorithmically when processing data to distinguish what "quality" engagement looks like for your specific community.
@@ -112,6 +115,7 @@ ModScope supports a custom UI engine designed for different modding environments
 | **Frozen Mist** | Cool, minimal icy blues to reduce cognitive load |
 | **Amber** | High-contrast amber on dark gray — classic terminal aesthetic |
 | **Nocturne** | True dark mode for low-light, late-night queue clearing |
+| **Rose Meadow** | A sophisticated, deep crimson and rose-tinted palette for a premium aesthetic |
 | **Springtime** | Soft, high-vibrancy pastels |
 
 ---

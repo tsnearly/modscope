@@ -2,7 +2,7 @@
 
 **"Empowering Reddit moderators through data-driven community insight."**
 
-[![Version](https://img.shields.io/badge/version-0.0.90-blue.svg)](https://github.com/modscope/modscope)
+[![Version](https://img.shields.io/badge/version-0.1.2-blue.svg)](https://github.com/modscope/modscope)
 [![Platform](https://img.shields.io/badge/platform-Devvit-red.svg)](https://developers.reddit.com/docs/)
 [![Storage](https://img.shields.io/badge/storage-Redis-green.svg)](https://redis.io/)
 
@@ -25,6 +25,7 @@ Rather than storing posts in giant JSON clumps (which requires expensive block-d
 | :--- | :--- | :--- |
 | `global:scan_counter` | `String (Int)` | Auto-incrementing primary key ID for all system snapshots. |
 | `index:snapshots:{sub}:{date}` | `String (Int)` | Deduplication pointer. Maps a specific subreddit and ISO date string back to its `scanId`. |
+| `modscope:launcherPostId` | `String (ID)` | Persistent, reusable Mod-Only launcher post ID. |
 | `sub:{sub}:latest_scan` | `String (Int)` | A fast-access pointer to the most recently completed `scanId` for initial dashboard load. |
 
 ### Layer 2: The Analysis Pool (Static & Dynamic Shards)
@@ -116,6 +117,7 @@ Theme preferences are saved to the user's specific state in Redis (`user:{userna
 - **Frozen Mist**: A cool, minimalist aesthetic relying on icy blues and stark whites to reduce cognitive load.
 - **Amber**: Reminiscent of classic CRT terminal interfaces, utilizing high-contrast amber on dark grays.
 - **Nocturne**: A true dark mode optimized for low-light environments to reduce eye strain during late-night queue clearing.
+- **Rose Meadow**: A sophisticated, deep crimson and rose-tinted palette for a premium aesthetic.
 - **Springtime**: A soft, high-vibrancy pastel theme.
 
 ---
