@@ -111,7 +111,7 @@ function ScheduleView({ initialJobs = [], initialHistory = [], onRunComplete }: 
     // Calculate dynamic stats
     const totalRuns = history.length;
     const successCount = history.filter(h => h.status === 'success' || h.status === 'completed').length;
-    const failedCount = history.filter(h => h.status === 'error' || h.status === 'failed').length;
+    const failedCount = history.filter(h => h.status === 'error' || h.status === 'failed' || h.status === 'failure').length;
 
     // Calculate avg processing time from snapshots
     let avgProcTime = '0.0s';
@@ -643,7 +643,13 @@ function ScheduleView({ initialJobs = [], initialHistory = [], onRunComplete }: 
                                                     {h.details}
                                                 </TableCell>
                                                 <TableCell className="py-2 text-right">
-                                                    <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase ${h.status === 'success' || h.status === 'completed' ? 'bg-green-100 text-green-700' : h.status === 'running' || h.status === 'pending' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
+                                                    <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase ${
+                                                        h.status === 'success' || h.status === 'completed' 
+                                                            ? 'bg-green-100 text-green-700' 
+                                                            : h.status === 'running' || h.status === 'pending' 
+                                                                ? 'bg-blue-100 text-blue-700' 
+                                                                : 'bg-red-100 text-red-700'
+                                                    }`}>
                                                         {h.status}
                                                     </span>
                                                 </TableCell>

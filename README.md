@@ -6,7 +6,10 @@ A native, data-driven community insight and moderation assistant developed for R
 
 - **Time-Series Analytics**: Understand deeply how posts perform over time with rich historical tracking.
 - **Algorithmic Engine**: Automatically score your community's engagement quality based on the archetype of your subreddit (Discussion, Image/Meme, Gaming, Support/Help, News).
-- **Automated Scheduling**: Set up ModScope to run daily, weekly, or on a custom schedule so you always have fresh data.
+- **Scheduling & Automation**: ModScope includes a built-in scheduler to automate data collection. You can define daily, weekly, or custom cron-based routines.
+
+  > [!TIP]
+  > The **Job History** log maintains a rolling window of the last 50 execution attempts to ensure high interface performance. Success/Failure statistics in the Schedule view reflect this window.
 - **Customizable Themes**: Personalize your interface with themes like Clockwork, Frozen Mist, Amber, Nocturne, and more.
 - **Exportable Reports**: Generate clean HTML reports of your community's health to share with your mod team.
 

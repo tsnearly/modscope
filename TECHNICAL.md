@@ -98,6 +98,7 @@ The built-in Schedule View abstracts away confusing cron syntax. When a user def
 ### Job Integrity and State Management
 - `jobs:active` (ZSET): Tracks currently active or scheduled cron jobs.
 - `jobs:history` (ZSET): A system-wide log of executed tasks.
+- **History Retrieval Limit**: To ensure optimal performance and minimize memory usage, the Job History UI displays the **last 50 execution records**. Statistics calculated within the Schedule view (e.g., success/failure rates) are scoped to this rolling window of the most recent 50 entries.
 - ModScope gracefully handles Devvit Execution Timeouts (which occur after ~10 seconds) by snapshotting its progress, creating an internal continuation schedule, and picking up exactly where it left off, ensuring that large subreddits can still be fully analyzed without crashing the app.
 
 ---
