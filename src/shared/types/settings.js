@@ -128,7 +128,8 @@ export const THEMES = [
     { id: 'frozenmist', label: 'Frozen Mist' },
     { id: 'amber', label: 'Amber' },
     { id: 'nocturne', label: 'Nocturne' },
-    { id: 'springtime', label: 'Springtime' }
+    { id: 'springtime', label: 'Springtime' },
+    { id: 'rosemeadow', label: 'Rose Meadow' }
 ];
 export const DEFAULT_STORAGE_SETTINGS = {
     snapshotFrequency: 'daily',

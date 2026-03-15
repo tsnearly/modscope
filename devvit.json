@@ -5,7 +5,7 @@
         "dir": "dist/client",
         "entrypoints": {
             "default": {
-                "inline": true,
+                "inline": false,
                 "entry": "dashboard.html"
             }
         }

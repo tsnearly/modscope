@@ -913,12 +913,22 @@ function ReportView({ data: propData, isPrintMode = false, onPrint, officialAcco
                                         />
                                         <YAxis tick={{ fontSize: 10 }} />
                                         <RechartsTooltip
-                                            labelFormatter={(label) => `${label}:00`}
+                                            labelFormatter={(label) => {
+                                                if (typeof label === 'string' && label.includes(':')) {
+                                                    const hour = parseInt(label.split(':')[0]);
+                                                    const ampm = hour >= 12 ? 'PM' : 'AM';
+                                                    const hour12 = hour % 12 || 12;
+                                                    return `${hour12}:00 ${ampm}`;
+                                                }
+                                                return label;
+                                            }}
                                             formatter={(value: any, name: any) => [
-                                                name === 'ratio' && typeof value === 'number' ? value.toFixed(2) : value,
-                                                name === 'ratio' ? 'Comments per Score' : name
+                                                typeof value === 'number' ? value.toFixed(2) : value,
+                                                name
                                             ]}
-                                            contentStyle={{ fontSize: '12px', borderRadius: '4px', border: '1px solid var(--color-border)' }}
+                                            contentStyle={{ fontSize: '12px', borderRadius: '4px', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg)' }}
+                                            labelStyle={{ fontWeight: 'bold', marginBottom: '4px', color: 'var(--color-text)', display: 'block' }}
+                                            itemStyle={{ display: 'block', paddingTop: '4px' }}
                                         />
                                         <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
                                         <Area

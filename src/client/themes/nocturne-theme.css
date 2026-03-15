@@ -3,28 +3,28 @@
 [data-theme='nocturne'] {
     /* Core Palette */
     --color-primary: #979797;
-    --color-secondary: #d6d6d6;
-    --color-accent: #e2e800;
-    --color-text: #141414;
-    --color-text-muted: #535050;
-    --color-bg: #444444;
-    --color-surface: #979797;
-    --color-error: #CDDDA3;
-    --color-border: #222222;
+    --color-secondary: #D6D6D6;
+    --color-accent: #E2E800;
+    --color-text: #D6D6D6;
+    --color-text-muted: #979797;
+    --color-bg: #141414;
+    --color-surface: #444444;
+    --color-error: #FF4444;
+    --color-border: #979797;
 
     /* Derived semantic variables */
     --tab-active-bg: var(--color-accent);
-    --tab-active-border: var(--color-primary);
-    --tab-active-text: var(--color-text);
+    --tab-active-border: var(--color-surface);
+    --tab-active-text: #141414;
     --tab-bg: var(--color-surface);
     --tab-border: var(--color-border);
     --tab-text: var(--color-text-muted);
-    --tab-hover: var(--color-primary);
+    --tab-hover: var(--color-text);
 
-    --btn-primary-bg: var(--color-primary);
-    --btn-primary-text: #dddddd;
-    --btn-primary-hover: #eaeda3;
-    --btn-primary-active: #c0c615;
+    --btn-primary-bg: var(--color-accent);
+    --btn-primary-text: #141414;
+    --btn-primary-hover: #F2F800;
+    --btn-primary-active: #C2C800;
 
     --nav-bg: var(--color-surface);
     --nav-border: var(--color-text-muted);

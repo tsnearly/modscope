@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
-import { UserSettings, DEFAULT_USER_SETTINGS } from '../../shared/types/settings';
+import { useEffect, useState } from 'react';
+import { DEFAULT_USER_SETTINGS, UserSettings } from '../../shared/types/settings';
 
-export type Theme = 'modscopeflow' | 'clockwork' | 'frozenmist' | 'amber' | 'nocturne' | 'springtime';
+export type Theme = 'modscopeflow' | 'clockwork' | 'frozenmist' | 'amber' | 'nocturne' | 'springtime' | 'rosemeadow';
 
 export function useTheme() {
     const [theme, setTheme] = useState<Theme>(() => {

@@ -1,30 +1,30 @@
 /* ModScope Amber Theme - Simplified Core Palette */
 
 [data-theme='amber'] {
-    /* Core Palette */
-    --color-primary: #304c64;
-    --color-secondary: #a4ccd4;
-    --color-accent: #e2480c;
-    --color-text: #631b08;
-    --color-text-muted: #9d5a47;
-    --color-bg: #304c64;
-    --color-surface: #304c64;
-    --color-error: #CDDDA3;
-    --color-border: #631b08;
+    /* Core Palette from Turquoise Amber Autumn */
+    --color-primary: #26788E;
+    --color-secondary: #A4CCD4;
+    --color-accent: #E2480C;
+    --color-text: #304C64;
+    --color-text-muted: #631B08;
+    --color-bg: #A4CCD4;
+    --color-surface: #A4CCD4;
+    --color-error: #E2480C;
+    --color-border: #304C64;
 
     /* Derived semantic variables */
     --tab-active-bg: var(--color-accent);
     --tab-active-border: var(--color-primary);
-    --tab-active-text: var(--color-text);
+    --tab-active-text: #FFFFFF;
     --tab-bg: var(--color-surface);
     --tab-border: var(--color-border);
-    --tab-text: var(--color-text-muted);
-    --tab-hover: var(--color-primary);
+    --tab-text: var(--color-primary);
+    --tab-hover: var(--color-accent);
 
-    --btn-primary-bg: var(--color-primary);
-    --btn-primary-text: #dddcdc;
-    --btn-primary-hover: #87a4bc;
-    --btn-primary-active: #304c6491;
+    --btn-primary-bg: var(--color-accent);
+    --btn-primary-text: #FFFFFF;
+    --btn-primary-hover: #F86024;
+    --btn-primary-active: #CC3AC8;
 
     --nav-bg: var(--color-surface);
     --nav-border: var(--color-text-muted);

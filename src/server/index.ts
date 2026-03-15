@@ -816,7 +816,7 @@ router.post('/api/settings', async (req, res) => {
 // Debug endpoint to clear cached post ID
 router.post('/internal/clear-cache', async (_req, res): Promise<void> => {
   try {
-    await redis.del('modscope:dashboard_post_id');
+    await redis.del('modscope:launcherPostId');
     res.json({
       status: 'success',
       message: 'Cache cleared - next dashboard open will create fresh post',

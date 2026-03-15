@@ -169,7 +169,7 @@ export interface ConfigSettings {
 }
 
 
-export type ThemeId = 'modscopeflow' | 'clockwork' | 'frozenmist' | 'amber' | 'nocturne' | 'springtime';
+export type ThemeId = 'modscopeflow' | 'clockwork' | 'frozenmist' | 'amber' | 'nocturne' | 'springtime' | 'rosemeadow';
 
 export interface ThemeDefinition {
     id: ThemeId;
@@ -182,7 +182,8 @@ export const THEMES: ThemeDefinition[] = [
     { id: 'frozenmist', label: 'Frozen Mist' },
     { id: 'amber', label: 'Amber' },
     { id: 'nocturne', label: 'Nocturne' },
-    { id: 'springtime', label: 'Springtime' }
+    { id: 'springtime', label: 'Springtime' },
+    { id: 'rosemeadow', label: 'Rose Meadow' }
 ];
 
 export interface UserSettings {

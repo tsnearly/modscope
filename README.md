@@ -107,7 +107,7 @@ ModScope supports a custom UI engine designed for different modding environments
 
 | Theme | Description |
 | :--- | :--- |
-| **ModScope Flow** | Default — clean, modern slate palette |
+| **ModScope Flow** | Default — clean, think old school radat scope meets understated professionalismmodern slate palette |
 | **Clockwork** | Warm, sepia-toned high-contrast for data-focused sessions |
 | **Frozen Mist** | Cool, minimal icy blues to reduce cognitive load |
 | **Amber** | High-contrast amber on dark gray — classic terminal aesthetic |

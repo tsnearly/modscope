@@ -1,40 +1,40 @@
 /* ModScope Springtime Theme - Simplified Core Palette */
 
 [data-theme='springtime'] {
-    /* Core Palette */
-    --color-primary: #1F4B99;
-    --color-secondary: #1D7324;
-    --color-accent: #3E7DA4;
-    --color-text: #5E9636;
-    --color-text-muted: #6CACB9;
-    --color-bg: #96BA61;
-    --color-surface: #ACD8D6;
-    --color-error: #CDDDA3;
-    --color-border: #FFFFFF;
+    /* Core Palette from Springtime spectrum */
+    --color-primary: #0B735F;
+    --color-secondary: #639D75;
+    --color-accent: #0CDC2A;
+    --color-text: #1D2339;
+    --color-text-muted: #384166;
+    --color-bg: #E2E7E2;
+    --color-surface: #E3DBA9;
+    --color-error: #7B86BA;
+    --color-border: #B9C0B9;
 
     /* Derived semantic variables */
-    --tab-active-bg: var(--color-accent);
-    --tab-active-border: var(--color-primary);
-    --tab-active-text: var(--color-text);
+    --tab-active-bg: var(--color-primary);
+    --tab-active-border: var(--color-text);
+    --tab-active-text: #EFF0F7;
     --tab-bg: var(--color-surface);
     --tab-border: var(--color-border);
-    --tab-text: var(--color-text-muted);
-    --tab-hover: var(--color-primary);
+    --tab-text: var(--color-primary);
+    --tab-hover: var(--color-accent);
 
     --btn-primary-bg: var(--color-primary);
-    --btn-primary-text: #3E7DA4;
-    --btn-primary-hover: #4a7dd6;
-    --btn-primary-active: #133674;
+    --btn-primary-text: #EFF0F7;
+    --btn-primary-hover: #07B01F;
+    --btn-primary-active: #048615;
 
     --nav-bg: var(--color-surface);
     --nav-border: var(--color-text-muted);
     --nav-item-text: var(--color-text-muted);
     --nav-item-hover: var(--color-primary);
-    --nav-item-active-bg: var(--color-secondary);
+    --nav-item-active-bg: #7EC695;
     --nav-item-active-text: var(--color-primary);
 
     --text-primary: var(--color-text);
-    --text-secondary: var(--color-text);
+    --text-secondary: var(--color-text-muted);
     --text-muted: var(--color-text-muted);
 
     --card-bg: var(--color-surface);
@@ -44,7 +44,7 @@
 
     --border-default: var(--color-border);
     --border-strong: var(--color-text-muted);
-    --border-subtle: var(--color-border);
+    --border-subtle: #B9C0B9;
 
     --bg-surface: var(--color-surface);
     --bg-card: var(--color-surface);
@@ -52,22 +52,22 @@
     /* Chart & Visualization Colors */
     --chart-primary: var(--color-primary);
     --chart-secondary: var(--color-secondary);
-    --chart-tertiary: #3E7DA4;
-    --chart-light: #6CACB9;
-    --chart-accent: var(--color-accent);
+    --chart-tertiary: #384166;
+    --chart-light: #1BC5A5;
+    --chart-accent: #E3DBA9;
     --chart-highlight: var(--color-error);
 
     /* Heatmap gradient (light to dark) */
-    --heatmap-0: #adecb2;
-    --heatmap-1: #95e69d;
-    --heatmap-2: #7ce084;
-    --heatmap-3: #6ccc72;
-    --heatmap-4: #5bba63;
-    --heatmap-5: #57af5e;
-    --heatmap-6: #52a259;
-    --heatmap-7: #4d9553;
-    --heatmap-8: #1D7324;
-    --heatmap-9: #185e1d;
+    --heatmap-0: #E2E7E2;
+    --heatmap-1: #9AF1B5;
+    --heatmap-2: #7EC695;
+    --heatmap-3: #8CFF90;
+    --heatmap-4: #0CDC2A;
+    --heatmap-5: #07B01F;
+    --heatmap-6: #048615;
+    --heatmap-7: #025E0C;
+    --heatmap-8: #013904;
+    --heatmap-9: #001701;
 
     --spacing-xs: 2px;
     --spacing-sm: 4px;
@@ -84,9 +84,9 @@
     --shadow-lg: 0 4px 16px rgba(42, 42, 42, 0.2);
 
     /* Schedule View Semantics */
-    --summary-bg: var(--color-bg);
+    --summary-bg: #D2D5E7;
     --summary-text: var(--color-text);
     --summary-header-text: var(--color-primary);
     --summary-border: var(--color-border);
-    --primary-contrast-text: var(--color-surface);
+    --primary-contrast-text: #EFF0F7;
 }

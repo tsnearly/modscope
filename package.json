@@ -1,7 +1,7 @@
 {
   "private": true,
   "name": "modscope",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "ModScope is the premier analytics dashboard designed exclusively for Reddit moderators. Gain deep insights into your community's health with real-time engagement scoring, activity heatmaps, and content DNA analysis. Track top contributors, identify optimal posting times, and visualize trends to grow and manage your subreddit more effectively.",
   "license": "BSD-3-Clause",
   "type": "module",
