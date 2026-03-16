@@ -152,11 +152,26 @@ export function getIconPath(filename: string): string {
         return iconAssets[match] as string;
     }
 
+    // 4. Case-insensitive basename only match (very loose)
+    if (!match) {
+        match = keys.find(key => {
+            const k = key.toLowerCase();
+            const filenamePart = k.split('/').pop() || '';
+            const filenameWithoutExt = filenamePart.split('.')[0] || '';
+            return filenamePart === normalized.toLowerCase() || 
+                   filenameWithoutExt === basename.toLowerCase() ||
+                   k.includes(`/${normalized.toLowerCase()}`);
+        });
+    }
+
+    if (match) {
+        return iconAssets[match] as string;
+    }
+
     // Last ditch: try without "glass-" or "mono-" prefix
     if (normalized.startsWith('glass-') || normalized.startsWith('mono-')) {
         const stripped = normalized.startsWith('glass-') ? normalized.replace('glass-', '') : normalized.replace('mono-', '');
-        const strippedMono = stripped.replace('mono-', '');
-        return getIconPath(strippedMono);
+        return getIconPath(stripped);
     }
 
     return '';

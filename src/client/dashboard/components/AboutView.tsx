@@ -11,7 +11,7 @@ function AboutView({ appVersion }: AboutViewProps) {
         <div style={{ backgroundColor: 'var(--color-surface)' }} className="about-view h-full flex flex-col">
             <EntityTitle
                 icon="app-icon"
-                iconSize={32}
+                iconSize={64}
                 title="About ModScope"
                 subtitle="Advanced subreddit analytics for moderators"
                 className="p-6 bg-card border-b border-border flex-shrink-0"

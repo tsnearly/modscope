@@ -9,6 +9,7 @@ import AboutView from './components/AboutView';
 import { SnapshotsView } from './components/SnapshotsView';
 import { Button } from './components/ui/button';
 import { Icon } from './components/ui/icon';
+import { Tooltip } from './components/ui/tooltip';
 import { cn } from './utils/cn';
 import { useTheme } from '../hooks/useTheme';
 
@@ -118,7 +119,7 @@ export const App = () => {
       }
 
       // Wait a minimum time to show loading state
-      await new Promise(resolve => setTimeout(resolve, 800));
+      await new Promise(resolve => setTimeout(resolve, 5000));
       setIsLoading(false);
       setShowSplash(false);
     };
@@ -213,19 +214,22 @@ export const App = () => {
 
   if (showSplash || isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center h-full bg-[#00451b] text-white p-8 overflow-hidden">
-        <div className="flex flex-col items-center animate-in fade-in zoom-in duration-700 max-w-full">
-           <img src="app-icon-stylized.png" className="w-24 h-24 mb-6 shadow-2xl rounded-2xl object-contain max-w-[min(25vw,120px)]" alt="ModScope Logo" />
-           <h1 className="text-4xl font-black mb-2 tracking-tighter">ModScope</h1>
-           <p className="text-[#98d8b1] font-bold mb-8 uppercase tracking-[0.2em] text-xs">Analytics Dashboard</p>
-           
-           <div className="flex flex-col items-center gap-4 text-center">
-             <div className="text-2xl font-bold">Welcome back!</div>
-             <div className="flex items-center gap-2 text-[#98d8b1] text-sm animate-pulse">
-               <div className="w-1.5 h-1.5 bg-[#98d8b1] rounded-full"></div>
-               {isLoading ? 'Loading Snapshot Data...' : 'Initializing Session...'}
-             </div>
-           </div>
+      <div className="flex flex-col items-center justify-center h-full bg-[#273c2b] text-[#7B9867] p-8 overflow-hidden">
+        <div className="flex flex-col items-center animate-in fade-in zoom-in duration-1000 max-w-full">
+          <img src="app-icon-stylized.png" className="w-24 h-24 mb-6 shadow-2xl rounded-2xl object-contain max-w-[min(25vw,120px)]" alt="ModScope Logo" />
+          <h1 className="text-4xl font-black mb-2 tracking-tighter">ModScope</h1>
+          <p className="text-[#bbcab7] font-bold mb-8 uppercase tracking-[0.2em] text-xs">Analytics Dashboard</p>
+
+          <div className="flex flex-col items-center gap-4 text-center">
+            <div className="text-2xl font-bold">
+              Welcome, <span className="font-semibold text-[#e7ede2]">{devvitContext?.username ?? 'Moderator'}</span>!
+            </div>
+
+            <div className="flex items-center gap-2 text-[#98d8b1] text-sm animate-pulse">
+              <div className="w-1.5 h-1.5 bg-[#273c2b] rounded-full"></div>
+              {isLoading ? 'Loading Snapshot Data...' : 'Initializing Session...'}
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -234,45 +238,59 @@ export const App = () => {
   if (isUnauthorized) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-8 text-center">
-            <Icon name="glass-warning" size={48} className="text-orange-500 mb-4" />
-            <h2 className="text-lg font-bold text-gray-900 mb-2">Moderators Only</h2>
-            <p className="text-sm text-gray-500">This tool is restricted to subreddit moderators.</p>
-          </div>
-        );
-      }
+        <Icon name="glass-warning" size={48} className="text-orange-500 mb-4" />
+        <h2 className="text-lg font-bold text-gray-900 mb-2">Moderators Only</h2>
+        <p className="text-sm text-gray-500">This tool is restricted to subreddit moderators.</p>
+      </div>
+    );
+  }
 
   return (
     <>
-
       {isPrintMode && (
-        <div className="fixed inset-0 z-[1000] bg-slate-200 overflow-y-auto overflow-x-hidden no-print flex flex-col items-center">
-          <div className="w-full max-w-5xl mx-auto my-8 bg-white shadow-2xl border border-slate-300 rounded-lg relative flex flex-col">
-            <div className="sticky top-0 z-10 flex justify-between items-center px-8 py-6 border-b border-slate-200 bg-slate-50/95 backdrop-blur rounded-t-lg shadow-sm">
-              <div>
-                <h2 className="text-xl font-bold text-slate-900">Export / Print Report</h2>
-                <div className="text-slate-500 text-sm mt-1">
-                  <p className="mb-2">Choose an export method:</p>
-                  <ul className="list-disc list-inside space-y-1">
-                    <li><strong className="text-blue-600">Cmd+Click</strong> (Mac) / <strong className="text-blue-600">Ctrl+Click</strong> (Win) to open the report in a new tab.</li>
-                    <li><strong className="text-slate-800">Alt+Click</strong> or <strong className="text-slate-800">Right-Click ➔ "Save As..."</strong> to download.</li>
-                  </ul>
+        <div className="fixed inset-0 z-[2000] bg-slate-100 flex flex-col items-center no-print animate-in fade-in duration-300">
+          {/* Stationary Header */}
+          <div className="w-full flex-shrink-0 bg-white border-b border-slate-200 shadow-md z-50">
+            <div className="max-w-6xl mx-auto flex justify-between items-center px-6 py-4">
+              <div className="flex flex-col">
+                <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                  <Icon name="mono-html" size={26} />
+                  Report Export Preview
+                </h2>
+                <div className="text-slate-500 text-[10px] text-bold uppercase tracking-widest mt-0.5">
+                  <Tooltip content="Use Cmd+Click (Mac) or Ctrl+Click (Windows) on the Open Report button/link to launch in a new tab for native printing" side="bottom">
+                    <span className="text-blue-600 font-black cursor-help">Cmd+Click</span>
+                  </Tooltip>
+                  <span> to Open • </span>
+                  <Tooltip content="Use Alt-Click on the Open Report button/link to automatically download the report" side="bottom">
+                    <span className="text-blue-600 font-black cursor-help">Alt+Click</span>
+                  </Tooltip>
+                  <span> or </span>
+                  <Tooltip content="Use Right-Click ➔ 'Save As...' on the Open Report button/link to specify a filename" side="bottom">
+                    <span className="text-blue-600 font-black cursor-help">Right-Click</span>
+                  </Tooltip>
+                  <span> to Download</span>
                 </div>
               </div>
-              <div className="flex gap-3 items-end">
-                <Button variant="outline" onClick={closePrintDrawer}>Cancel</Button>
+              <div className="flex gap-3">
+                <Button variant="outline" onClick={closePrintDrawer}>Close Export</Button>
                 {printUrl ? (
                   <a href={printUrl} download={`ModScope_Report_${reportData?.meta?.subreddit || 'Unknown'}.html`} title="Cmd/Ctrl+Click to open, or Right-Click to save" className="inline-block">
-                    <Button variant="default" icon="glass-export">Cmd+Click to Open</Button>
+                    <Button variant="default" icon="mono-html" iconSize={22}>Open Report</Button>
                   </a>
                 ) : (
-                  <Button variant="default" disabled loading>Generating HQ Print...</Button>
+                  <Button variant="default" size="sm" disabled loading>Generating HQ Print...</Button>
                 )}
               </div>
             </div>
-            {/* The printable actual component is rendered here. */}
-            <div className="flex-1 w-full bg-white rounded-b-lg pb-12">
+          </div>
+
+          {/* Scrollable Preview Area */}
+          <div className="flex-1 w-full overflow-y-auto bg-slate-100 p-8">
+            <div className="max-w-6xl mx-auto bg-white shadow-2xl border border-slate-200 rounded-lg overflow-hidden">
               <ReportView data={reportData} isPrintMode={true} officialAccounts={officialAccounts} />
             </div>
+            <div className="h-16" /> {/* Bottom padding for comfortable scrolling */}
           </div>
         </div>
       )}

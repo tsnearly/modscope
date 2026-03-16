@@ -431,7 +431,7 @@ function ReportView({ data: propData, isPrintMode = false, onPrint, officialAcco
                     <div style={{ backgroundColor: 'var(--color-surface)', overflowY: 'auto', height: '100%' }}>
                         <Chart
                             title="Activity Heatmap (Post Frequency)"
-                            icon={<Icon name="grey-timeline-week.png" size={16} />}
+                            icon={<Icon src={getDataGroupingIcon('activity_heatmap', iconContext)} size={16} />}
                             height="auto"
                         >
                             <div className="p-3">
@@ -827,7 +827,7 @@ function ReportView({ data: propData, isPrintMode = false, onPrint, officialAcco
                     <div style={{ width: '100%' }}>
                         <Chart
                             title="Activity Trend (30d)"
-                            icon={<Icon src={getDataGroupingIcon('activity_trend')} size={16} />}
+                            icon={<Icon src={getDataGroupingIcon('activity_trend', iconContext)} size={16} />}
                             className="mb-3"
                             height={320}
                         >
@@ -896,7 +896,7 @@ function ReportView({ data: propData, isPrintMode = false, onPrint, officialAcco
 
                         <Chart
                             title="Engagement vs Votes (24h)"
-                            icon={<Icon src={getDataGroupingIcon('engagement')} size={16} />}
+                            icon={<Icon src={getDataGroupingIcon('engagement', iconContext)} size={16} />}
                             height={320}
                         >
                             <div style={{ width: '100%', height: '280px', minWidth: 0, position: 'relative' }}>
@@ -1180,7 +1180,7 @@ function ReportView({ data: propData, isPrintMode = false, onPrint, officialAcco
                             {/* Content Stats Section via renderTabContent */}
                             <div className="mb-8 pdf-safe-block">
                                 <div className="flex items-center gap-2 mb-4 border-b-2 border-slate-200 pb-2">
-                                    <Icon name="color-content.png" size={20} />
+                                    <Icon name="color-layers.png" size={20} />
                                     <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">Content Analysis</h3>
                                 </div>
                                 <div className="bg-white border border-slate-200 rounded p-4 print-no-scroll">
