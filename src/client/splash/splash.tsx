@@ -30,12 +30,22 @@ export const Splash = () => {
             </p>
           </div>
 
-          <button
-            className="w-full bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200 mt-6"
-            onClick={(e) => requestExpandedMode(e.nativeEvent, 'dashboard')}
-          >
-            Open Dashboard
-          </button>
+          <div className="flex flex-col gap-3 mt-6">
+            <button
+              className="w-full bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200"
+              onClick={(e) => requestExpandedMode(e.nativeEvent, 'dashboard')}
+            >
+              Open in Post
+            </button>
+            <a
+              href={`https://www.reddit.com/r/${context.subredditName || 'modscope_dev'}/app/modscope`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full bg-white hover:bg-gray-50 text-gray-700 font-semibold py-3 px-6 rounded-lg border border-gray-300 transition-colors duration-200 text-center"
+            >
+              Launch Full Screen
+            </a>
+          </div>
         </div>
       </div>
     </div>

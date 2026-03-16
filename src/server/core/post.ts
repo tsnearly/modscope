@@ -1,6 +1,6 @@
 import { reddit, redis } from '@devvit/web/server';
 
-const DASHBOARD_POST_KEY = 'modscope:launcherPostId';
+export const DASHBOARD_POST_KEY = 'modscope:launcherPostId:v2';
 
 export const createPost = async (subredditName: string) => {
   console.log(`[CREATE_POST] Starting post entry for ${subredditName}...`);
@@ -31,17 +31,23 @@ export const createPost = async (subredditName: string) => {
     subredditName: subredditName,
   });
 
-  // 3. Apply mod-only attributes (Sticky + Distinguish + Spam)
+  // 3. Apply mod-only attributes
   try {
-    // Distinguish as mod (green shield) and sticky to top
-    // Note: in Devvit 0.12.x, distinguish(how, sticky) handles both
-    await newPost.distinguish('moderator', true);
-    console.log(`[CREATE_POST] ✓ Distinguished and Stickied post ${newPost.id}`);
+    // 3a. Approve the post to pull it out of the mod queue
+    await newPost.approve();
+    console.log(`[CREATE_POST] ✓ Approved post ${newPost.id}`);
 
-    // Mark as spam to hide from subreddit feed and mod queue noise
-    // But DO NOT approve it.
-    await newPost.remove(true); 
-    console.log(`[CREATE_POST] ✓ Marked as spam (mod-only hidden)`);
+    // 3b. Distinguish as mod (green shield)
+    await newPost.distinguish();
+    console.log(`[CREATE_POST] ✓ Distinguished post ${newPost.id}`);
+
+    // 3c. Sticky to top
+    await newPost.sticky();
+    console.log(`[CREATE_POST] ✓ Stickied post ${newPost.id}`);
+
+    // 3d. Lock the post to prevent community interaction
+    await newPost.lock();
+    console.log(`[CREATE_POST] ✓ Locked post ${newPost.id}`);
   } catch (error) {
     console.log(`[CREATE_POST] Failed to set mod attributes: ${error}`);
   }

@@ -3,7 +3,7 @@ import { AnalyticsResponse } from '../shared/types/api';
 import { DEFAULT_CALCULATION_SETTINGS, DEFAULT_USER_SETTINGS, DEFAULT_STORAGE_SETTINGS, CalculationSettings, UserSettings, StorageSettings } from '../shared/types/settings';
 import { redis, reddit, createServer, context, getServerPort, scheduler } from '@devvit/web/server';
 import { Devvit } from '@devvit/public-api';
-import { createPost } from './core/post';
+import { createPost, DASHBOARD_POST_KEY } from './core/post';
 import { NormalizationService } from './services/NormalizationService';
 import { DataRetrievalService } from './services/DataRetrievalService';
 import { SnapshotService } from './services/SnapshotService';
@@ -18,11 +18,9 @@ const storage = redis;
 // Canonical subreddit used for all data storage and retrieval.
 Object.defineProperty(globalThis, 'DATA_SUBREDDIT', {
   get: function () {
-    try {
-      return context.subredditName || 'QuizPlanetGame';
-    } catch (e) {
-      return 'QuizPlanetGame';
-    }
+    const name = context.subredditName;
+    if (!name) throw new Error('[DATA_SUBREDDIT] subredditName unavailable in current context');
+    return name;
   }
 });
 declare var DATA_SUBREDDIT: string;
@@ -64,6 +62,18 @@ router.get<{ postId: string }, AnalyticsResponse | { status: string; message: st
 
     try {
       const username = await reddit.getCurrentUsername();
+      if (!username) {
+        res.status(401).json({ status: 'error', message: 'Not authenticated' });
+        return;
+      }
+
+      const mods = await (reddit as any).getModerators({ subredditName: DATA_SUBREDDIT, username }).all();
+      const isMod = mods.length > 0;
+      if (!isMod) {
+        res.status(403).json({ status: 'error', message: 'Moderators only' });
+        return;
+      }
+
       // Ensure bootstrap has run (lazy initialization on first request)
       await ensureBootstrap(username || undefined);
 
@@ -134,24 +144,12 @@ router.post('/internal/on-app-install', async (_req, res): Promise<void> => {
   }
 });
 
-router.post('/internal/menu/open-dashboard', async (req, res): Promise<void> => {
+router.post('/internal/menu/open-dashboard', async (_req, res): Promise<void> => {
   try {
-    await redis.set('modscope:debug:req', JSON.stringify(req.body));
-    console.log('[DASHBOARD] Menu item clicked - creating new post');
-    const post = await createPost(DATA_SUBREDDIT);
-
-    // Add timestamp to force cache bust
-    const timestamp = Date.now();
-    const url = `https://reddit.com/r/${DATA_SUBREDDIT}/comments/${post.id}?t=${timestamp}`;
-
-    console.log(`[DASHBOARD] Navigating to: ${url}`);
-
-    res.json({
-      navigateTo: url,
-    });
+    const post = await createPost(DATA_SUBREDDIT); // createPost already handles reuse vs recovery
+    const url = `https://reddit.com/r/${DATA_SUBREDDIT}/comments/${post.id}`;
+    res.json({ navigateTo: url });
   } catch (error) {
-    await redis.set('modscope:debug:error', error instanceof Error ? error.message : String(error));
-    console.error(`[DASHBOARD] Error creating post: ${error}`);
     const errorMessage = error instanceof Error ? error.message : String(error);
     res.json({
       showToast: {
@@ -816,19 +814,27 @@ router.post('/api/settings', async (req, res) => {
 // Debug endpoint to clear cached post ID
 router.post('/internal/clear-cache', async (_req, res): Promise<void> => {
   try {
-    await redis.del('modscope:launcherPostId');
+    await Promise.all([
+      redis.del('modscope:launcherPostId'),
+      redis.del(DASHBOARD_POST_KEY)
+    ]);
     res.json({
-      status: 'success',
-      message: 'Cache cleared - next dashboard open will create fresh post',
+      showToast: {
+        text: 'Cache cleared - next dashboard open will create fresh post',
+        appearance: 'success'
+      }
     });
   } catch (error) {
     console.error(`Error clearing cache: ${error}`);
-    res.status(400).json({
-      status: 'error',
-      message: 'Failed to clear cache',
+    res.json({
+      showToast: {
+        text: 'Failed to clear cache',
+        appearance: 'neutral'
+      }
     });
   }
 });
+
 
 router.post('/api/schedule-action', async (req, res) => {
   const { postId, delayMinutes } = req.body;
@@ -1089,6 +1095,8 @@ router.post('/internal/tasks/snapshot_worker', async (_req, res): Promise<void> 
 server.listen(port, () => {
   console.log(`[SERVER] ModScope Dashboard Service listening on port ${port}`);
 });
+
+
 
 // export default Devvit instantiates the Actor, which registers the Twirp
 // SchedulerHandler service that Devvit's runtime uses to invoke scheduled jobs.

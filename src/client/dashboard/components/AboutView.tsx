@@ -1,13 +1,12 @@
 import { EntityTitle } from './ui/entity-title';
 import { Accordion } from './ui/accordion';
 import { Icon } from './ui/icon';
-import { getIconPath } from '../utils/iconMappings';
 
 interface AboutViewProps {
-    appVersion?: string;
+    appVersion: string;
 }
 
-function AboutView({ appVersion = '0.0.1' }: AboutViewProps) {
+function AboutView({ appVersion }: AboutViewProps) {
     return (
         <div style={{ backgroundColor: 'var(--color-surface)' }} className="about-view h-full flex flex-col">
             <EntityTitle
@@ -15,10 +14,10 @@ function AboutView({ appVersion = '0.0.1' }: AboutViewProps) {
                 iconSize={32}
                 title="About ModScope"
                 subtitle="Advanced subreddit analytics for moderators"
-                className="mb-4 p-4 bg-card border-b border-border flex-shrink-0 items-center"
+                className="p-6 bg-card border-b border-border flex-shrink-0"
             />
 
-            <div className="view-content flex-1 overflow-y-auto px-6 pb-6 pt-4">
+            <div className="view-content flex-1 overflow-y-auto px-6 pb-6 pt-2">
                 <div className="card mb-6">
                     <div className="flex divide-x divide-border">
                         <div className="flex-1" style={{ padding: '1.5rem' }}>

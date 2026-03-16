@@ -11,13 +11,6 @@ import { Button } from './components/ui/button';
 import { Icon } from './components/ui/icon';
 import { cn } from './utils/cn';
 import { useTheme } from '../hooks/useTheme';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "./components/ui/dialog";
 
 type View = 'report' | 'snapshots' | 'config' | 'schedule' | 'about';
 
@@ -66,7 +59,7 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
 export const App = () => {
   useTheme(); // Initialize and apply theme on mount
   const [activeView, setActiveView] = useState<View>('report');
-  const [selectedSnapshotId, setSelectedSnapshotId] = useState<number | null>(null);
+  const [, setSelectedSnapshotId] = useState<number | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [reportData, setReportData] = useState<any>(null);
   const [officialAccounts, setOfficialAccounts] = useState<string[]>([]);
@@ -74,20 +67,28 @@ export const App = () => {
   const [jobHistory, setJobHistory] = useState<any[]>([]);
   const [config, setConfig] = useState<any>(null);
   const [appVersion, setAppVersion] = useState<string>(devvitContext?.appVersion || '0.0.x');
+  const [isUnauthorized, setIsUnauthorized] = useState(false);
   const [isPrintMode, setIsPrintMode] = useState(false);
   const [printUrl, setPrintUrl] = useState<string | null>(null);
-  const [showSplash, setShowSplash] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
-  const [countdown, setCountdown] = useState(5);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [showSplash, setShowSplash] = useState(true);
 
   useEffect(() => {
     const loadData = async () => {
       // Here we could also fetch other settings to initialize the app state
 
       try {
-        // Load initial system state
         const res = await fetch('/api/init');
+
+        if (res.status === 403) {
+          // Non-moderator accessed the post
+          setIsLoading(false);
+          setShowSplash(false);
+          // Render a blocked state — see below
+          setIsUnauthorized(true);
+          return;
+        }
+
         if (res.ok) {
           const data = await res.json();
           if (data.analytics) setReportData(data.analytics);
@@ -116,35 +117,14 @@ export const App = () => {
         console.error('Failed to auto-load latest snapshot:', err);
       }
 
-      // Wait a minimum time to show splash
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Wait a minimum time to show loading state
+      await new Promise(resolve => setTimeout(resolve, 800));
       setIsLoading(false);
-
-      // Start countdown only if successfully loaded
-      timerRef.current = setInterval(() => {
-        setCountdown((prev) => {
-          if (prev <= 1) {
-            if (timerRef.current) clearInterval(timerRef.current);
-            // Only hide if we aren't still loading (safety check)
-            setShowSplash(false);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+      setShowSplash(false);
     };
 
     loadData();
-
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
   }, []);
-
-  const handleSplashClick = () => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    setShowSplash(false);
-  };
 
   const handleLoadSnapshot = async (scanId: number): Promise<boolean> => {
     try {
@@ -231,47 +211,38 @@ export const App = () => {
     }
   };
 
+  if (showSplash || isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full bg-[#00451b] text-white p-8 overflow-hidden">
+        <div className="flex flex-col items-center animate-in fade-in zoom-in duration-700 max-w-full">
+           <img src="app-icon-stylized.png" className="w-24 h-24 mb-6 shadow-2xl rounded-2xl object-contain max-w-[min(25vw,120px)]" alt="ModScope Logo" />
+           <h1 className="text-4xl font-black mb-2 tracking-tighter">ModScope</h1>
+           <p className="text-[#98d8b1] font-bold mb-8 uppercase tracking-[0.2em] text-xs">Analytics Dashboard</p>
+           
+           <div className="flex flex-col items-center gap-4 text-center">
+             <div className="text-2xl font-bold">Welcome back!</div>
+             <div className="flex items-center gap-2 text-[#98d8b1] text-sm animate-pulse">
+               <div className="w-1.5 h-1.5 bg-[#98d8b1] rounded-full"></div>
+               {isLoading ? 'Loading Snapshot Data...' : 'Initializing Session...'}
+             </div>
+           </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isUnauthorized) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+            <Icon name="glass-warning" size={48} className="text-orange-500 mb-4" />
+            <h2 className="text-lg font-bold text-gray-900 mb-2">Moderators Only</h2>
+            <p className="text-sm text-gray-500">This tool is restricted to subreddit moderators.</p>
+          </div>
+        );
+      }
+
   return (
     <>
-      {showSplash && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-[2px] transition-all duration-300"
-          onClick={handleSplashClick}
-        >
-          <div
-            className="bg-white rounded-xl shadow-2xl p-6 max-w-sm w-full mx-4 border border-gray-100 flex flex-col items-center text-center animate-in zoom-in-95 fade-in duration-300"
-          >
-            <div className="mb-5">
-              <div className="inline-flex mb-4 drop-shadow-sm">
-                <Icon name="app-icon-stylized" size={80} />
-              </div>
-              <h1 className="text-2xl font-bold text-gray-900 tracking-tight">ModScope</h1>
-              <p className="text-xs font-medium text-gray-500 uppercase tracking-widest mt-1">v{appVersion}</p>
-            </div>
-
-            <div className="w-full py-4 border-t border-gray-100">
-              {isLoading ? (
-                <div className="flex flex-col items-center gap-3">
-                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-gray-200 border-t-blue-600"></div>
-                  <span className="text-sm text-gray-500 font-medium">Initializing...</span>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <p className="text-sm text-gray-600">Welcome back!</p>
-                  <p className="text-xs text-green-600 font-semibold bg-green-50 px-3 py-1 rounded-full inline-block">System Ready</p>
-                </div>
-              )}
-            </div>
-
-            {!isLoading && (
-              <div className="flex flex-col items-center gap-1 mt-2">
-                <p className="text-[10px] text-gray-400">Auto-closing in {countdown}s</p>
-                <p className="text-[10px] text-gray-300 animate-pulse">Click anywhere to start</p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       {isPrintMode && (
         <div className="fixed inset-0 z-[1000] bg-slate-200 overflow-y-auto overflow-x-hidden no-print flex flex-col items-center">

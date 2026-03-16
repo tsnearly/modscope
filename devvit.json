@@ -5,7 +5,7 @@
         "dir": "dist/client",
         "entrypoints": {
             "default": {
-                "inline": false,
+                "inline": true,
                 "entry": "dashboard.html"
             }
         }
@@ -25,6 +25,12 @@
                 "location": "subreddit",
                 "forUserType": "moderator",
                 "endpoint": "/internal/menu/open-dashboard"
+            },
+            {
+                "label": "Reset Launcher Post",
+                "location": "subreddit",
+                "forUserType": "moderator",
+                "endpoint": "/internal/clear-cache"
             }
         ]
     },

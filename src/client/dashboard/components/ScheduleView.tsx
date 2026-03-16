@@ -388,20 +388,17 @@ function ScheduleView({ initialJobs = [], initialHistory = [], onRunComplete }: 
 
     return (
         <div className="flex flex-col gap-6 p-6 h-full overflow-auto bg-[var(--color-bg)] text-[var(--color-text)]">
-            <div className="flex items-center justify-between">
-                <div>
-                    <EntityTitle
-                        icon="lucide:calendar-clock"
-                        title="Snapshot Scheduling"
-                        subtitle="Automate your community health checks and historical data collection"
-                    />
-                </div>
-                <div className="flex items-center gap-3">
+            <EntityTitle
+                icon="lucide:calendar-clock"
+                title="Snapshot Scheduling"
+                subtitle="Automate your community health checks and historical data collection"
+                className="mb-2"
+                actions={
                     <Button variant="default" onClick={handleRunNow} disabled={loading} loading={loading} tooltip="Execute a background analysis immediately" icon="lucide:play">
                         Run Analysis Now
                     </Button>
-                </div>
-            </div>
+                }
+            />
 
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
                 {/* Main Configuration Card */}
