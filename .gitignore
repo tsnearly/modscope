@@ -35,6 +35,9 @@ pnpm-debug.log*
 .gemini/
 brain/
 tmp/
+.memory
+LongTermMemory
+CLAUDE.md
 
 
 # Logs
@@ -176,6 +179,3 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
-.memory
-LongTermMemory
-CLAUDE.md
