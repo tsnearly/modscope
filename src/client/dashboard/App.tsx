@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useState, useEffect, useRef } from 'react';
-import { context as devvitContext } from '@devvit/web/client';
+import { context as devvitContext, requestExpandedMode } from '@devvit/web/client';
 import './styles/main.css';
 import ReportView from './components/ReportView';
 import ConfigView from './components/ConfigView';
@@ -10,6 +10,7 @@ import { SnapshotsView } from './components/SnapshotsView';
 import { Button } from './components/ui/button';
 import { Icon } from './components/ui/icon';
 import { Tooltip } from './components/ui/tooltip';
+import { Heading } from './components/ui/heading';
 import { cn } from './utils/cn';
 import { useTheme } from '../hooks/useTheme';
 
@@ -214,19 +215,21 @@ export const App = () => {
 
   if (showSplash || isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center h-full bg-[#273c2b] text-[#7B9867] p-8 overflow-hidden">
+      <div className="flex flex-col items-center justify-center h-full bg-[var(--color-bg)] text-[var(--color-primary)] p-8 overflow-hidden">
         <div className="flex flex-col items-center animate-in fade-in zoom-in duration-1000 max-w-full">
           <img src="app-icon-stylized.png" className="w-24 h-24 mb-6 shadow-2xl rounded-2xl object-contain max-w-[min(25vw,120px)]" alt="ModScope Logo" />
-          <h1 className="text-4xl font-black mb-2 tracking-tighter">ModScope</h1>
-          <p className="text-[#bbcab7] font-bold mb-8 uppercase tracking-[0.2em] text-xs">Analytics Dashboard</p>
+          <Heading size="xl">ModScope</Heading>
+          <Heading size="lg" className="text-[var(--color-text-muted)]">Analytics Dashboard</Heading>
+          <Heading size="default" className="text-[var(--color-text-muted)]">Version {appVersion}</Heading>
+          <div className="h-4"></div>
 
           <div className="flex flex-col items-center gap-4 text-center">
             <div className="text-2xl font-bold">
-              Welcome, <span className="font-semibold text-[#e7ede2]">{devvitContext?.username ?? 'Moderator'}</span>!
+              Welcome, <span className="font-semibold text-[var(--color-text)]">{devvitContext?.username ?? 'Moderator'}</span>!
             </div>
 
-            <div className="flex items-center gap-2 text-[#98d8b1] text-sm animate-pulse">
-              <div className="w-1.5 h-1.5 bg-[#273c2b] rounded-full"></div>
+            <div className="flex items-center gap-2 text-[var(--color-primary)] text-sm animate-pulse">
+              <div className="w-1.5 h-1.5 bg-[var(--color-primary)] rounded-full"></div>
               {isLoading ? 'Loading Snapshot Data...' : 'Initializing Session...'}
             </div>
           </div>
@@ -275,7 +278,7 @@ export const App = () => {
               <div className="flex gap-3">
                 <Button variant="outline" onClick={closePrintDrawer}>Close Export</Button>
                 {printUrl ? (
-                  <a href={printUrl} download={`ModScope_Report_${reportData?.meta?.subreddit || 'Unknown'}.html`} title="Cmd/Ctrl+Click to open, or Right-Click to save" className="inline-block">
+                  <a href={printUrl} download={`ModScope-${reportData?.meta?.subreddit || 'Unknown'}-${(reportData?.meta?.scan_date ? new Date(reportData.meta.scan_date) : new Date()).toISOString().slice(0, 10).replace(/-/g, '')}.html`} title="Cmd/Ctrl+Click to open, or Right-Click to save" className="inline-block">
                     <Button variant="default" icon="mono-html" iconSize={22}>Open Report</Button>
                   </a>
                 ) : (
@@ -328,6 +331,23 @@ export const App = () => {
               );
             })}
           </div>
+
+          {/* Expand into full-screen post — right side of toolbar */}
+          <Tooltip content="Open Full Screen" side="bottom">
+            <button
+              className="fullscreen-btn"
+              aria-label="Open full screen"
+              onClick={(e) => requestExpandedMode(e.nativeEvent, 'dashboard')}
+            >
+              {/* Expand icon */}
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 8V5a2 2 0 0 1 2-2h3" />
+                <path d="M16 3h3a2 2 0 0 1 2 2v3" />
+                <path d="M21 16v3a2 2 0 0 1-2 2h-3" />
+                <path d="M8 21H5a2 2 0 0 1-2-2v-3" />
+              </svg>
+            </button>
+          </Tooltip>
         </div>
 
         {/* Content Area - Scrollable */}

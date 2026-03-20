@@ -67,8 +67,13 @@ router.get<{ postId: string }, AnalyticsResponse | { status: string; message: st
         return;
       }
 
-      const mods = await (reddit as any).getModerators({ subredditName: DATA_SUBREDDIT, username }).all();
-      const isMod = mods.length > 0;
+      let isMod = false;
+      try {
+        const mods = await (reddit as any).getModerators({ subredditName: DATA_SUBREDDIT, username }).all();
+        isMod = mods.length > 0;
+      } catch (modCheckError) {
+        console.warn('[INIT] getModerators check failed (SDK/Reddit API error), defaulting isMod=false:', modCheckError);
+      }
       if (!isMod) {
         res.status(403).json({ status: 'error', message: 'Moderators only' });
         return;
@@ -92,8 +97,13 @@ router.get<{ postId: string }, AnalyticsResponse | { status: string; message: st
         console.log(`[ANALYTICS] ✓ Successfully reassembled snapshot from Redis for r/${analytics.meta.subreddit}`);
       }
 
-      // Fetch official accounts
-      const officialAccounts = await getOfficialAccounts(reddit as any, DATA_SUBREDDIT);
+      // Fetch official accounts — isolated so a Reddit/SDK 403 never blocks init
+      let officialAccounts: string[] = [];
+      try {
+        officialAccounts = await getOfficialAccounts(reddit as any, DATA_SUBREDDIT);
+      } catch (oaError) {
+        console.warn('[INIT] getOfficialAccounts failed, continuing with empty list:', oaError);
+      }
 
       // Fetch job history and active jobs
       const jobsRaw = await scheduler.listJobs();
@@ -347,7 +357,7 @@ router.post('/api/jobs', async (req, res) => {
 
       console.log(`[JOBS] Job ID ${jobId} persisted to Redis`);
     } catch (redisError) {
-      console.error('[JOBS] CRITICAL: Failed to store job ID, cancelling job:', redisError);
+      console.error('[JOBS] CRITICAL: Failed to store job ID, canceling job:', redisError);
       await scheduler.cancelJob(jobId); // Prevent zombie
       throw new Error('Failed to persist job metadata');
     }
@@ -389,20 +399,20 @@ router.delete('/api/jobs/:id', async (req, res) => {
     // Cancel in scheduler (may throw if one-time job already executed)
     try {
       await scheduler.cancelJob(id);
-      console.log(`[JOBS] Cancelled job ${id}`);
+      console.log(`[JOBS] Canceled job ${id}`);
     } catch (schedulerError) {
       console.log(`[JOBS] Scheduler cancel failed for ${id}, likely already executed or purged. Proceeding with Redis cleanup.`);
     }
 
     // Clean up Redis
-    await redis.hSet(`job:${id}`, { status: 'cancelled' });
+    await redis.hSet(`job:${id}`, { status: 'canceled' });
     await redis.zRem('jobs:active', [id]);
 
     console.log(`[JOBS] Removed job ${id} from Redis`);
 
-    res.json({ status: 'success', message: 'Job cancelled' });
+    res.json({ status: 'success', message: 'Job canceled' });
   } catch (error) {
-    console.error('Error cancelling job:', error);
+    console.error('Error canceling job:', error);
     res.status(500).json({ status: 'error', message: 'Failed to cancel job' });
   }
 });
@@ -740,7 +750,16 @@ router.get('/api/history', async (_req, res) => {
   try {
     // Fetch last 50 history entries
     const historyRaw = await redis.zRange('jobs:history', -50, -1);
-    const history = historyRaw.map((entry: any) => JSON.parse(entry.member)).reverse();
+    const history = historyRaw.map((entry: any) => {
+      const job = JSON.parse(entry.member);
+      // If a job has been "running" for more than 30 minutes, it was almost certainly killed by a timeout
+      if (job.status === 'running' && Date.now() - job.startTime > 30 * 60 * 1000) {
+        job.status = 'canceled';
+        job.details = 'Job timed out or was terminated unexpectedly by the host runtime.';
+        job.duration = '> 30m';
+      }
+      return job;
+    }).reverse();
     res.json(history);
   } catch (error) {
     console.error('Error fetching history:', error);
@@ -881,12 +900,12 @@ router.post('/internal/menu/cancel-job', async (req, res) => {
     // Clean up the stored job ID
     res.json({
       showToast: {
-        text: 'Successfully cancelled the scheduled job',
+        text: 'Successfully canceled the scheduled job',
         appearance: 'success',
       },
     });
   } catch (error) {
-    console.error('Error cancelling job:', error);
+    console.error('Error canceling job:', error);
     res.json({
       showToast: {
         text: 'Failed to cancel job',
@@ -1035,27 +1054,66 @@ router.post('/internal/tasks/snapshot_worker', async (_req, res): Promise<void> 
     cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
     let deletedCount = 0;
 
-    const scanCountStr = await storage.get('global:scan_counter');
-    if (scanCountStr) {
-      const maxId = parseInt(scanCountStr);
-      for (let id = 1; id <= maxId; id++) {
-        if (id === scanId) continue;
-        try {
-          const meta = await storage.hGetAll(`run:${id}:meta`);
-          if (meta && (meta.scan_date || meta.proc_date)) {
-            const dateStr = meta.scan_date || meta.proc_date || Date.now().toString();
-            const scanDate = new Date(dateStr);
-            if (scanDate < cutoffDate) {
-              await normalizer.deleteSnapshot(id);
-              deletedCount++;
-              console.log(`[WORKER] Evicted old snapshot #${id} (exceeded ${retentionDays} days retention)`);
-            }
+      const scanCountStr = await storage.get('global:scan_counter');
+      const startIdStr = await storage.get('global:last_cleaned_id');
+      const startId = startIdStr ? parseInt(startIdStr) : 1;
+
+      if (scanCountStr) {
+        const maxId = parseInt(scanCountStr);
+        const BATCH_SIZE = 20;
+        let highestCleanedId = startId;
+        
+        for (let batchStart = startId; batchStart <= maxId; batchStart += BATCH_SIZE) {
+          const promises = [];
+          for (let i = 0; i < BATCH_SIZE && (batchStart + i) <= maxId; i++) {
+            const id = batchStart + i;
+            if (id === scanId) continue;
+            promises.push((async () => {
+              try {
+                const meta = await storage.hGetAll(`run:${id}:meta`);
+                if (!meta || Object.keys(meta).length === 0) return { id, status: 'empty' };
+
+                if (meta && (meta.scan_date || meta.proc_date)) {
+                  const dateStr = meta.scan_date || meta.proc_date || Date.now().toString();
+                  const scanDate = new Date(dateStr);
+                  if (scanDate < cutoffDate) {
+                    await normalizer.deleteSnapshot(id);
+                    deletedCount++;
+                    console.log(`[WORKER] Evicted old snapshot #${id} (exceeded ${retentionDays} days retention)`);
+                    return { id, status: 'deleted' };
+                  } else {
+                    return { id, status: 'retained' };
+                  }
+                }
+              } catch (e) {
+                // Ignore individual fetch errors
+              }
+              return { id, status: 'error' };
+            })());
           }
-        } catch (e) {
-          // Ignore individual fetch errors
+          const results = await Promise.all(promises);
+          
+          let stopScanning = false;
+          for (const res of results) {
+             if (res.status === 'deleted' || res.status === 'empty') {
+                highestCleanedId = Math.max(highestCleanedId, res.id);
+             } else if (res.status === 'retained') {
+                // Since scan IDs are strictly chronological, the first retained snapshot means all subsequent ones are also retained!
+                stopScanning = true;
+                break; // Stop evaluating further statuses in this batch
+             }
+          }
+
+          if (stopScanning || highestCleanedId >= maxId) {
+             break; // Break the primary sequence batch loop immediately to save max transactions
+          }
+        }
+        
+        // Persist the pointer so we don't have to scan 1 through N empty hashes next week
+        if (highestCleanedId > startId) {
+           await storage.put('global:last_cleaned_id', highestCleanedId.toString());
         }
       }
-    }
 
     // 5. Update the history record
     await redis.zRem('jobs:history', [historyEntryStr]);

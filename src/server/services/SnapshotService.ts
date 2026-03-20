@@ -76,17 +76,22 @@ export class SnapshotService {
                         // Completed successfully, exit retry loop
                         break;
                     } catch (e: any) {
-                        if (e.message && e.message.includes('429')) {
+                        const isRateLimit = e.message && e.message.includes('429');
+                        const isServerError = e.message && (e.message.includes('500') || e.message.includes('503'));
+
+                        if (isRateLimit || isServerError) {
                             retries++;
                             if (retries > MAX_RETRIES) {
-                                console.warn(`[SNAPSHOT] Rate limit: max retries exhausted. Returning ${results.length} items collected so far.`);
+                                const reason = isRateLimit ? 'Rate limit' : 'Server error';
+                                console.warn(`[SNAPSHOT] ${reason}: max retries exhausted. Returning ${results.length} items collected so far.`);
                                 break;
                             }
                             const delay = 5000 * Math.pow(2, retries - 1); // 5s, 10s, 20s
-                            console.warn(`[SNAPSHOT] Rate limit hit during fetchBounded. Retry ${retries}/${MAX_RETRIES} after ${delay / 1000}s pause...`);
+                            const reason = isRateLimit ? 'Rate limit (429)' : 'Server error (500/503)';
+                            console.warn(`[SNAPSHOT] ${reason} hit during fetchBounded. Retry ${retries}/${MAX_RETRIES} after ${delay / 1000}s pause...`);
                             await new Promise(r => setTimeout(r, delay));
                             // Note: AsyncIterables from Reddit SDK are typically consumed once,
-                            // so after a 429 mid-stream we return what we have.
+                            // so after an error mid-stream we return what we have.
                             break;
                         } else {
                             throw e;

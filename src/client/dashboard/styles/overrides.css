@@ -16,7 +16,7 @@ body,
 }
 
 body {
-    background: var(--color-bg) !important;
+    background: var(--color-surface) !important;
 }
 
 /* ── EntityTitle layout ──────────────────────────────────────────────────*/

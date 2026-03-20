@@ -48,7 +48,7 @@
     --border-strong: var(--color-text-muted);
     --border-subtle: var(--color-border);
 
-    --bg-surface: var(--color-bg);
+    --bg-surface: var(--color-surface);
     --bg-card: var(--color-surface);
 
     /* Chart & Visualization Colors */
@@ -76,10 +76,30 @@
     --spacing-md: 8px;
     --spacing-lg: 12px;
     --spacing-xl: 16px;
-
     --radius-sm: 4px;
     --radius-md: 6px;
     --radius-lg: 8px;
+
+    /* Shadcn/Tailwind Variables (HSL format) */
+    --background: 108 33% 97%;
+    --foreground: 120 13% 15%;
+    --card: 108 33% 93%;
+    --card-foreground: 120 13% 15%;
+    --popover: 120 35% 97%;
+    --popover-foreground: 120 13% 15%;
+    --primary: 139 10% 48%;
+    --primary-foreground: 108 33% 93%;
+    --secondary: 102 16% 75%;
+    --secondary-foreground: 139 10% 48%;
+    --muted: 102 16% 85%;
+    --muted-foreground: 120 5% 45%;
+    --accent: 108 33% 93%;
+    --accent-foreground: 139 10% 48%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 102 18% 81%;
+    --input: 102 18% 81%;
+    --ring: 139 10% 48%;
 
     --shadow-sm: 0 1px 3px rgba(39, 60, 43, 0.1);
     --shadow-md: 0 2px 8px rgba(39, 60, 43, 0.15);
@@ -99,8 +119,8 @@
     --color-accent: #e8f4e5;
     --color-text: #5a6b5a;
     --color-text-muted: #2d3a2d;
-    --color-bg: #e8f4e5;
-    --color-surface: #f5f5f0;
+    --color-bg: #f5fcf5;
+    --color-surface: #e8f4e5;
     --color-error: #d63447;
     --color-border: #c7d9c3;
 
@@ -125,7 +145,7 @@
     --nav-item-active-text: var(--color-text-muted);
 
     --text-primary: var(--color-text);
-    --text-secondary: var(--color-text);
+    --text-secondary: var(--color-secondary);
     --text-muted: var(--color-text-muted);
 
     --card-bg: var(--color-surface);
@@ -137,7 +157,7 @@
     --border-strong: var(--color-text-muted);
     --border-subtle: var(--color-border);
 
-    --bg-surface: var(--color-bg);
+    --bg-surface: var(--color-surface);
     --bg-card: var(--color-surface);
 
     --chart-primary: var(--color-primary);
@@ -167,6 +187,27 @@
     --radius-sm: 4px;
     --radius-md: 6px;
     --radius-lg: 8px;
+
+    /* Shadcn/Tailwind Variables (HSL format) */
+    --background: 108 33% 97%;
+    --foreground: 120 13% 15%;
+    --card: 108 33% 93%;
+    --card-foreground: 120 13% 15%;
+    --popover: 120 35% 97%;
+    --popover-foreground: 120 13% 15%;
+    --primary: 139 10% 48%;
+    --primary-foreground: 108 33% 93%;
+    --secondary: 102 16% 75%;
+    --secondary-foreground: 139 10% 48%;
+    --muted: 102 16% 85%;
+    --muted-foreground: 120 5% 45%;
+    --accent: 108 33% 93%;
+    --accent-foreground: 139 10% 48%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 102 18% 81%;
+    --input: 102 18% 81%;
+    --ring: 139 10% 48%;
 
     --shadow-sm: 0 1px 3px rgba(39, 60, 43, 0.1);
     --shadow-md: 0 2px 8px rgba(39, 60, 43, 0.15);

@@ -7,23 +7,33 @@ export async function getOfficialAccounts(reddit: RedditAPIClient, subredditName
         const moderators = await subreddit.getModerators().all();
 
         if (moderators && moderators.length > 0) {
-            // First mod is usually creator/oldest
-            official.push(moderators[0]?.username || '');
-
-            // Dynamic Official Account Detection (Based on original spec design)
             const patterns = ['bot', 'automod', subredditName.toLowerCase()];
+            const normalizedSubName = subredditName.toLowerCase().replace(/[^a-z0-9]/g, '');
 
-            for (const mod of moderators) {
-                const modName = mod.username.toLowerCase();
-                // We normalize both names to ensure hyphenated bots like 'quiz-planet-game' 
-                // match subreddits like 'QuizPlanetGame' as intended by the spec's logic.
-                const normalizedModName = modName.replace(/[^a-z0-9]/g, '');
-                const normalizedSubName = subredditName.toLowerCase().replace(/[^a-z0-9]/g, '');
+            for (let i = 0; i < moderators.length; i++) {
+                try {
+                    // The new Devvit SDK may trigger a User.getByUsername API call when
+                    // accessing properties on moderator objects. Wrap each one individually
+                    // so a single inaccessible/suspended account doesn't crash the whole function.
+                    const username = moderators[i]?.username || '';
+                    if (!username) continue;
 
-                if (patterns.some(p => modName.includes(p)) || normalizedModName.includes(normalizedSubName)) {
-                    if (!official.includes(mod.username || '')) {
-                        official.push(mod.username || '');
+                    // First mod (index 0) is typically the creator/oldest — always include
+                    if (i === 0 && !official.includes(username)) {
+                        official.push(username);
+                        continue;
                     }
+
+                    const modName = username.toLowerCase();
+                    const normalizedModName = modName.replace(/[^a-z0-9]/g, '');
+
+                    if (patterns.some(p => modName.includes(p)) || normalizedModName.includes(normalizedSubName)) {
+                        if (!official.includes(username)) {
+                            official.push(username);
+                        }
+                    }
+                } catch (modError) {
+                    console.warn(`[OfficialAccounts] Could not access moderator at index ${i} for r/${subredditName} (SDK user lookup may have failed):`, modError);
                 }
             }
         }

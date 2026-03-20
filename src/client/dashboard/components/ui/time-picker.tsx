@@ -221,7 +221,7 @@ export function TimePicker({
                     <Button
                         variant={"outline"}
                         className={cn(
-                            "w-full h-9 justify-start text-left font-normal pl-3",
+                            "w-full h-9 justify-start text-left font-normal pl-3 bg-background",
                             !value && "text-muted-foreground"
                         )}
                         onClick={() => setTempTime(value)}

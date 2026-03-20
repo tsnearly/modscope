@@ -118,7 +118,7 @@ function ReportView({ data: propData, isPrintMode = false, onPrint, officialAcco
                 day: stat.day,
                 hour: stat.hour,
                 hour_fmt: `${stat.hour % 12 || 12} ${stat.hour < 12 ? 'AM' : 'PM'}`,
-                score: Math.round(avgScore),
+                score: Math.round(sortWeight),
                 sortWeight,
                 count
             };
@@ -325,16 +325,16 @@ function ReportView({ data: propData, isPrintMode = false, onPrint, officialAcco
                                 { label: 'Subscribers', value: Number(analytics.stats.subscribers).toLocaleString(), color: 'text-foreground' },
                                 { label: 'Active Users', value: analytics.stats.active, color: 'text-foreground' },
                                 { label: 'Rules', value: analytics.stats.rules_count, color: 'text-foreground' },
-                                { label: 'Avg Score', value: analytics.stats.avg_score, color: '--accent-foreground:', title: `Lowest Post: ${minVote} | Highest Post: ${maxVote}` },
+                                { label: 'Avg Score', value: analytics.stats.avg_score, color: 'text-[var(--color-primary)]', title: `Lowest Post: ${minVote} | Highest Post: ${maxVote}` },
                                 { label: 'Posts/Day', value: analytics.stats.posts_per_day, color: 'text-foreground', title: `Lowest Day: ${minPosts} | Highest Day: ${maxPosts}` },
                                 { label: 'Comments/Day', value: analytics.stats.comments_per_day, color: 'text-foreground', title: `Lowest Day: ${minComments} | Highest Day: ${maxComments}` },
                                 {
                                     label: 'Velocity',
                                     value: `${analytics.stats.combined_velocity}/hr`,
-                                    color: '--accent-foreground:',
+                                    color: 'text-[var(--color-primary)]',
                                     title: `Score: ${analytics.stats.score_velocity}/hr | Comments: ${analytics.stats.comment_velocity}/hr`,
                                 },
-                                { label: 'Avg Engagement', value: avgScore, color: '--accent-foreground:', title: `Lowest Post: ${minScore} | Highest Post: ${maxScore}` }
+                                { label: 'Avg Engagement', value: avgScore, color: 'text-[var(--color-primary)]', title: `Lowest Post: ${minScore} | Highest Post: ${maxScore}` }
                             ].map((metric, idx) => (
                                 <TooltipProvider key={idx} delayDuration={200}>
                                     <TooltipRoot>
@@ -445,7 +445,7 @@ function ReportView({ data: propData, isPrintMode = false, onPrint, officialAcco
                                             <div style={{ textAlign: 'right', paddingRight: '4px' }}>{day}</div>
                                             {Array.from({ length: 24 }, (_, h) => {
                                                 const data = heatmapData[`${d}-${h}`] || { intensity: 0, count: 0 };
-                                                const colors = ['var(--heatmap-0)', 'var(--heatmap-0)', 'var(--chart-light)', 'var(--color-secondary)', 'var(--color-primary)'];
+                                                const colors = ['var(--heatmap-0)', 'var(--heatmap-2)', 'var(--heatmap-5)', 'var(--heatmap-7)', 'var(--heatmap-9)'];
                                                 return (
                                                     <div
                                                         key={h}
@@ -731,14 +731,14 @@ function ReportView({ data: propData, isPrintMode = false, onPrint, officialAcco
                     .slice(0, 10);
 
                 return (
-                    <div className="flex flex-col gap-4 p-3 h-full overflow-y-auto">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 shrink-0">
+                    <div className="flex flex-col gap-2 p-2 h-full overflow-y-auto">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 shrink-0">
                             <Chart
                                 title="Post Types"
                                 icon={<Icon src={getDataGroupingIcon('post_type', iconContext)} size={16} />}
-                                height={125}
+                                height={110}
                             >
-                                <div className="h-full flex flex-col gap-2 p-2 overflow-y-auto">
+                                <div className="h-full flex flex-col gap-1 p-1 overflow-y-auto">
                                     {postTypes.sort((a, b) => b.count - a.count).map((type) => (
                                         <div key={type.category} style={{ display: 'flex', alignItems: 'center', fontSize: '0.75rem' }}>
                                             <span style={{ width: '80px', color: '#64748b' }}>{type.category}</span>
@@ -756,9 +756,9 @@ function ReportView({ data: propData, isPrintMode = false, onPrint, officialAcco
                             <Chart
                                 title="Title Length"
                                 icon={<Icon src={getDataGroupingIcon('title_length', iconContext)} size={16} />}
-                                height={125}
+                                height={110}
                             >
-                                <div className="h-full flex flex-col gap-2 p-2 overflow-y-auto">
+                                <div className="h-full flex flex-col gap-1 p-1 overflow-y-auto">
                                     {titleLengthData.map((len) => (
                                         <div key={len.category} style={{ display: 'flex', alignItems: 'center', fontSize: '0.75rem' }}>
                                             <span style={{ paddingLeft: '8px', width: '60px', color: '#64748b' }}>{len.category}</span>
@@ -778,9 +778,8 @@ function ReportView({ data: propData, isPrintMode = false, onPrint, officialAcco
                             title="Flair Distribution"
                             icon={<Icon src={getDataGroupingIcon('flair', iconContext)} size={16} />}
                             height="auto"
-                            className="shrink-0"
                         >
-                            <div className="p-3 flex flex-col gap-2">
+                            <div className="p-1 flex flex-col gap-1">
                                 {flairDist.sort((a, b) => b.count - a.count).map((f) => (
                                     <div key={f.flair} style={{ display: 'flex', alignItems: 'center', fontSize: '0.75rem' }}>
                                         <span style={{ paddingLeft: '8px', width: '120px', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.flair}</span>
@@ -797,21 +796,20 @@ function ReportView({ data: propData, isPrintMode = false, onPrint, officialAcco
 
                         <Chart
                             title="Velocity Breakdown"
-                            icon={<Icon src={getDataGroupingIcon('velocity_breakdown', iconContext)} {...(iconContext === 'printed' ? { color: '#ef4444' } : {})} size={16} />}
+                            icon={<Icon src={getDataGroupingIcon('velocity_breakdown', iconContext)} size={16} />}
                             height="auto"
-                            className="shrink-0"
                         >
-                            <div className="p-4 flex gap-4 justify-around">
+                            <div className="p-2 flex gap-4 justify-around">
                                 <div style={{ textAlign: 'center' }}>
-                                    <div className="text-2xl font-bold text-foreground">{analytics.stats.score_velocity.toFixed(2)}</div>
+                                    <div className="text-xl font-bold text-foreground">{analytics.stats.score_velocity.toFixed(2)}</div>
                                     <div className="text-xs text-muted-foreground">Score Velocity</div>
                                 </div>
                                 <div style={{ textAlign: 'center' }}>
-                                    <div className="text-2xl font-bold text-foreground">{analytics.stats.comment_velocity.toFixed(2)}</div>
+                                    <div className="text-xl font-bold text-foreground">{analytics.stats.comment_velocity.toFixed(2)}</div>
                                     <div className="text-xs text-muted-foreground">Comment Velocity</div>
                                 </div>
                                 <div style={{ textAlign: 'center' }}>
-                                    <div className="text-2xl font-bold text-foreground">{analytics.stats.combined_velocity.toFixed(2)}</div>
+                                    <div className="text-xl font-bold text-foreground">{analytics.stats.combined_velocity.toFixed(2)}</div>
                                     <div className="text-xs text-muted-foreground">Combined</div>
                                 </div>
                             </div>
@@ -959,7 +957,7 @@ function ReportView({ data: propData, isPrintMode = false, onPrint, officialAcco
             {!isPrintMode && (
                 <>
                     {/* Header - Fixed Height */}
-                    <div className="flex-shrink-0 bg-card border-b border-border">
+                    <div className="flex-shrink-0 bg-transparent border-b border-border">
                         <EntityTitle
                             icon="mono-trend.png"
                             title="ModScope Analytics"
@@ -1040,8 +1038,10 @@ function ReportView({ data: propData, isPrintMode = false, onPrint, officialAcco
 
             {/* Print Report Layout — Rendered offscreen for HTML capture */}
             {isPrintMode && (() => {
-                const printPool = analytics.analysis_pool || [];
-                const engScores = printPool.map(p => p.engagement_score || 0);
+                const printPool = excludeOfficial
+                    ? analytics.analysis_pool.filter((p: any) => !effectiveOfficials.includes(p.author) && p.author !== officialAccount && p.author !== 'None')
+                    : analytics.analysis_pool;
+                const engScores = printPool.map((p: any) => p.engagement_score || 0);
                 const printAvgScore = engScores.length > 0 ? Math.round(engScores.reduce((a, b) => a + b, 0) / engScores.length) : 0;
 
                 return (
@@ -1049,12 +1049,12 @@ function ReportView({ data: propData, isPrintMode = false, onPrint, officialAcco
                         <div className="print-report-container p-8 bg-white text-slate-900 font-sans" style={{ width: '1200px', backgroundColor: '#ffffff' }}>
                             {/* Report Header */}
                             <div className="mb-8 border-b-4 border-slate-900 pb-4 flex justify-between items-end">
-                                <div>
-                                    <h1 className="text-4xl font-black tracking-tight text-slate-900 mb-1">
-                                        ModScope <span className="text-blue-600">Analytics Report</span>
-                                    </h1>
-                                    <div className="text-sm font-bold text-slate-500 uppercase tracking-widest">
-                                        Subreddit Activity & Engagement Engine v2.0
+                                <div className="flex items-center gap-3">
+                                    <Icon name="app-icon.png" size={64} />
+                                    <div>
+                                        <h1 className="text-4xl font-black tracking-tight text-slate-900 mb-1">
+                                            ModScope <span className="text-blue-600">Analytics Report</span>
+                                        </h1>
                                     </div>
                                 </div>
                                 <div className="text-right">
@@ -1131,15 +1131,15 @@ function ReportView({ data: propData, isPrintMode = false, onPrint, officialAcco
                                     height="auto"
                                 >
                                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 6px', alignItems: 'baseline', justifyContent: 'center', padding: '12px', background: '#f8fafc', borderRadius: '4px' }}>
-                                        {getWordCloudData().map((item) => (
+                                        {getWordCloudData().map((item, i) => (
                                             <span
                                                 key={item.word}
                                                 style={{
                                                     fontWeight: 'bold',
-                                                    color: '#334155',
+                                                    color: ['#1e3a8a', '#1e40af', '#1d4ed8', '#2563eb', '#3b82f6'][i % 5],
                                                     lineHeight: 0.85,
                                                     fontSize: `${item.size}em`,
-                                                    opacity: item.opacity
+                                                    opacity: Math.max(0.6, item.opacity)
                                                 }}
                                             >
                                                 {item.word}
@@ -1169,7 +1169,7 @@ function ReportView({ data: propData, isPrintMode = false, onPrint, officialAcco
                             {/* Trend Charts Section via renderTabContent */}
                             <div className="mb-8 pdf-safe-block">
                                 <div className="flex items-center gap-2 mb-4 border-b-2 border-slate-200 pb-2">
-                                    <Icon name="color-activity.png" size={20} />
+                                    <Icon name={isPrintMode ? 'reshot-icon-seo-report.png' : 'reshot-icon-seo-report.svg'} size={20} />
                                     <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">Trends & Engagement</h3>
                                 </div>
                                 <div className="bg-white border border-slate-200 rounded p-4 print-no-scroll">
@@ -1180,7 +1180,7 @@ function ReportView({ data: propData, isPrintMode = false, onPrint, officialAcco
                             {/* Content Stats Section via renderTabContent */}
                             <div className="mb-8 pdf-safe-block">
                                 <div className="flex items-center gap-2 mb-4 border-b-2 border-slate-200 pb-2">
-                                    <Icon name="color-layers.png" size={20} />
+                                    <Icon name="emoji-dna.png" size={20} />
                                     <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">Content Analysis</h3>
                                 </div>
                                 <div className="bg-white border border-slate-200 rounded p-4 print-no-scroll">
@@ -1203,8 +1203,8 @@ function ReportView({ data: propData, isPrintMode = false, onPrint, officialAcco
                             <div className="grid grid-cols-2 gap-x-8 gap-y-12 mb-8 pdf-safe-block">
                                 {[
                                     { key: 'most_engaged', title: 'Most Engaged Posts', icon: 'color-guarantee.png', list: analytics.lists.most_engaged || [] },
-                                    { key: 'top_posts', title: 'Top Score Posts', icon: 'color-activity.png', list: analytics.lists.top_posts || [] },
-                                    { key: 'most_discussed', title: 'Most Discussed', icon: 'colors-persons.png', list: analytics.lists.most_discussed || [] },
+                                    { key: 'top_posts', title: 'Top Score Posts', icon: 'color-rating.png', list: analytics.lists.top_posts || [] },
+                                    { key: 'most_discussed', title: 'Most Discussed', icon: 'emoji-loudspeaker.png', list: analytics.lists.most_discussed || [] },
                                     { key: 'rising', title: 'Rising Content', icon: 'color-increase.png', list: analytics.lists.rising || [] },
                                     { key: 'hot', title: 'Hot Content', icon: 'color-hot.png', list: analytics.lists.hot || [] },
                                     { key: 'controversial', title: 'Controversial', icon: 'color-turn-on-arrows.png', list: analytics.lists.controversial || [] }
@@ -1256,7 +1256,7 @@ function ReportView({ data: propData, isPrintMode = false, onPrint, officialAcco
 
                             {/* Footer */}
                             <div className="mt-12 pt-8 border-t-2 border-slate-200 flex justify-between items-center text-[10px] font-black uppercase text-slate-400">
-                                <div>Generated via ModScope Engagement Engine</div>
+                                <div>Generated via ModScope Subreddit Activity & Engagement Engine v1.5</div>
                                 <div className="flex gap-4">
                                     <span>© 2026 ModScope Analytics</span>
                                     <span>CONFIDENTIAL REPORT</span>

@@ -2,13 +2,13 @@
 
 [data-theme='clockwork'] {
     /* Core Palette */
-    --color-primary: #E56515;
+    --color-primary: #e56515;
     --color-secondary: #FBA45C;
     --color-accent: #CDCDCB;
     --color-text: #2a2a2a;
     --color-text-muted: #919599;
-    --color-bg: #F8F8F8;
-    --color-surface: #F8F8F8;
+    --color-bg: #f8f8f8;
+    --color-surface: #f8f8f8;
     --color-error: #dc3545;
     --color-border: #CDCDCB;
 
@@ -58,16 +58,16 @@
     --chart-highlight: var(--color-error);
 
     /* Heatmap gradient (light to dark) */
-    --heatmap-0: #F8F8F8;
-    --heatmap-1: #f7e8d0;
-    --heatmap-2: #F5D5A8;
-    --heatmap-3: #f8bd82;
-    --heatmap-4: #FBA45C;
-    --heatmap-5: #f08538;
-    --heatmap-6: #E56515;
-    --heatmap-7: #d45a10;
-    --heatmap-8: #c34f0b;
-    --heatmap-9: #a04008;
+    --heatmap-0: #fce7da;
+    --heatmap-1: #ffc68d;
+    --heatmap-2: #fcbb7d;
+    --heatmap-3: #f9af6e;
+    --heatmap-4: #f6a45e;
+    --heatmap-5: #f29850;
+    --heatmap-6: #ef8c41;
+    --heatmap-7: #ec8033;
+    --heatmap-8: #e87325;
+    --heatmap-9: #e56515;
 
     --spacing-xs: 2px;
     --spacing-sm: 4px;
@@ -89,4 +89,25 @@
     --summary-header-text: var(--color-primary);
     --summary-border: var(--color-border);
     --primary-contrast-text: var(--color-surface);
+
+    /* Shadcn/Tailwind Variables (HSL format) */
+    --background: 0 0% 97%;
+    --foreground: 20 10% 15%;
+    --card: 0 0% 97%;
+    --card-foreground: 20 10% 15%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 20 10% 15%;
+    --primary: 23 82% 49%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 60 1% 80%;
+    --secondary-foreground: 23 82% 49%;
+    --muted: 60 1% 90%;
+    --muted-foreground: 20 5% 45%;
+    --accent: 23 82% 80%;
+    --accent-foreground: 23 82% 49%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 60 1% 70%;
+    --input: 60 1% 70%;
+    --ring: 23 82% 49%;
 }

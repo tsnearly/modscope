@@ -35,9 +35,9 @@ export function EntityTitle({
                     )
                 )}
                 <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                    <h2 style={{ fontSize: '1.125rem', fontWeight: 600, color: '#111827', margin: 0, lineHeight: 1.2 }}>{title}</h2>
+                    <h2 style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--text-primary)', margin: 0, lineHeight: 1.2 }}>{title}</h2>
                     {subtitle && (
-                        <p style={{ fontSize: '0.875rem', color: '#6b7280', margin: '2px 0 0 0' }}>{subtitle}</p>
+                        <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', margin: '2px 0 0 0' }}>{subtitle}</p>
                     )}
                 </div>
             </div>

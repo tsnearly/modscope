@@ -11,7 +11,7 @@ A native, data-driven community insight and moderation assistant developed for R
   > [!TIP]
   > The **Job History** log maintains a rolling window of the last 50 execution attempts to ensure high interface performance. Success/Failure statistics in the Schedule view reflect this window.
 - **Customizable Themes**: Personalize your interface with themes like Clockwork, Frozen Mist, Amber, Nocturne, and more.
-- **Exportable Reports**: Generate clean HTML reports of your community's health to share with your mod team.
+- **Exportable Reports**: Generate high-fidelity HTML reports with the built-in print engine to share with your mod team.
 
 ---
 
@@ -20,7 +20,7 @@ A native, data-driven community insight and moderation assistant developed for R
 1. **Access ModScope**: Once installed from the Reddit Developer directory, click on your subreddit's mod tools menu and choose "Open ModScope Dashboard". 
 
    > [!NOTE]
-   > ModScope uses a **Mod-Only Launcher Post** architecture. The first time the app is launched, it creates a persistent, stickied post that is intentionally marked as spam. This keeps the dashboard invisible to regular users and out of the community feed, while remaining easily accessible to moderators via the mod tools menu.
+   > ModScope uses a **Mod-Only Launcher Post** architecture. The first time the app is launched, it creates a persistent, approved, and locked post. This keeps the dashboard invisible to regular users while remaining easily accessible to moderators via the mod tools menu. If the dashboard fails to load, use the **"Reset Launcher Post"** option in the mod tools menu to recover.
 
 ### Step 1: Select your Subreddit Preset
 Navigate to the **Settings** tab in the upper menu. Here, you will find the configuration engine where you can choose between community archetypes. This dictates what ModScope values algorithmically when processing data to distinguish what "quality" engagement looks like for your specific community.
@@ -75,7 +75,12 @@ The Snapshots table lists all your successfully captured snapshots.
 ### Step 4: Review your Reports
 Once you open a report from the Snapshots table, you enter the **Reports View**. This is your portal to your community's health metrics.
 
-At the top right of the report, you can use the **Export HTML** button to generate a clean, standalone, printable webpage of the current report data to share with your mod team. You can also toggle the **Exclude Official Content** button to filter out mod-distinguished or stickied posts, ensuring your data reflects organic user engagement.
+At the top right of the report, use the **Export HTML** button to open the print drawer. From here, you can generate a high-fidelity, standalone webpage of the current report.
+
+> [!TIP]
+> Due to browser sandbox restrictions, use **Cmd+Click** (Mac) or **Ctrl+Click** (Windows) on the **Open Report** button to launch the export in a new tab for native printing. You can also use **Alt+Click** or **Right-Click ➔ "Save As..."** to automatically download the report file.
+
+You can also toggle the **Exclude Official Content** button to filter out mod-distinguished or stickied posts, ensuring your data reflects organic user engagement.
 
 The Report view is broken down into several tabs at the bottom:
 - **Overview**: A high-level dashboard showing top posts, community momentum, and general health indicators.
@@ -113,7 +118,7 @@ ModScope supports a custom UI engine designed for different modding environments
 
 | Theme | Description |
 | :--- | :--- |
-| **ModScope Flow** | Default — clean, think old school radat scope meets understated professionalismmodern slate palette |
+| **ModScope Flow** | Default — clean, think old-school radar scope meets understated professionalism with a modern slate palette |
 | **Clockwork** | Warm, sepia-toned high-contrast for data-focused sessions |
 | **Frozen Mist** | Cool, minimal icy blues to reduce cognitive load |
 | **Amber** | High-contrast amber on dark gray — classic terminal aesthetic |
@@ -127,3 +132,22 @@ ModScope supports a custom UI engine designed for different modding environments
 If you want to quickly check the current status of the app, open the **About** view (info icon). Here you can see the currently running program version and release date. You can also expand the accordion controls (like "What is ModScope?" and "Features") to read quick refreshers on the app's capabilities.
 
 *Note: ModScope runs entirely within the Devvit ecosystem. It requires no external servers or API keys, ensuring strict adherence to Reddit's data privacy guidelines.*
+
+---
+
+## Changelog
+
+### v0.0.90 (Current Release)
+**Performance & Reliability**
+*   **Snapshot Optimization:** Completely refactored the daily background snapshot cleanup routine. The system now uses a high-performance O(1) pointer system and batched parallel reads to drastically reduce Redis transaction loads.
+*   **Intelligent Execution Halting:** The cleanup worker now aggressively halts execution the moment it reaches naturally retained snapshots, preventing hundreds of pointless database queries.
+*   **Timeout Detection:** Implemented a new 30-minute timeout detection fallback in the Job History log perfectly aligned with Reddit's maximum processing threshold. Hung jobs are now accurately marked as canceled rather than permanently displaying as running.
+
+**UI & Experience**
+*   **Splash Screen Overhaul:** Replaced the standalone static splash page with an integrated, animated splash loader within the main dashboard context. This guarantees seamless full-screen mode transitions and strict platform compliance.
+*   **Theme Standardization:** Resolved a persistent styling bug where hardcoded green theme tinting overrode the user's selected color palette across the Schedule, Config, and Report views.
+*   **Icon Mapping Corrections:** Re-mapped and restored missing analytical icons (Velocity Breakdown, Trends & Engagement, Activity Trend) to ensure they render properly on both the screen and print layers.
+
+**Reporting & Analytics**
+*   **Print Engine Polish:** Fixed a severe layout regression in exported HTML print reports. The generated HTML now accurately retains color generation, resolves white-screen rendering crashes, and features proper header spacing with the application icon included.
+*   **Calculation Transparency:** The Prime Posting Times UI was updated to seamlessly display the underlying "confidence-weighted" ranking score rather than the raw average score, ensuring the numbers descend in logical order without confusing users.

@@ -180,12 +180,13 @@ export function SnapshotsView({ onSelectSnapshot, onDeleteSnapshot }: SnapshotsV
         <div className="snapshots-view h-full flex flex-col bg-[var(--color-surface)] text-left">
             <EntityTitle
                 icon="lucide:database"
+                iconColor="var(--color-text)"
                 title="Data Snapshots"
                 subtitle="Manage and view historical analysis data"
-                className="mb-4 p-4 bg-card border-b border-border flex-shrink-0"
+                className="mb-4 p-4 bg-transparent border-b border-border flex-shrink-0"
             />
             <div className="flex-1 px-6 pb-6 pt-2 min-h-0 flex flex-col">
-                <Card className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                <Card className="flex-1 flex flex-col min-h-0 overflow-hidden bg-background">
                     <div className="flex-1 flex flex-col min-h-0 p-4">
                         <div className="mb-4">
                             <EntityTitle

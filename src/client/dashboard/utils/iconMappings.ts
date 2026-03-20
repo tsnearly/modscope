@@ -59,15 +59,15 @@ export const DATA_GROUPING_ICONS = {
     },
     activity_trend: {
         screen: 'mono-ratings.png',
-        printed: 'color-rating.png',
+        printed: 'color-event-history.png',
     },
     velocity_breakdown: {
-        screen: 'lucide:zap',
-        printed: 'lucide:zap',
+        screen: 'color-fast-download.png',
+        printed: 'color-fast-download-alt.png',
     },
     engagement: {
         screen: 'outline-new-topic.png',
-        printed: 'color-speech.png',
+        printed: 'color-engagement.png',
     },
     flair: {
         screen: 'mono-tags.png',
@@ -75,11 +75,11 @@ export const DATA_GROUPING_ICONS = {
     },
     top_post: {
         screen: 'mono-activity.png',
-        printed: 'color-activity.png',
+        printed: 'color-rating.png',
     },
     most_discussed: {
         screen: 'mono-google-groups.png',
-        printed: 'colors-persons.png',
+        printed: 'emoji-loudspeaker.png',
     },
     most_engaged: {
         screen: 'mono-approval.png',

@@ -8,17 +8,17 @@ interface AboutViewProps {
 
 function AboutView({ appVersion }: AboutViewProps) {
     return (
-        <div style={{ backgroundColor: 'var(--color-surface)' }} className="about-view h-full flex flex-col">
+        <div className="about-view h-full flex flex-col bg-[var(--color-surface)] text-left">
             <EntityTitle
                 icon="app-icon"
                 iconSize={64}
                 title="About ModScope"
                 subtitle="Advanced subreddit analytics for moderators"
-                className="p-6 bg-card border-b border-border flex-shrink-0"
+                className="p-6 bg-transparent border-b border-border flex-shrink-0"
             />
 
             <div className="view-content flex-1 overflow-y-auto px-6 pb-6 pt-2">
-                <div className="card mb-6">
+                <div className="card mb-6 !bg-background">
                     <div className="flex divide-x divide-border">
                         <div className="flex-1" style={{ padding: '1.5rem' }}>
                             <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">Version Information</h3>

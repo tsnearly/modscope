@@ -7,6 +7,9 @@
             "default": {
                 "inline": true,
                 "entry": "dashboard.html"
+            },
+            "dashboard": {
+                "entry": "dashboard.html"
             }
         }
     },

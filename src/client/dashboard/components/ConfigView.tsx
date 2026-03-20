@@ -113,12 +113,13 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
     const isCustom = localSettings?.settings?.id === 'custom';
 
     return (
-        <div className="config-view h-full flex flex-col bg-muted text-left">
+        <div className="config-view h-full flex flex-col bg-[var(--color-surface)] text-left">
             <EntityTitle
                 icon="mono-set-up.png"
+                iconColor="var(--color-text)"
                 title="Configuration & Rulesets"
                 subtitle="Analysis settings and presets"
-                className="mb-6 p-4 bg-card border-b border-border"
+                className="mb-6 p-4 bg-transparent border-b border-border"
                 actions={
                     <div className="flex gap-3">
                         <Button variant="outline" onClick={handleReset} disabled={loading} className="w-36" icon="lucide:rotate-ccw">
@@ -141,8 +142,8 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                                 <form>
                                     <div className="space-y-4">
                                         <div>
-                                            <label className="text-sm font-semibold text-gray-900 block mb-1">Community Preset</label>
-                                            <p className="text-xs text-gray-500 mb-3">Load a pre-configured analysis strategy optimized for specific subreddit types.</p>
+                                            <label className="text-sm font-semibold text-foreground block mb-1">Community Preset</label>
+                                            <p className="text-xs text-muted-foreground mb-3">Load a pre-configured analysis strategy optimized for specific subreddit types.</p>
                                             <Select
                                                 value={localSettings?.settings?.id ?? 'discussion'}
                                                 onValueChange={(val) => handlePresetChange(val as AnalysisPreset)}
@@ -160,7 +161,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                                             </Select>
                                         </div>
                                         <div className="p-3 bg-primary/10 rounded-md border border-primary/30">
-                                            <p className="text-xs text-primary-foreground font-medium" style={{ color: 'var(--color-text)' }}>
+                                            <p className="text-xs text-primary font-medium">
                                                 <span className="font-bold">Current Mode: </span>
                                                 {PRESETS.find(p => p.id === (localSettings?.settings?.id))?.desc || 'Custom settings'}
                                             </p>
@@ -177,15 +178,15 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                                         </p>
                                     )}
                                     <form>
-                                        <h3 className="text-sm font-bold text-gray-900 mb-4 uppercase tracking-wider flex items-center gap-2">
+                                        <h3 className="text-sm font-bold text-foreground mb-4 uppercase tracking-wider flex items-center gap-2">
                                             <span className="w-1 h-4 rounded-full" style={{ backgroundColor: 'var(--color-secondary)' }}></span>
                                             Scoring Factors
                                         </h3>
                                         <div className="space-y-3">
                                             {/* Comment Weight */}
-                                            <div className="px-4 py-3 bg-gray-50 rounded-lg border border-gray-100">
+                                            <div className="px-4 py-3 bg-muted/20 rounded-lg border border-border/50">
                                                 <div className="flex justify-between items-center mb-2">
-                                                    <label className="text-xs font-semibold text-gray-700 uppercase">Comment Weight</label>
+                                                    <label className="text-xs font-semibold text-muted-foreground uppercase">Comment Weight</label>
                                                     <span className="text-xs font-bold px-2 py-1 rounded">{localSettings?.settings?.commentWeight ?? 1}x</span>
                                                 </div>
                                                 <input
@@ -195,7 +196,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                                                     onChange={(e) => handleCalcChange('commentWeight', parseInt(e.target.value))}
                                                     className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600 mb-1"
                                                 />
-                                                <div className="flex justify-between text-[10px] text-gray-400 font-medium font-mono">
+                                                <div className="flex justify-between text-[10px] text-muted-foreground font-medium font-mono">
                                                     <span>Upvotes</span>
                                                     <span>Balanced</span>
                                                     <span>Comments</span>
@@ -203,9 +204,9 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                                             </div>
 
                                             {/* Upvote Weight */}
-                                            <div className="px-4 py-3 bg-gray-50 rounded-lg border border-gray-100">
+                                            <div className="px-4 py-3 bg-muted/20 rounded-lg border border-border/50">
                                                 <div className="flex justify-between items-center mb-2">
-                                                    <label className="text-xs font-semibold text-gray-700 uppercase">Upvote Weight</label>
+                                                    <label className="text-xs font-semibold text-muted-foreground uppercase">Upvote Weight</label>
                                                     <span className="text-xs font-bold px-2 py-1 rounded">{localSettings?.settings?.upvoteWeight ?? 1}x</span>
                                                 </div>
                                                 <input
@@ -215,7 +216,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                                                     onChange={(e) => handleCalcChange('upvoteWeight', parseInt(e.target.value))}
                                                     className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600 mb-1"
                                                 />
-                                                <div className="flex justify-between text-[10px] text-gray-400 font-medium font-mono">
+                                                <div className="flex justify-between text-[10px] text-muted-foreground font-medium font-mono">
                                                     <span>Low</span>
                                                     <span>Standard</span>
                                                     <span>Impactful</span>
@@ -223,9 +224,9 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                                             </div>
 
                                             {/* Velocity Configuration */}
-                                            <div className="px-4 py-3 bg-gray-50 rounded-lg border border-gray-100">
+                                            <div className="px-4 py-3 bg-muted/20 rounded-lg border border-border/50">
                                                 <div className="flex justify-between items-center mb-4">
-                                                    <label className="text-xs font-semibold text-gray-700 uppercase">Velocity Impact</label>
+                                                    <label className="text-xs font-semibold text-muted-foreground uppercase">Velocity Impact</label>
                                                     <div className="flex gap-2">
                                                         <span className="text-[10px] font-bold px-1.5 py-0.5 rounded">{localSettings?.settings?.velocityHours ?? 24}h Window</span>
                                                         <span className="text-[10px] font-bold px-1.5 py-0.5 rounded">{localSettings?.settings?.velocityWeight ?? 1.5}x Max</span>
@@ -234,7 +235,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
 
                                                 <div className="space-y-4">
                                                     <div>
-                                                        <div className="flex justify-between text-[10px] text-gray-500 mb-1">
+                                                        <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
                                                             <span>Decay Window (Hours)</span>
                                                             <span>{localSettings?.settings?.velocityHours ?? 24}h</span>
                                                         </div>
@@ -247,7 +248,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                                                         />
                                                     </div>
                                                     <div>
-                                                        <div className="flex justify-between text-[10px] text-gray-500 mb-1">
+                                                        <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
                                                             <span>Engagement Multiplier</span>
                                                             <span>{localSettings?.settings?.velocityWeight ?? 1.5}x</span>
                                                         </div>
@@ -263,9 +264,9 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                                             </div>
 
                                             {/* Creator Bonus */}
-                                            <div className="px-4 py-3 bg-gray-50 rounded-lg border border-gray-100">
+                                            <div className="px-4 py-3 bg-muted/20 rounded-lg border border-border/50">
                                                 <div className="flex justify-between items-center mb-2">
-                                                    <label className="text-xs font-semibold text-gray-700 uppercase">Creator Bonus</label>
+                                                    <label className="text-xs font-semibold text-muted-foreground uppercase">Creator Bonus</label>
                                                     <span className="text-xs font-bold px-2 py-1 rounded">+{localSettings?.settings?.creatorBonus ?? 5} pts</span>
                                                 </div>
                                                 <input
@@ -275,7 +276,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                                                     onChange={(e) => handleCalcChange('creatorBonus', parseInt(e.target.value))}
                                                     className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600 mb-1"
                                                 />
-                                                <div className="flex justify-between text-[10px] text-gray-400 font-medium font-mono">
+                                                <div className="flex justify-between text-[10px] text-muted-foreground font-medium font-mono">
                                                     <span>None</span>
                                                     <span>Standard</span>
                                                     <span>High Impact</span>
@@ -283,8 +284,8 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                                             </div>
 
                                             {/* Depth Scaling */}
-                                            <div className="px-4 py-3 bg-gray-50 rounded-lg border border-gray-100">
-                                                <label className="text-xs font-semibold text-gray-700 uppercase block mb-3">Engagement Decay</label>
+                                            <div className="px-4 py-3 bg-muted/20 rounded-lg border border-border/50">
+                                                <label className="text-xs font-semibold text-muted-foreground uppercase block mb-3">Engagement Decay</label>
                                                 <RadioGroup
                                                     value={localSettings?.settings?.depthScaling ?? 'logarithmic'}
                                                     onChange={(val) => handleCalcChange('depthScaling', val as ScalingMethod)}
@@ -301,7 +302,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                                                             {(localSettings?.settings?.depthScaling ?? 'logarithmic') === method && (
                                                                 <div className="pl-6 space-y-3 border-l-2 border-primary/20 ml-2 py-1">
                                                                     <div>
-                                                                        <div className="flex justify-between text-[10px] text-gray-500 mb-1">
+                                                                        <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
                                                                             <span>Scaling Intensity</span>
                                                                             <span>{(() => {
                                                                                 const val = method === 'linear' ? localSettings?.settings?.depthLinear :
@@ -329,7 +330,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                                                                         />
                                                                     </div>
                                                                     <div>
-                                                                        <div className="flex justify-between text-[10px] text-gray-500 mb-1">
+                                                                        <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
                                                                             <span>Maximum Depth Cap</span>
                                                                             <span>{localSettings?.settings?.depthMax ?? 20} Levels</span>
                                                                         </div>
@@ -357,79 +358,86 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                     <div className="space-y-6">
                         <Section title="Data Scope" icon="lucide:layers">
                             <SectionCard>
-                                <form>
-                                    <div className="space-y-3">
-                                        {/* Fetch Depth */}
-                                        <div className="px-4 py-3 bg-gray-50 rounded-lg border border-gray-100">
-                                            <div className="flex justify-between items-center mb-2">
-                                                <label className="text-sm font-semibold text-gray-900">Scanning Depth</label>
-                                                <span className="text-xs font-bold px-2 py-1 rounded shadow-sm border border-gray-200 bg-white">{['Fast', 'Light', 'Balanced', 'Thorough', 'Complete'][(localSettings?.settings?.fetchDepth ?? 3) - 1] || 'Balanced'}</span>
-                                            </div>
-                                            <p className="text-xs text-gray-500 mb-3 block">Maximum depth of nested comment trees to fetch.</p>
-                                            <input
-                                                type="range"
-                                                min="1" max="5"
-                                                value={localSettings?.settings?.fetchDepth ?? 3}
-                                                onChange={(e) => handleCalcChange('fetchDepth', parseInt(e.target.value))}
-                                                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-600"
-                                            />
-                                            <div className="flex justify-between text-[10px] text-gray-400 mt-1 uppercase font-medium">
-                                                <span>Fast</span>
-                                                <span>Deep</span>
-                                            </div>
-                                        </div>
-
-                                        {/* Analysis Days */}
-                                        <div className="px-4 py-3 bg-gray-50 rounded-lg border border-gray-100">
-                                            <div className="flex justify-between items-center mb-2">
-                                                <label className="text-sm font-semibold text-gray-900">Analysis Window</label>
-                                            </div>
-                                            <p className="text-xs text-gray-500 mb-3 block">How far back to look for posts to include in analysis.</p>
-                                            <div className="flex items-center gap-3">
-                                                <input
-                                                    type="number"
-                                                    min="7" max="90" step="1"
-                                                    value={localSettings?.settings?.analysisDays ?? 30}
-                                                    onChange={(e) => handleCalcChange('analysisDays', parseInt(e.target.value))}
-                                                    className="w-20 px-3 py-1.5 border border-gray-300 rounded text-sm font-semibold"
-                                                />
-                                                <span className="text-sm font-semibold text-gray-700">Days</span>
-                                            </div>
-                                        </div>
-
-                                        <Separator />
-
-                                        {/* Exclusions */}
+                                <fieldset disabled={!isCustom} className={`border-0 p-0 m-0 ${!isCustom ? 'opacity-60' : ''}`}>
+                                    {!isCustom && (
+                                        <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-2 mb-4 flex items-center gap-2">
+                                            <span className="font-bold">🔒</span> Controlled by preset — select <strong>Custom</strong> to edit
+                                        </p>
+                                    )}
+                                    <form>
                                         <div className="space-y-3">
-                                            <h3 className="text-sm font-bold text-gray-900 mb-4 uppercase tracking-wider flex items-center gap-2">
-                                                <span className="w-1 h-4 rounded-full" style={{ backgroundColor: 'var(--color-secondary)' }}></span>
-                                                Filters & Exclusions
-                                            </h3>
-
-                                            <div className="flex items-center justify-between px-4 py-3 bg-gray-50 rounded-lg border border-gray-100">
-                                                <div>
-                                                    <span className="text-xs font-medium text-gray-800 block">Ignore Official Accounts</span>
-                                                    <span className="text-[10px] text-gray-500">Exclude moderators and admin posts.</span>
+                                            {/* Fetch Depth */}
+                                            <div className="px-4 py-3 bg-muted/20 rounded-lg border border-border/50">
+                                                <div className="flex justify-between items-center mb-2">
+                                                    <label className="text-sm font-semibold text-foreground">Scanning Depth</label>
+                                                    <span className="text-xs font-bold px-2 py-1 rounded shadow-sm border border-gray-200 bg-white">{['Fast', 'Light', 'Balanced', 'Thorough', 'Complete'][(localSettings?.settings?.fetchDepth ?? 3) - 1] || 'Balanced'}</span>
                                                 </div>
-                                                <Switch
-                                                    checked={localSettings?.settings?.excludeOfficial ?? false}
-                                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleCalcChange('excludeOfficial', e.target.checked)}
+                                                <p className="text-xs text-muted-foreground mb-3 block">Maximum depth of nested comment trees to fetch.</p>
+                                                <input
+                                                    type="range"
+                                                    min="1" max="5"
+                                                    value={localSettings?.settings?.fetchDepth ?? 3}
+                                                    onChange={(e) => handleCalcChange('fetchDepth', parseInt(e.target.value))}
+                                                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-600"
                                                 />
+                                                <div className="flex justify-between text-[10px] text-muted-foreground mt-1 uppercase font-medium">
+                                                    <span>Fast</span>
+                                                    <span>Deep</span>
+                                                </div>
                                             </div>
 
-                                            <div className="flex items-center justify-between px-4 py-3 bg-gray-50 rounded-lg border border-gray-100">
-                                                <div>
-                                                    <span className="text-xs font-medium text-gray-800 block">Ignore Bots</span>
-                                                    <span className="text-[10px] text-gray-500">Exclude known bot accounts.</span>
+                                            {/* Analysis Days */}
+                                            <div className="px-4 py-3 bg-muted/20 rounded-lg border border-border/50">
+                                                <div className="flex justify-between items-center mb-2">
+                                                    <label className="text-sm font-semibold text-foreground">Analysis Window</label>
                                                 </div>
-                                                <Switch
-                                                    checked={localSettings?.settings?.excludeBots ?? false}
-                                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleCalcChange('excludeBots', e.target.checked)}
-                                                />
+                                                <p className="text-xs text-muted-foreground mb-3 block">How far back to look for posts to include in analysis.</p>
+                                                <div className="flex items-center gap-3">
+                                                    <input
+                                                        type="number"
+                                                        min="7" max="90" step="1"
+                                                        value={localSettings?.settings?.analysisDays ?? 30}
+                                                        onChange={(e) => handleCalcChange('analysisDays', parseInt(e.target.value))}
+                                                        className="w-20 px-3 py-1.5 border border-gray-300 rounded text-sm font-semibold"
+                                                    />
+                                                    <span className="text-sm font-semibold text-muted-foreground">Days</span>
+                                                </div>
+                                            </div>
+
+                                            <Separator />
+
+                                            {/* Exclusions */}
+                                            <div className="space-y-3">
+                                                <h3 className="text-sm font-bold text-foreground mb-4 uppercase tracking-wider flex items-center gap-2">
+                                                    <span className="w-1 h-4 rounded-full" style={{ backgroundColor: 'var(--color-secondary)' }}></span>
+                                                    Filters & Exclusions
+                                                </h3>
+
+                                                <div className="flex items-center justify-between px-4 py-3 bg-gray-50 rounded-lg border border-gray-100">
+                                                    <div>
+                                                        <span className="text-xs font-medium text-gray-800 block">Ignore Official Accounts</span>
+                                                        <span className="text-[10px] text-muted-foreground">Exclude moderators and admin posts.</span>
+                                                    </div>
+                                                    <Switch
+                                                        checked={localSettings?.settings?.excludeOfficial ?? false}
+                                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleCalcChange('excludeOfficial', e.target.checked)}
+                                                    />
+                                                </div>
+
+                                                <div className="flex items-center justify-between px-4 py-3 bg-gray-50 rounded-lg border border-gray-100">
+                                                    <div>
+                                                        <span className="text-xs font-medium text-gray-800 block">Ignore Bots</span>
+                                                        <span className="text-[10px] text-muted-foreground">Exclude known bot accounts.</span>
+                                                    </div>
+                                                    <Switch
+                                                        checked={localSettings?.settings?.excludeBots ?? false}
+                                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleCalcChange('excludeBots', e.target.checked)}
+                                                    />
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                </form>
+                                    </form>
+                                </fieldset>
                             </SectionCard>
                         </Section>
                     </div>
@@ -439,14 +447,14 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                         <Section title="Appearance" icon="lucide:swatch-book">
                             <SectionCard>
                                 <form>
-                                    <h3 className="text-sm font-bold text-gray-900 mb-4 uppercase tracking-wider flex items-center gap-2">
+                                    <h3 className="text-sm font-bold text-foreground mb-4 uppercase tracking-wider flex items-center gap-2">
                                         <span className="w-1 h-4 rounded-full" style={{ backgroundColor: 'var(--color-secondary)' }}></span>
                                         Interface Theme
                                     </h3>
                                     <div className="space-y-4">
                                         <div>
-                                            <label className="text-sm font-semibold text-gray-900 block mb-1">Color Palette</label>
-                                            <p className="text-xs text-gray-500 mb-3">Select the visual color scheme for the application.</p>
+                                            <label className="text-sm font-semibold text-foreground block mb-1">Color Palette</label>
+                                            <p className="text-xs text-muted-foreground mb-3">Select the visual color scheme for the application.</p>
                                             <Select
                                                 value={localSettings?.display?.theme ?? 'modscopeflow'}
                                                 onValueChange={(val) => {

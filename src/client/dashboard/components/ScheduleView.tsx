@@ -387,24 +387,25 @@ function ScheduleView({ initialJobs = [], initialHistory = [], onRunComplete }: 
     };
 
     return (
-        <div className="flex flex-col gap-6 p-6 h-full overflow-auto bg-[var(--color-bg)] text-[var(--color-text)]">
+        <div className="schedule-view h-full flex flex-col bg-[var(--color-surface)] text-left">
             <EntityTitle
                 icon="lucide:calendar-clock"
+                iconColor="var(--color-text)"
                 title="Snapshot Scheduling"
                 subtitle="Automate your community health checks and historical data collection"
-                className="mb-2"
+                className="mb-6 p-4 bg-transparent border-b border-border"
                 actions={
                     <Button variant="default" onClick={handleRunNow} disabled={loading} loading={loading} tooltip="Execute a background analysis immediately" icon="lucide:play">
                         Run Analysis Now
                     </Button>
                 }
             />
-
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+            <div className="view-content flex-1 overflow-y-auto px-6 pb-6 w-full">
+                <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
                 {/* Main Configuration Card */}
                 <div className="xl:col-span-2 space-y-6">
-                    <Card className="overflow-hidden shadow-md border-[var(--color-border)]">
-                        <CardHeader className="bg-muted/30 border-b border-[var(--color-border)]">
+                    <Card className="overflow-hidden shadow-md border-border bg-background">
+                        <CardHeader className="bg-muted/50 border-b border-border">
                             <CardTitle className="text-lg flex items-center gap-2">
                                 <Icon name="mono-planner.png" size={20} color="var(--color-primary)" />
                                 Automated Snapshot Configuration
@@ -449,7 +450,7 @@ function ScheduleView({ initialJobs = [], initialHistory = [], onRunComplete }: 
                                 </RadioGroup>
 
                                 {/* Common Parameters Cluster */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 bg-white rounded-xl border border-[var(--color-border)] ring-1 ring-primary mb-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 bg-muted/20 rounded-xl border border-border ring-1 ring-primary/20 mb-6">
                                     <div className="space-y-6 md:pr-6">
                                         <div className="grid grid-cols-2 gap-4 align-bottom">
                                             <TimePicker
@@ -469,7 +470,7 @@ function ScheduleView({ initialJobs = [], initialHistory = [], onRunComplete }: 
                                     </div>
 
                                     {/* Clustered Custom Controls */}
-                                    <div className="border-l border-[var(--color-border)] pl-6">
+                                    <div className="border-l border-border pl-6">
                                         <div className="space-y-4 pt-2">
                                             {scheduleType === 'weekly' && (
                                                 <div className="space-y-2">
@@ -498,7 +499,7 @@ function ScheduleView({ initialJobs = [], initialHistory = [], onRunComplete }: 
                                                     description="min hour day month weekday"
                                                     value={customCron}
                                                     onChange={(e) => setCustomCron(e.target.value)}
-                                                    className="border-l border-[var(--color-border)]"
+                                                    className="border-l border-border"
                                                 />
                                             )}
 
@@ -512,7 +513,7 @@ function ScheduleView({ initialJobs = [], initialHistory = [], onRunComplete }: 
                                     </div>
                                 </div>
 
-                                <div className="flex justify-end gap-3 pt-4 border-t border-[var(--color-border)]">
+                                <div className="flex justify-end gap-3 pt-4 border-t border-border">
                                     <Button variant="outline" onClick={() => { setName(''); setEditingJobId(null); }} className="w-40" icon="lucide:x">Cancel</Button>
                                     <Button onClick={handleAddSchedule} loading={loading} className="w-40 shadow-sm" icon={editingJobId ? "lucide:edit" : "lucide:plus"}>
                                         {editingJobId ? "Update Schedule" : "Initialize Schedule"}
@@ -525,8 +526,8 @@ function ScheduleView({ initialJobs = [], initialHistory = [], onRunComplete }: 
 
                 {/* Sidebar - Active Jobs & History */}
                 <div className="space-y-6">
-                    <Card className="shadow-sm border-[var(--color-border)]">
-                        <CardHeader className="pb-3 border-b border-[var(--color-border)]">
+                    <Card className="shadow-sm border-border bg-background">
+                        <CardHeader className="pb-3 border-b border-border bg-muted/50">
                             <CardTitle className="text-lg flex items-center gap-2 justify-between">
                                 <div className="flex items-center gap-2">
                                     <Icon name="mono-schedule.png" size={20} color="var(--color-primary)" />
@@ -543,9 +544,9 @@ function ScheduleView({ initialJobs = [], initialHistory = [], onRunComplete }: 
                                     No scheduled jobs found
                                 </div>
                             ) : (
-                                <div className="divide-y divide-[var(--color-border)]">
+                                <div className="divide-y divide-border">
                                     {jobs.map((job) => (
-                                        <div key={job.id} className="p-4 hover:bg-muted/20 transition-colors group">
+                                        <div key={job.id} className="p-4 bg-white hover:bg-muted/20 transition-colors group">
                                             <div className="flex items-start justify-between gap-2">
                                                 <div className="min-w-0">
                                                     <div className="font-bold text-sm truncate">{job.name}</div>
@@ -581,10 +582,10 @@ function ScheduleView({ initialJobs = [], initialHistory = [], onRunComplete }: 
                                             </div>
                                             <div className="mt-2 flex items-center gap-2">
                                                 <div className="relative flex h-2 w-2">
-                                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#78C12A] opacity-75"></span>
+                                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-[#78C12A]"></span>
                                                 </div>
-                                                <span className="text-[10px] text-green-600 font-bold uppercase tracking-wider">Live Scheduler</span>
+                                                <span className="text-[10px] text-[#78C12A] font-bold uppercase tracking-wider">Live Scheduler</span>
                                             </div>
                                         </div>
                                     ))}
@@ -593,8 +594,8 @@ function ScheduleView({ initialJobs = [], initialHistory = [], onRunComplete }: 
                         </CardContent>
                     </Card>
 
-                    <Card className="shadow-sm border-[var(--color-border)] bg-muted/10">
-                        <CardHeader className="pb-3 border-b border-[var(--color-border)]">
+                    <Card className="shadow-sm border-border bg-background">
+                        <CardHeader className="pb-3 border-b border-border bg-muted/50">
                             <CardTitle className="text-lg flex items-center gap-2">
                                 <Icon name="mono-historical.png" size={16} color="var(--color-primary)" />
                                 Job History
@@ -642,10 +643,10 @@ function ScheduleView({ initialJobs = [], initialHistory = [], onRunComplete }: 
                                                 <TableCell className="py-2 text-right">
                                                     <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase ${
                                                         h.status === 'success' || h.status === 'completed' 
-                                                            ? 'bg-green-100 text-green-700' 
+                                                            ? 'bg-background text-[#78C12A]' 
                                                             : h.status === 'running' || h.status === 'pending' 
-                                                                ? 'bg-blue-100 text-blue-700' 
-                                                                : 'bg-red-100 text-red-700'
+                                                                ? 'bg-background text-[#0797EA]' 
+                                                                : 'bg-background text-[#F24318]'
                                                     }`}>
                                                         {h.status}
                                                     </span>
@@ -655,14 +656,14 @@ function ScheduleView({ initialJobs = [], initialHistory = [], onRunComplete }: 
                                     )}
                                 </TableBody>
                             </Table>
-                            <div className="p-4 bg-muted/20 border-t border-[var(--color-border)] text-xs text-muted-foreground space-y-1">
+                            <div className="p-4 bg-muted/20 border-t border-border text-xs text-muted-foreground space-y-1">
                                 <div className="flex justify-between">
                                     <span>Generated Snapshots: <strong>{totalRuns}</strong></span>
-                                    <span>Successful: <strong className="text-green-600">{successCount}</strong></span>
+                                    <span>Successful: <strong className="text-[#78C12A]">{successCount}</strong></span>
                                 </div>
                                 <div className="flex justify-between">
                                     <span>Avg Processing: <strong>{avgProcTime}</strong></span>
-                                    <span>Failed: <strong className="text-red-500">{failedCount}</strong></span>
+                                    <span>Failed: <strong className="text-[#F24318]]">{failedCount}</strong></span>
                                 </div>
                             </div>
                         </CardContent>
@@ -670,6 +671,7 @@ function ScheduleView({ initialJobs = [], initialHistory = [], onRunComplete }: 
                 </div>
             </div>
         </div>
+    </div>
     );
 }
 

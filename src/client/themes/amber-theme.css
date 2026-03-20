@@ -89,6 +89,27 @@
     --summary-header-text: var(--color-primary);
     --summary-border: var(--color-border);
     --primary-contrast-text: var(--color-surface);
+
+    /* Shadcn/Tailwind Variables (HSL format) */
+    --background: 190 32% 74%;
+    --foreground: 193 58% 15%;
+    --card: 190 32% 80%;
+    --card-foreground: 193 58% 15%;
+    --popover: 190 32% 90%;
+    --popover-foreground: 193 58% 15%;
+    --primary: 193 58% 35%;
+    --primary-foreground: 190 32% 95%;
+    --secondary: 190 32% 64%;
+    --secondary-foreground: 193 58% 35%;
+    --muted: 190 10% 80%;
+    --muted-foreground: 193 10% 45%;
+    --accent: 17 90% 46%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 17 90% 46%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 193 58% 25%;
+    --input: 193 58% 25%;
+    --ring: 193 58% 35%;
 }
 
 /*

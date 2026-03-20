@@ -104,7 +104,7 @@ export function RadioItem({ value, id, label, description, icon, disabled: ownDi
                 className={cn(
                     "relative flex cursor-pointer rounded-lg border bg-white p-6 shadow-sm focus:outline-none transition-all",
                     isChecked
-                        ? "border-primary ring-1 ring-primary bg-primary/[0.02]"
+                        ? "border-primary ring-1 ring-primary bg-primary/10"
                         : "border-gray-200 hover:border-gray-300",
                     disabled && "opacity-50 cursor-not-allowed",
                     className

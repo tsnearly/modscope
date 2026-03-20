@@ -11,7 +11,8 @@ export interface SectionProps extends React.HTMLAttributes<HTMLDivElement> {
     compact?: boolean;
     collapsible?: boolean;
     defaultIsOpen?: boolean;
-    elevation?: 0 | 1 | 2 | 3; // For Card style elevation if we want section to be a card itself, but usually it's a container
+    elevation?: 0 | 1 | 2 | 3;
+    iconColor?: string;
 }
 
 export function Section({
@@ -25,6 +26,7 @@ export function Section({
     className,
     children,
     elevation = 0,
+    iconColor = "var(--color-primary)",
     ...props
 }: SectionProps) {
     const [isOpen, setIsOpen] = useState(defaultIsOpen);
@@ -65,7 +67,7 @@ export function Section({
                     )}
 
                     {/* Main Icon */}
-                    {icon && <Icon name={icon} size={compact ? "md" : "lg"} className="text-primary flex-shrink-0" />}
+                    {icon && <Icon name={icon} size={compact ? "md" : "lg"} color={iconColor} className="flex-shrink-0" />}
 
                     {/* Title & Subtitle */}
                     <div className="flex flex-col overflow-hidden">
@@ -115,7 +117,7 @@ export interface SectionCardProps extends React.HTMLAttributes<HTMLDivElement> {
 
 export function SectionCard({ className, compact, children, ...props }: SectionCardProps) {
     return (
-        <Card className={cn("overflow-hidden", className)} {...props}>
+        <Card className={cn("overflow-hidden bg-background", className)} {...props}>
             <div className={cn(
                 compact ? "p-3" : "p-4"
             )}>

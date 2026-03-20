@@ -37,14 +37,12 @@ export const Splash = () => {
             >
               Open in Post
             </button>
-            <a
-              href={`https://www.reddit.com/r/${context.subredditName || 'modscope_dev'}/app/modscope`}
-              target="_blank"
-              rel="noopener noreferrer"
+            <button
+              onClick={() => navigateTo(`https://www.reddit.com/r/${context.subredditName || 'modscope_dev'}/app/modscope`)}
               className="w-full bg-white hover:bg-gray-50 text-gray-700 font-semibold py-3 px-6 rounded-lg border border-gray-300 transition-colors duration-200 text-center"
             >
               Launch Full Screen
-            </a>
+            </button>
           </div>
         </div>
       </div>

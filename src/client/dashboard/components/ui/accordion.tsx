@@ -65,7 +65,7 @@ export function AccordionItem({ id, heading, children, disabled, className }: Ac
 
     return (
         <div className={cn(
-            "border border-[var(--color-border)] rounded-lg bg-[var(--color-surface)] overflow-hidden",
+            "border border-border rounded-lg bg-background overflow-hidden",
             disabled && "opacity-50 pointer-events-none",
             className
         )}>
