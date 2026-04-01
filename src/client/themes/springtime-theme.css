@@ -1,92 +1,113 @@
 /* ModScope Springtime Theme - Simplified Core Palette */
 
 [data-theme='springtime'] {
-    /* Core Palette from Springtime spectrum */
-    --color-primary: #0B735F;
-    --color-secondary: #639D75;
-    --color-accent: #0CDC2A;
-    --color-text: #1D2339;
-    --color-text-muted: #384166;
-    --color-bg: #E2E7E2;
-    --color-surface: #E3DBA9;
-    --color-error: #7B86BA;
-    --color-border: #B9C0B9;
+  /* Core Palette from Springtime spectrum */
+  --color-primary: #0b735f;
+  --color-secondary: #639d75;
+  --color-accent: #7ec695;
+  --color-text: #1d2339;
+  --color-text-muted: #384166;
+  --color-bg: #e2e7e2;
+  --color-surface: #e3dba9;
+  --color-error: #7b86ba;
+  --color-border: #b9c0b9;
 
-    /* Derived semantic variables */
-    --tab-active-bg: var(--color-primary);
-    --tab-active-border: var(--color-text);
-    --tab-active-text: #EFF0F7;
-    --tab-bg: var(--color-surface);
-    --tab-border: var(--color-border);
-    --tab-text: var(--color-primary);
-    --tab-hover: var(--color-accent);
+  /* Derived semantic variables */
+  --tab-active-bg: var(--color-primary);
+  --tab-active-border: var(--color-text);
+  --tab-active-text: #eff0f7;
+  --tab-bg: var(--color-surface);
+  --tab-border: var(--color-border);
+  --tab-text: var(--color-primary);
+  --tab-hover: var(--color-accent);
 
-    --btn-primary-bg: var(--color-primary);
-    --btn-primary-text: #EFF0F7;
-    --btn-primary-hover: #07B01F;
-    --btn-primary-active: #048615;
+  --btn-primary-bg: var(--color-primary);
+  --btn-primary-text: #eff0f7;
+  --btn-primary-hover: #095b4b;
+  --btn-primary-active: #074538;
 
-    --nav-bg: var(--color-surface);
-    --nav-border: var(--color-text-muted);
-    --nav-item-text: var(--color-text-muted);
-    --nav-item-hover: var(--color-primary);
-    --nav-item-active-bg: #7EC695;
-    --nav-item-active-text: var(--color-primary);
+  --nav-bg: var(--color-surface);
+  --nav-border: var(--color-text-muted);
+  --nav-item-text: var(--color-text-muted);
+  --nav-item-hover: var(--color-primary);
+  --nav-item-active-bg: #7ec695;
+  --nav-item-active-text: var(--color-primary);
 
-    --text-primary: var(--color-text);
-    --text-secondary: var(--color-text-muted);
-    --text-muted: var(--color-text-muted);
+  --text-primary: var(--color-text);
+  --text-secondary: var(--color-text-muted);
+  --text-muted: var(--color-text-muted);
 
-    --card-bg: var(--color-surface);
-    --card-border: var(--color-border);
-    --card-header-text: var(--color-text);
-    --card-body-text: var(--color-text);
+  --card-bg: var(--color-surface);
+  --card-border: var(--color-border);
+  --card-header-text: var(--color-text);
+  --card-body-text: var(--color-text);
 
-    --border-default: var(--color-border);
-    --border-strong: var(--color-text-muted);
-    --border-subtle: #B9C0B9;
+  --border-default: var(--color-border);
+  --border-strong: var(--color-text-muted);
+  --border-subtle: #b9c0b9;
 
-    --bg-surface: var(--color-surface);
-    --bg-card: var(--color-surface);
+  --bg-surface: var(--color-surface);
+  --bg-card: var(--color-surface);
 
-    /* Chart & Visualization Colors */
-    --chart-primary: var(--color-primary);
-    --chart-secondary: var(--color-secondary);
-    --chart-tertiary: #384166;
-    --chart-light: #1BC5A5;
-    --chart-accent: #E3DBA9;
-    --chart-highlight: var(--color-error);
+  /* Chart & Visualization Colors */
+  --chart-primary: var(--color-primary);
+  --chart-secondary: var(--color-accent);
+  --chart-tertiary: var(--color-error);
+  --chart-light: var(--color-border);
+  --chart-accent: var(--color-surface);
+  --chart-highlight: var(--color-secondary);
 
-    /* Heatmap gradient (light to dark) */
-    --heatmap-0: #E2E7E2;
-    --heatmap-1: #9AF1B5;
-    --heatmap-2: #7EC695;
-    --heatmap-3: #8CFF90;
-    --heatmap-4: #0CDC2A;
-    --heatmap-5: #07B01F;
-    --heatmap-6: #048615;
-    --heatmap-7: #025E0C;
-    --heatmap-8: #013904;
-    --heatmap-9: #001701;
+  /* Heatmap gradient (purple/navy spectrum) */
+  --heatmap-0: #f0f1f7;
+  --heatmap-1: #d2d5e7;
+  --heatmap-2: #b3b9d9;
+  --heatmap-3: #949dcb;
+  --heatmap-4: #7b86ba;
+  --heatmap-5: #626d9b;
+  --heatmap-6: #4e5881;
+  --heatmap-7: #384166;
+  --heatmap-8: #2b3356;
+  --heatmap-9: #1d2339;
 
-    --spacing-xs: 2px;
-    --spacing-sm: 4px;
-    --spacing-md: 8px;
-    --spacing-lg: 12px;
-    --spacing-xl: 16px;
+  --spacing-xs: 2px;
+  --spacing-sm: 4px;
+  --spacing-md: 8px;
+  --spacing-lg: 12px;
+  --spacing-xl: 16px;
 
-    --radius-sm: 4px;
-    --radius-md: 6px;
-    --radius-lg: 8px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
 
-    --shadow-sm: 0 1px 3px rgba(42, 42, 42, 0.1);
-    --shadow-md: 0 2px 8px rgba(42, 42, 42, 0.15);
-    --shadow-lg: 0 4px 16px rgba(42, 42, 42, 0.2);
+  --shadow-sm: 0 1px 3px rgba(42, 42, 42, 0.1);
+  --shadow-md: 0 2px 8px rgba(42, 42, 42, 0.15);
+  --shadow-lg: 0 4px 16px rgba(42, 42, 42, 0.2);
 
-    /* Schedule View Semantics */
-    --summary-bg: #D2D5E7;
-    --summary-text: var(--color-text);
-    --summary-header-text: var(--color-primary);
-    --summary-border: var(--color-border);
-    --primary-contrast-text: #EFF0F7;
+  /* Schedule View Semantics */
+  --summary-bg: #d2d5e7;
+  --summary-text: var(--color-text);
+  --summary-header-text: var(--color-primary);
+  --summary-border: var(--color-border);
+  --primary-contrast-text: #eff0f7;
+
+  /* Shadcn/Tailwind Variables (HSL format) */
+  --background: 120 7% 90%;
+  --foreground: 229 32% 17%;
+  --card: 52 51% 78%;
+  --card-foreground: 229 32% 17%;
+  --popover: 120 7% 95%;
+  --popover-foreground: 229 32% 17%;
+  --primary: 161 82% 25%;
+  --primary-foreground: 120 7% 95%;
+  --secondary: 139 28% 50%;
+  --secondary-foreground: 161 82% 25%;
+  --muted: 120 7% 85%;
+  --muted-foreground: 229 15% 45%;
+  --accent: 139 41% 64%;
+  --accent-foreground: 161 82% 25%;
+  --destructive: 229 32% 61%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 120 7% 75%;
+  --input: 120 7% 75%;
+  --ring: 161 82% 25%;
 }

@@ -4,13 +4,6 @@
     "skipLibCheck": true,
     "types": []
   },
-  "include": [
-    "src/**/*"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist",
-    "src/client",
-    "src/server"
-  ]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "src/client", "src/server", "**/*.test.ts"]
 }

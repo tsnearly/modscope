@@ -1,113 +1,113 @@
 /* ModScope Nocturne Theme - Simplified Core Palette */
 
 [data-theme='nocturne'] {
-    /* Core Palette */
-    --color-primary: #979797;
-    --color-secondary: #D6D6D6;
-    --color-accent: #E2E800;
-    --color-text: #D6D6D6;
-    --color-text-muted: #979797;
-    --color-bg: #141414;
-    --color-surface: #444444;
-    --color-error: #FF4444;
-    --color-border: #979797;
+  /* Core Palette */
+  --color-primary: #979797;
+  --color-secondary: #d6d6d6;
+  --color-accent: #010101;
+  --color-text: #d6d6d6;
+  --color-text-muted: #979797;
+  --color-bg: #141414;
+  --color-surface: #444444;
+  --color-error: #ff4444;
+  --color-border: #979797;
 
-    /* Derived semantic variables */
-    --tab-active-bg: var(--color-accent);
-    --tab-active-border: var(--color-surface);
-    --tab-active-text: #141414;
-    --tab-bg: var(--color-surface);
-    --tab-border: var(--color-border);
-    --tab-text: var(--color-text-muted);
-    --tab-hover: var(--color-text);
+  /* Derived semantic variables */
+  --tab-active-bg: var(--color-accent);
+  --tab-active-border: var(--color-surface);
+  --tab-active-text: #141414;
+  --tab-bg: var(--color-surface);
+  --tab-border: var(--color-border);
+  --tab-text: var(--color-text-muted);
+  --tab-hover: var(--color-text);
 
-    --btn-primary-bg: var(--color-accent);
-    --btn-primary-text: #141414;
-    --btn-primary-hover: #F2F800;
-    --btn-primary-active: #C2C800;
+  --btn-primary-bg: var(--color-accent);
+  --btn-primary-text: #141414;
+  --btn-primary-hover: #f2f800;
+  --btn-primary-active: #c2c800;
 
-    --nav-bg: var(--color-surface);
-    --nav-border: var(--color-text-muted);
-    --nav-item-text: var(--color-text-muted);
-    --nav-item-hover: var(--color-primary);
-    --nav-item-active-bg: var(--color-secondary);
-    --nav-item-active-text: var(--color-primary);
+  --nav-bg: var(--color-surface);
+  --nav-border: var(--color-text-muted);
+  --nav-item-text: var(--color-text-muted);
+  --nav-item-hover: var(--color-primary);
+  --nav-item-active-bg: var(--color-secondary);
+  --nav-item-active-text: var(--color-primary);
 
-    --text-primary: var(--color-text);
-    --text-secondary: var(--color-text);
-    --text-muted: var(--color-text-muted);
+  --text-primary: var(--color-text);
+  --text-secondary: var(--color-text);
+  --text-muted: var(--color-text-muted);
 
-    --card-bg: var(--color-surface);
-    --card-border: var(--color-border);
-    --card-header-text: var(--color-text);
-    --card-body-text: var(--color-text);
+  --card-bg: var(--color-surface);
+  --card-border: var(--color-border);
+  --card-header-text: var(--color-text);
+  --card-body-text: var(--color-text);
 
-    --border-default: var(--color-border);
-    --border-strong: var(--color-text-muted);
-    --border-subtle: var(--color-border);
+  --border-default: var(--color-border);
+  --border-strong: var(--color-text-muted);
+  --border-subtle: var(--color-border);
 
-    --bg-surface: var(--color-surface);
-    --bg-card: var(--color-surface);
+  --bg-surface: var(--color-surface);
+  --bg-card: var(--color-surface);
 
-    /* Chart & Visualization Colors */
-    --chart-primary: var(--color-primary);
-    --chart-secondary: var(--color-secondary);
-    --chart-tertiary: #e9e2e2;
-    --chart-light: #d5d79b;
-    --chart-accent: var(--color-accent);
-    --chart-highlight: var(--color-error);
+  /* Chart & Visualization Colors */
+  --chart-primary: var(--color-primary);
+  --chart-secondary: var(--color-secondary);
+  --chart-tertiary: #e9e2e2;
+  --chart-light: #d5d79b;
+  --chart-accent: var(--color-accent);
+  --chart-highlight: var(--color-error);
 
-    /* Heatmap gradient (light to dark) */
-    --heatmap-0: #dedddd;
-    --heatmap-1: #c5c3c3;
-    --heatmap-2: #aca9a9;
-    --heatmap-3: #959292;
-    --heatmap-4: #7e7c7c;
-    --heatmap-5: #6a6969;
-    --heatmap-6: #565656;
-    --heatmap-7: #4d4d4d;
-    --heatmap-8: #444444;
-    --heatmap-9: #333333;
+  /* Heatmap gradient (light to dark) */
+  --heatmap-0: #dedddd;
+  --heatmap-1: #c5c3c3;
+  --heatmap-2: #aca9a9;
+  --heatmap-3: #959292;
+  --heatmap-4: #7e7c7c;
+  --heatmap-5: #6a6969;
+  --heatmap-6: #565656;
+  --heatmap-7: #4d4d4d;
+  --heatmap-8: #444444;
+  --heatmap-9: #333333;
 
-    --spacing-xs: 2px;
-    --spacing-sm: 4px;
-    --spacing-md: 8px;
-    --spacing-lg: 12px;
-    --spacing-xl: 16px;
+  --spacing-xs: 2px;
+  --spacing-sm: 4px;
+  --spacing-md: 8px;
+  --spacing-lg: 12px;
+  --spacing-xl: 16px;
 
-    --radius-sm: 4px;
-    --radius-md: 6px;
-    --radius-lg: 8px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
 
-    --shadow-sm: 0 1px 3px rgba(42, 42, 42, 0.1);
-    --shadow-md: 0 2px 8px rgba(42, 42, 42, 0.15);
-    --shadow-lg: 0 4px 16px rgba(42, 42, 42, 0.2);
+  --shadow-sm: 0 1px 3px rgba(42, 42, 42, 0.1);
+  --shadow-md: 0 2px 8px rgba(42, 42, 42, 0.15);
+  --shadow-lg: 0 4px 16px rgba(42, 42, 42, 0.2);
 
-    /* Schedule View Semantics */
-    --summary-bg: var(--color-bg);
-    --summary-text: var(--color-text);
-    --summary-header-text: var(--color-primary);
-    --summary-border: var(--color-border);
-    --primary-contrast-text: var(--color-surface);
+  /* Schedule View Semantics */
+  --summary-bg: var(--color-bg);
+  --summary-text: var(--color-text);
+  --summary-header-text: var(--color-primary);
+  --summary-border: var(--color-border);
+  --primary-contrast-text: var(--color-surface);
 
-    /* Shadcn/Tailwind Variables (HSL format) */
-    --background: 0 0% 8%;
-    --foreground: 0 0% 84%;
-    --card: 0 0% 15%;
-    --card-foreground: 0 0% 84%;
-    --popover: 0 0% 12%;
-    --popover-foreground: 0 0% 84%;
-    --primary: 0 0% 59%;
-    --primary-foreground: 0 0% 8%;
-    --secondary: 0 0% 25%;
-    --secondary-foreground: 0 0% 84%;
-    --muted: 0 0% 20%;
-    --muted-foreground: 0 0% 60%;
-    --accent: 62 100% 45%;
-    --accent-foreground: 0 0% 8%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 0 0% 30%;
-    --input: 0 0% 30%;
-    --ring: 62 100% 45%;
+  /* Shadcn/Tailwind Variables (HSL format) */
+  --background: 0 0% 8%;
+  --foreground: 0 0% 84%;
+  --card: 0 0% 15%;
+  --card-foreground: 0 0% 84%;
+  --popover: 0 0% 12%;
+  --popover-foreground: 0 0% 84%;
+  --primary: 0 0% 59.2%;
+  --primary-foreground: 0 0% 8%;
+  --secondary: 0 0% 83.9%;
+  --secondary-foreground: 0 0% 84%;
+  --muted: 0 0% 20%;
+  --muted-foreground: 0 0% 60%;
+  --accent: 61 100% 48.6%;
+  --accent-foreground: 0 0% 8%;
+  --destructive: 0 100% 63.3%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 0 0% 59.2%;
+  --input: 0 0% 59.2%;
+  --ring: 62 100% 39.2%;
 }

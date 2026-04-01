@@ -1,50 +1,56 @@
 {
-    "$schema": "https://developers.reddit.com/schema/config-file.v1.json",
-    "name": "modscope",
-    "post": {
-        "dir": "dist/client",
-        "entrypoints": {
-            "default": {
-                "inline": true,
-                "entry": "dashboard.html"
-            },
-            "dashboard": {
-                "entry": "dashboard.html"
-            }
-        }
-    },
-    "server": {
-        "dir": "dist/server",
-        "entry": "index.cjs"
-    },
-    "media": {
-        "dir": "assets"
-    },
-    "menu": {
-        "items": [
-            {
-                "label": "Open ModScope Dashboard",
-                "description": "View subreddit analytics and insights",
-                "location": "subreddit",
-                "forUserType": "moderator",
-                "endpoint": "/internal/menu/open-dashboard"
-            },
-            {
-                "label": "Reset Launcher Post",
-                "location": "subreddit",
-                "forUserType": "moderator",
-                "endpoint": "/internal/clear-cache"
-            }
-        ]
-    },
-    "triggers": {
-        "onAppInstall": "/internal/on-app-install"
-    },
-    "scheduler": {
-        "tasks": {
-            "snapshot_worker": {
-                "endpoint": "/internal/tasks/snapshot_worker"
-            }
-        }
+  "$schema": "https://developers.reddit.com/schema/config-file.v1.json",
+  "name": "modscope",
+  "permissions": {
+    "reddit": true
+  },
+  "post": {
+    "dir": "dist/client",
+    "entrypoints": {
+      "default": {
+        "inline": true,
+        "entry": "dashboard.html"
+      },
+      "dashboard": {
+        "entry": "dashboard.html"
+      }
     }
+  },
+  "server": {
+    "dir": "dist/server",
+    "entry": "index.cjs"
+  },
+  "media": {
+    "dir": "assets"
+  },
+  "marketingAssets": {
+    "icon": "assets/app-icon-stylized.png"
+  },
+  "menu": {
+    "items": [
+      {
+        "label": "Open ModScope Dashboard",
+        "description": "View subreddit analytics and insights",
+        "location": "subreddit",
+        "forUserType": "moderator",
+        "endpoint": "/internal/menu/open-dashboard"
+      },
+      {
+        "label": "Reset Launcher Post",
+        "location": "subreddit",
+        "forUserType": "moderator",
+        "endpoint": "/internal/clear-cache"
+      }
+    ]
+  },
+  "triggers": {
+    "onAppInstall": "/internal/on-app-install"
+  },
+  "scheduler": {
+    "tasks": {
+      "snapshot_worker": {
+        "endpoint": "/internal/tasks/snapshot_worker"
+      }
+    }
+  }
 }

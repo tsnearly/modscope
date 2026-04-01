@@ -1,113 +1,113 @@
 /* ModScope Clockwork Theme - Simplified Core Palette */
 
 [data-theme='clockwork'] {
-    /* Core Palette */
-    --color-primary: #e56515;
-    --color-secondary: #FBA45C;
-    --color-accent: #CDCDCB;
-    --color-text: #2a2a2a;
-    --color-text-muted: #919599;
-    --color-bg: #f8f8f8;
-    --color-surface: #f8f8f8;
-    --color-error: #dc3545;
-    --color-border: #CDCDCB;
+  /* Core Palette */
+  --color-primary: #e56515;
+  --color-secondary: #fba45c;
+  --color-accent: #cdcdcb;
+  --color-text: #2a2a2a;
+  --color-text-muted: #919599;
+  --color-bg: #f8f8f8;
+  --color-surface: #f8f8f8;
+  --color-error: #dc3545;
+  --color-border: #cdcdcb;
 
-    /* Derived semantic variables */
-    --tab-active-bg: var(--color-accent);
-    --tab-active-border: var(--color-primary);
-    --tab-active-text: var(--color-text);
-    --tab-bg: var(--color-surface);
-    --tab-border: var(--color-border);
-    --tab-text: var(--color-text-muted);
-    --tab-hover: var(--color-primary);
+  /* Derived semantic variables */
+  --tab-active-bg: var(--color-accent);
+  --tab-active-border: var(--color-primary);
+  --tab-active-text: var(--color-text);
+  --tab-bg: var(--color-surface);
+  --tab-border: var(--color-border);
+  --tab-text: var(--color-text-muted);
+  --tab-hover: var(--color-primary);
 
-    --btn-primary-bg: var(--color-primary);
-    --btn-primary-text: #ffffff;
-    --btn-primary-hover: #d45a10;
-    --btn-primary-active: #c34f0b;
+  --btn-primary-bg: var(--color-primary);
+  --btn-primary-text: #ffffff;
+  --btn-primary-hover: #d45a10;
+  --btn-primary-active: #c34f0b;
 
-    --nav-bg: var(--color-surface);
-    --nav-border: var(--color-text-muted);
-    --nav-item-text: var(--color-text-muted);
-    --nav-item-hover: var(--color-primary);
-    --nav-item-active-bg: var(--color-secondary);
-    --nav-item-active-text: var(--color-primary);
+  --nav-bg: var(--color-surface);
+  --nav-border: var(--color-text-muted);
+  --nav-item-text: var(--color-text-muted);
+  --nav-item-hover: var(--color-primary);
+  --nav-item-active-bg: var(--color-secondary);
+  --nav-item-active-text: var(--color-primary);
 
-    --text-primary: var(--color-text);
-    --text-secondary: var(--color-text);
-    --text-muted: var(--color-text-muted);
+  --text-primary: var(--color-text);
+  --text-secondary: var(--color-text);
+  --text-muted: var(--color-text-muted);
 
-    --card-bg: var(--color-surface);
-    --card-border: var(--color-border);
-    --card-header-text: var(--color-text);
-    --card-body-text: var(--color-text);
+  --card-bg: var(--color-surface);
+  --card-border: var(--color-border);
+  --card-header-text: var(--color-text);
+  --card-body-text: var(--color-text);
 
-    --border-default: var(--color-border);
-    --border-strong: var(--color-text-muted);
-    --border-subtle: var(--color-border);
+  --border-default: var(--color-border);
+  --border-strong: var(--color-text-muted);
+  --border-subtle: var(--color-border);
 
-    --bg-surface: var(--color-surface);
-    --bg-card: var(--color-surface);
+  --bg-surface: var(--color-surface);
+  --bg-card: var(--color-surface);
 
-    /* Chart & Visualization Colors */
-    --chart-primary: var(--color-primary);
-    --chart-secondary: var(--color-secondary);
-    --chart-tertiary: #D4A574;
-    --chart-light: #F5D5A8;
-    --chart-accent: var(--color-accent);
-    --chart-highlight: var(--color-error);
+  /* Chart & Visualization Colors */
+  --chart-primary: var(--color-primary);
+  --chart-secondary: var(--color-secondary);
+  --chart-tertiary: #d4a574;
+  --chart-light: #f5d5a8;
+  --chart-accent: var(--color-accent);
+  --chart-highlight: var(--color-error);
 
-    /* Heatmap gradient (light to dark) */
-    --heatmap-0: #fce7da;
-    --heatmap-1: #ffc68d;
-    --heatmap-2: #fcbb7d;
-    --heatmap-3: #f9af6e;
-    --heatmap-4: #f6a45e;
-    --heatmap-5: #f29850;
-    --heatmap-6: #ef8c41;
-    --heatmap-7: #ec8033;
-    --heatmap-8: #e87325;
-    --heatmap-9: #e56515;
+  /* Heatmap gradient (light to dark) */
+  --heatmap-0: #fce7da;
+  --heatmap-1: #ffc68d;
+  --heatmap-2: #fcbb7d;
+  --heatmap-3: #f9af6e;
+  --heatmap-4: #f6a45e;
+  --heatmap-5: #f29850;
+  --heatmap-6: #ef8c41;
+  --heatmap-7: #ec8033;
+  --heatmap-8: #e87325;
+  --heatmap-9: #e56515;
 
-    --spacing-xs: 2px;
-    --spacing-sm: 4px;
-    --spacing-md: 8px;
-    --spacing-lg: 12px;
-    --spacing-xl: 16px;
+  --spacing-xs: 2px;
+  --spacing-sm: 4px;
+  --spacing-md: 8px;
+  --spacing-lg: 12px;
+  --spacing-xl: 16px;
 
-    --radius-sm: 4px;
-    --radius-md: 6px;
-    --radius-lg: 8px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
 
-    --shadow-sm: 0 1px 3px rgba(42, 42, 42, 0.1);
-    --shadow-md: 0 2px 8px rgba(42, 42, 42, 0.15);
-    --shadow-lg: 0 4px 16px rgba(42, 42, 42, 0.2);
+  --shadow-sm: 0 1px 3px rgba(42, 42, 42, 0.1);
+  --shadow-md: 0 2px 8px rgba(42, 42, 42, 0.15);
+  --shadow-lg: 0 4px 16px rgba(42, 42, 42, 0.2);
 
-    /* Schedule View Semantics */
-    --summary-bg: var(--color-bg);
-    --summary-text: var(--color-text);
-    --summary-header-text: var(--color-primary);
-    --summary-border: var(--color-border);
-    --primary-contrast-text: var(--color-surface);
+  /* Schedule View Semantics */
+  --summary-bg: var(--color-bg);
+  --summary-text: var(--color-text);
+  --summary-header-text: var(--color-primary);
+  --summary-border: var(--color-border);
+  --primary-contrast-text: var(--color-surface);
 
-    /* Shadcn/Tailwind Variables (HSL format) */
-    --background: 0 0% 97%;
-    --foreground: 20 10% 15%;
-    --card: 0 0% 97%;
-    --card-foreground: 20 10% 15%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 20 10% 15%;
-    --primary: 23 82% 49%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 60 1% 80%;
-    --secondary-foreground: 23 82% 49%;
-    --muted: 60 1% 90%;
-    --muted-foreground: 20 5% 45%;
-    --accent: 23 82% 80%;
-    --accent-foreground: 23 82% 49%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 60 1% 70%;
-    --input: 60 1% 70%;
-    --ring: 23 82% 49%;
+  /* Shadcn/Tailwind Variables (HSL format) */
+  --background: 0 0% 97%;
+  --foreground: 20 10% 15%;
+  --card: 0 0% 97%;
+  --card-foreground: 20 10% 15%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 20 10% 15%;
+  --primary: 23 83.2% 49%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 27 95.2% 67.3;
+  --secondary-foreground: 23 82% 49%;
+  --muted: 60 1% 90%;
+  --muted-foreground: 20 5% 45%;
+  --accent: 23 82% 80%;
+  --accent-foreground: 23 82% 49%;
+  --destructive: 354 70.5% 53.5%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 60 1% 70%;
+  --input: 60 1% 70%;
+  --ring: 23 82% 49%;
 }

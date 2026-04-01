@@ -7,20 +7,24 @@ export const createPost = async (subredditName: string) => {
 
   // 1. Check if there's an existing dashboard post
   const existingPostId = await redis.get(DASHBOARD_POST_KEY);
-  
+
   if (existingPostId) {
     try {
       console.log(`[CREATE_POST] Checking existing post: ${existingPostId}`);
       const post = await reddit.getPostById(existingPostId as `t3_${string}`);
-      
+
       // If we can fetch it, reuse it.
       // Note: getPostById will throw or return null if not found.
       if (post) {
-        console.log(`[CREATE_POST] ✓ Reusing existing dashboard post: ${existingPostId}`);
+        console.log(
+          `[CREATE_POST] ✓ Reusing existing dashboard post: ${existingPostId}`,
+        );
         return post;
       }
     } catch (error) {
-      console.log(`[CREATE_POST] Existing post ${existingPostId} not found or inaccessible, creating new. Error: ${error}`);
+      console.log(
+        `[CREATE_POST] Existing post ${existingPostId} not found or inaccessible, creating new. Error: ${error}`,
+      );
     }
   }
 
@@ -28,7 +32,7 @@ export const createPost = async (subredditName: string) => {
   console.log('[CREATE_POST] Creating new custom post...');
   const newPost = await reddit.submitCustomPost({
     title: 'ModScope — Mod Analytics Dashboard',
-    subredditName: subredditName,
+    subredditName,
   });
 
   // 3. Apply mod-only attributes
@@ -54,7 +58,9 @@ export const createPost = async (subredditName: string) => {
 
   // 4. Store the new post ID
   await redis.set(DASHBOARD_POST_KEY, newPost.id);
-  console.log(`[CREATE_POST] ✓ Created new persistent dashboard post: ${newPost.id}`);
+  console.log(
+    `[CREATE_POST] ✓ Created new persistent dashboard post: ${newPost.id}`,
+  );
 
   return newPost;
 };

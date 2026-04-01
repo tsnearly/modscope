@@ -22,7 +22,7 @@ export type PostData = PostStatic & PostDynamic;
 
 export type SubredditStats = {
   subscribers: number;
-  active: string;
+  active: number;
   rules_count: number;
   posts_per_day: number;
   comments_per_day: number;
@@ -73,4 +73,3 @@ export type AnalyticsResponse = InitResponse & {
   config?: any;
   display?: any;
 };
-

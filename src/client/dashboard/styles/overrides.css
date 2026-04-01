@@ -7,39 +7,41 @@ html,
 body,
 #root,
 .app-container {
-    height: 100% !important;
-    min-height: 100% !important;
-    margin: 0 !important;
-    overflow: hidden !important;
-    /* Note: do NOT add padding: 0 here. Shell padding should be zero by
+  height: 100% !important;
+  min-height: 100% !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  /* Note: do NOT add padding: 0 here. Shell padding should be zero by
        the absence of padding, not by forcing it !important. */
 }
 
 body {
-    background: var(--color-surface) !important;
+  background: var(--color-surface) !important;
 }
 
 /* ── EntityTitle layout ──────────────────────────────────────────────────*/
 .entity-title-container,
-[class*="entity-title"],
-[class*="EntityTitle"] {
-    display: flex !important;
-    flex-direction: row !important;
-    align-items: center !important;
+[class*='entity-title'],
+[class*='EntityTitle'] {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
 }
 
-.entity-title-container>*,
-[class*="entity-title"]>*,
-[class*="EntityTitle"]>* {
-    display: inline-flex !important;
+.entity-title-container > *,
+[class*='entity-title'] > *,
+[class*='EntityTitle'] > * {
+  display: inline-flex !important;
 }
 
 /* ── Chart headers: force inline layout ─────────────────────────────────*/
-[class*="chart"]>div:first-child,
-[class*="Chart"]>div:first-child {
-    display: flex !important;
-    flex-direction: row !important;
-    align-items: center !important;
+[class*='chart']:not([class*='chart-tooltip'])
+  > div:first-child:not([class*='chart-tooltip']),
+[class*='Chart']:not([class*='chart-tooltip'])
+  > div:first-child:not([class*='chart-tooltip']) {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
 }
 
 /* ── Headings with icons ─────────────────────────────────────────────────
@@ -50,98 +52,97 @@ body {
 .entity-title-container h2,
 .entity-title-container h3,
 .entity-title-container h4,
-[class*="entity-title"] h1,
-[class*="entity-title"] h2,
-[class*="entity-title"] h3,
-[class*="entity-title"] h4,
-[class*="card-header"] h1,
-[class*="card-header"] h2,
-[class*="card-header"] h3,
-[class*="card-header"] h4,
-[class*="section-header"] h1,
-[class*="section-header"] h2,
-[class*="section-header"] h3,
-[class*="section-header"] h4 {
-    display: flex !important;
-    flex-direction: row !important;
-    align-items: center !important;
+[class*='entity-title'] h1,
+[class*='entity-title'] h2,
+[class*='entity-title'] h3,
+[class*='entity-title'] h4,
+[class*='card-header'] h1,
+[class*='card-header'] h2,
+[class*='card-header'] h3,
+[class*='card-header'] h4,
+[class*='section-header'] h1,
+[class*='section-header'] h2,
+[class*='section-header'] h3,
+[class*='section-header'] h4 {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
 }
 
 /* Icon images inside headings */
-h1>img,
-h2>img,
-h3>img,
-h4>img,
-h5>img,
-h6>img {
-    display: inline-block !important;
-    flex-shrink: 0 !important;
-    margin-right: 0.5rem !important;
+h1 > img,
+h2 > img,
+h3 > img,
+h4 > img,
+h5 > img,
+h6 > img {
+  display: inline-block !important;
+  flex-shrink: 0 !important;
+  margin-right: 0.5rem !important;
 }
 
 /* ── Recharts layout fixes ───────────────────────────────────────────────
    Prevents blank charts on first render.
 */
 .recharts-wrapper {
-    position: absolute !important;
-    top: 0;
-    left: 0;
-    width: 100% !important;
-    height: 100% !important;
+  position: absolute !important;
+  top: 0;
+  left: 0;
+  width: 100% !important;
+  height: 100% !important;
 }
 
 .recharts-responsive-container {
-    display: block !important;
+  display: block !important;
 }
 
 /* ── Print styles ────────────────────────────────────────────────────────*/
 @media print {
+  /* Hide everything by default for a clean report */
+  body.is-printing * {
+    visibility: hidden;
+  }
 
-    /* Hide everything by default for a clean report */
-    body.is-printing * {
-        visibility: hidden;
-    }
+  /* Show only the print report container and its children */
+  body.is-printing .print-report-container,
+  body.is-printing .print-report-container * {
+    visibility: visible;
+  }
 
-    /* Show only the print report container and its children */
-    body.is-printing .print-report-container,
-    body.is-printing .print-report-container * {
-        visibility: visible;
-    }
+  /* Aggressively overlay our print container on top of any Devvit wrappers */
+  body.is-printing .print-report-container {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100vw;
+    background: white !important;
+    color: black !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
 
-    /* Aggressively overlay our print container on top of any Devvit wrappers */
-    body.is-printing .print-report-container {
-        position: absolute;
-        left: 0;
-        top: 0;
-        width: 100vw;
-        background: white !important;
-        color: black !important;
-        padding: 0 !important;
-        margin: 0 !important;
-    }
+  /* Hide UI chrome */
+  body.is-printing .nav-toolbar,
+  body.is-printing .tabs-list,
+  body.is-printing [data-report-view] > div:first-child,
+  body.is-printing .absolute.bottom-0 {
+    display: none !important;
+  }
 
-    /* Hide UI chrome */
-    body.is-printing .nav-toolbar,
-    body.is-printing .tabs-list,
-    body.is-printing [data-report-view]>div:first-child,
-    body.is-printing .absolute.bottom-0 {
-        display: none !important;
-    }
-
-    /* Reset overflow for print — strip out SPA constraints so all pages print */
-    body.is-printing,
-    body.is-printing #root,
-    body.is-printing .app-container,
-    body.is-printing .content-area,
-    body.is-printing .h-full,
-    body.is-printing .overflow-hidden,
-    body.is-printing .overflow-y-auto {
-        overflow: visible !important;
-        height: auto !important;
-        min-height: auto !important;
-        max-height: none !important;
-        position: static !important;
-    }
+  /* Reset overflow for print — strip out SPA constraints so all pages print */
+  body.is-printing,
+  body.is-printing #root,
+  body.is-printing .app-container,
+  body.is-printing .content-area,
+  body.is-printing .h-full,
+  body.is-printing .overflow-hidden,
+  body.is-printing .overflow-y-auto {
+    overflow: visible !important;
+    height: auto !important;
+    min-height: auto !important;
+    max-height: none !important;
+    position: static !important;
+  }
 }
 
 /* ── Print Container Explicit Colors & Layout ──────────────────────────────
@@ -150,61 +151,114 @@ h6>img {
    of the system default green theme.
 */
 html body .print-report-container {
-    background: white !important;
-    color: #1e293b !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-    height: max-content !important;
+  background: white !important;
+  color: #1e293b !important;
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+  height: max-content !important;
 
-    /* Force blue color scheme for print */
-    --color-primary: #2563eb;
-    --color-secondary: #93c5fd;
-    --color-accent: #dbeafe;
-    --chart-primary: #2563eb;
-    --chart-secondary: #94a3b8;
-    --chart-tertiary: #60a5fa;
-    --chart-light: #bfdbfe;
-    --chart-accent: #dbeafe;
-    --chart-highlight: #ef4444;
+  /* Force blue color scheme for print */
+  --color-primary: #2563eb;
+  --color-secondary: #93c5fd;
+  --color-accent: #dbeafe;
+  --color-bg: #f8fafc;
+  --chart-primary: #2563eb;
+  --chart-secondary: #94a3b8;
+  --chart-tertiary: #60a5fa;
+  --chart-light: #bfdbfe;
+  --chart-accent: #dbeafe;
+  --chart-highlight: #ef4444;
+  --color-border: #e2e8f0;
 
-    --heatmap-0: #e2e8f0;
-    --heatmap-1: #dbeafe;
-    --heatmap-2: #bfdbfe;
-    --heatmap-3: #93c5fd;
-    --heatmap-4: #60a5fa;
-    --heatmap-5: #3b82f6;
-    --heatmap-6: #2563eb;
-    --heatmap-7: #1d4ed8;
-    --heatmap-8: #1e40af;
-    --heatmap-9: #1e3a8a;
+  --heatmap-0: #f8fafc;
+  --heatmap-1: #dbeafe;
+  --heatmap-2: #bfdbfe;
+  --heatmap-3: #93c5fd;
+  --heatmap-4: #60a5fa;
+  --heatmap-5: #3b82f6;
+  --heatmap-6: #2563eb;
+  --heatmap-7: #1d4ed8;
+  --heatmap-8: #1e40af;
+  --heatmap-9: #1e3a8a;
 }
 
 /* Cards and charts */
 html body .print-report-container .bg-card,
 html body .print-report-container .bg-white {
-    background: white !important;
-    border: 1px solid #e2e8f0 !important;
-    box-shadow: none !important;
+  background: white !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: none !important;
 }
 
 html body .print-report-container .text-muted-foreground {
-    color: #64748b !important;
+  color: #64748b !important;
 }
 
 /* Page break optimizations */
 html body .print-report-container .pdf-safe-block {
-    page-break-inside: avoid;
-    break-inside: avoid;
-    margin-bottom: 2rem;
+  page-break-inside: avoid;
+  break-inside: avoid;
+  margin-bottom: 2rem;
 }
 
 html body .print-report-container .recharts-responsive-container {
-    width: 100% !important;
-    height: 300px !important;
+  width: 100% !important;
+  height: 300px !important;
 }
 
 html body .print-report-container .print-title {
-    color: #0f172a !important;
-    font-size: 24pt !important;
-    margin-bottom: 10pt !important;
+  color: #0f172a !important;
+  font-size: 24pt !important;
+  margin-bottom: 10pt !important;
+}
+
+/* ── Chart tooltip ──────────────────────────────────────────────────────────
+   Two-section stationary tooltip used by all Recharts area/line charts.
+   Position is pinned via the Recharts `position` prop, not CSS positioning.
+*/
+.chart-tooltip-container {
+  display: flex !important;
+  flex-direction: column !important;
+  border-radius: 4px;
+  overflow: hidden;
+  font-size: 8px;
+  font-weight: normal;
+  font-style: normal;
+  pointer-events: none;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  min-width: 90px;
+}
+
+.chart-tooltip-date {
+  display: block !important;
+  background: var(--color-text) !important;
+  color: var(--color-accent) !important;
+  padding: 2px 6px !important;
+  font-size: 8px !important;
+  font-weight: normal !important;
+  line-height: 1.5 !important;
+}
+
+.chart-tooltip-row {
+  display: flex !important;
+  flex-direction: row !important;
+  background: var(--color-text-muted) !important;
+  color: var(--color-accent) !important;
+  padding: 2px 6px !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  gap: 16px !important;
+  font-size: 8px !important;
+  font-weight: normal !important;
+  line-height: 1.5 !important;
+}
+
+.chart-tooltip-label {
+  text-align: left !important;
+}
+
+.chart-tooltip-value {
+  text-align: right !important;
 }

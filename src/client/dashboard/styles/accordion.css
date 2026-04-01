@@ -1,68 +1,68 @@
 /* Accordion Component Styles */
 .accordion {
-    margin-bottom: var(--spacing-md);
-    border: 1px solid var(--border-default);
-    border-radius: var(--radius-md);
-    background: var(--card-bg);
-    overflow: hidden;
+  margin-bottom: var(--spacing-md);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--card-bg);
+  overflow: hidden;
 }
 
 .accordion-header {
-    width: 100%;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: var(--spacing-lg) !important;
-    min-height: 48px !important;
-    background: var(--card-bg);
-    border: none;
-    cursor: pointer;
-    transition: background-color 0.2s ease;
-    font-family: inherit;
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-lg) !important;
+  min-height: 48px !important;
+  background: var(--card-bg);
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  font-family: inherit;
 }
 
 .accordion-header:hover {
-    background: var(--bg-hover);
+  background: var(--bg-hover);
 }
 
 .accordion-header.open {
-    border-bottom: 1px solid var(--border-default);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .accordion-title {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--card-header-text);
-    text-align: left;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--card-header-text);
+  text-align: left;
 }
 
 .accordion-icon {
-    width: 24px;
-    height: 24px;
-    object-fit: contain;
-    transition: transform 0.2s ease;
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  transition: transform 0.2s ease;
 }
 
 .accordion-content {
-    padding: var(--spacing-md);
-    animation: slideDown 0.3s ease-out forwards;
-    display: block;
-    /* Ensure block layout */
+  padding: var(--spacing-md);
+  animation: slideDown 0.3s ease-out forwards;
+  display: block;
+  /* Ensure block layout */
 }
 
 @keyframes slideDown {
-    from {
-        opacity: 0;
-        transform: translateY(-10px);
-        max-height: 0;
-    }
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+    max-height: 0;
+  }
 
-    to {
-        opacity: 1;
-        transform: translateY(0);
-        max-height: 1000px;
-        /* Safe upper bound for text content */
-    }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    max-height: 1000px;
+    /* Safe upper bound for text content */
+  }
 }
 
 /* ── New AccordionItem (AccordionRoot/AccordionItem pattern) ──────────────
@@ -71,9 +71,9 @@
    so the accordion trigger and content are never flush against the border.
 */
 [data-accordion-trigger] {
-    padding: 16px 24px !important;
+  padding: 16px 24px !important;
 }
 
 [data-accordion-content] {
-    padding: 16px 24px 24px 24px !important;
+  padding: 16px 24px 24px 24px !important;
 }

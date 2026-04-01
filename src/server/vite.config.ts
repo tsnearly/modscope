@@ -16,7 +16,9 @@ export default defineConfig({
     rollupOptions: {
       onwarn(warning, warn) {
         // Suppress eval warnings from @protobufjs
-        if (warning.code === 'EVAL') return;
+        if (warning.code === 'EVAL') {
+          return;
+        }
         warn(warning);
       },
       external: [...builtinModules],
@@ -29,6 +31,8 @@ export default defineConfig({
     },
   },
   define: {
-    'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'production'),
+    'process.env.NODE_ENV': JSON.stringify(
+      process.env.NODE_ENV || 'production',
+    ),
   },
 });

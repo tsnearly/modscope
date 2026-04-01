@@ -1,0 +1,6 @@
+# .prettierignore
+assets/
+dist/
+node_modules/
+.venv/
+.vscode/

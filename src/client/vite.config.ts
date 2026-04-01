@@ -13,7 +13,6 @@ export default defineConfig({
     sourcemap: true,
     rollupOptions: {
       input: {
-        splash: 'splash.html',
         dashboard: 'dashboard.html',
       },
       output: {

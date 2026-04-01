@@ -3,7 +3,7 @@ export const FetchDepth = [
     { value: 2, label: 'light', limit: 8 },
     { value: 3, label: 'balanced', limit: 16 },
     { value: 4, label: 'thorough', limit: 32 },
-    { value: 5, label: 'complete', limit: 0 }
+    { value: 5, label: 'complete', limit: 0 },
 ];
 export const PRESETS = [
     {
@@ -21,12 +21,32 @@ export const PRESETS = [
             velocityHours: 48,
             velocityWeight: 1.3,
             analysisPoolSize: 25,
-            analysisDays: 30
+            analysisDays: 30,
         },
         storage: {
             snapshotFrequency: 'daily',
-            retentionDays: 180
-        }
+            retentionDays: 180,
+        },
+        report: {
+            showOverview: true,
+            showTiming: true,
+            showPosts: true,
+            showUsers: true,
+            showContent: true,
+            showActivity: true,
+            showTrendSubscribers: true,
+            showTrendContent: true,
+            showTrendEngagement: true,
+            showTrendPosting: true,
+            showTrendBestPostTime: true,
+            showTopPosts: true,
+            showMostDiscussed: true,
+            showMostEngaged: true,
+            showRising: true,
+            showHot: true,
+            showControversial: true,
+            trendAnalysisDays: 90,
+        },
     },
     {
         id: 'meme',
@@ -43,12 +63,32 @@ export const PRESETS = [
             velocityHours: 12,
             velocityWeight: 2.5,
             analysisPoolSize: 25,
-            analysisDays: 14
+            analysisDays: 14,
         },
         storage: {
             snapshotFrequency: '12hours',
-            retentionDays: 60
-        }
+            retentionDays: 60,
+        },
+        report: {
+            showOverview: true,
+            showTiming: true,
+            showPosts: true,
+            showUsers: true,
+            showContent: true,
+            showActivity: true,
+            showTrendSubscribers: true,
+            showTrendContent: true,
+            showTrendEngagement: true,
+            showTrendPosting: true,
+            showTrendBestPostTime: true,
+            showTopPosts: true,
+            showMostDiscussed: true,
+            showMostEngaged: true,
+            showRising: true,
+            showHot: true,
+            showControversial: true,
+            trendAnalysisDays: 30,
+        },
     },
     {
         id: 'gaming',
@@ -58,19 +98,39 @@ export const PRESETS = [
             commentWeight: 5,
             upvoteWeight: 2,
             depthScaling: 'logarithmic',
-            depthLogarithmic: 0.30,
+            depthLogarithmic: 0.3,
             depthMax: 15,
             fetchDepth: 3,
             creatorBonus: 7,
             velocityHours: 36,
             velocityWeight: 1.5,
             analysisPoolSize: 25,
-            analysisDays: 30
+            analysisDays: 30,
         },
         storage: {
             snapshotFrequency: 'daily',
-            retentionDays: 180
-        }
+            retentionDays: 180,
+        },
+        report: {
+            showOverview: true,
+            showTiming: true,
+            showPosts: true,
+            showUsers: true,
+            showContent: true,
+            showActivity: true,
+            showTrendSubscribers: true,
+            showTrendContent: true,
+            showTrendEngagement: true,
+            showTrendPosting: true,
+            showTrendBestPostTime: true,
+            showTopPosts: true,
+            showMostDiscussed: true,
+            showMostEngaged: true,
+            showRising: true,
+            showHot: true,
+            showControversial: true,
+            trendAnalysisDays: 90,
+        },
     },
     {
         id: 'support',
@@ -80,19 +140,39 @@ export const PRESETS = [
             commentWeight: 9,
             upvoteWeight: 1,
             depthScaling: 'logarithmic',
-            depthLogarithmic: 0.40,
+            depthLogarithmic: 0.4,
             depthMax: 20,
             fetchDepth: 5,
             creatorBonus: 15,
             velocityHours: 72,
             velocityWeight: 1.0,
             analysisPoolSize: 25,
-            analysisDays: 30
+            analysisDays: 30,
         },
         storage: {
             snapshotFrequency: 'daily',
-            retentionDays: 365
-        }
+            retentionDays: 365,
+        },
+        report: {
+            showOverview: true,
+            showTiming: true,
+            showPosts: true,
+            showUsers: true,
+            showContent: true,
+            showActivity: true,
+            showTrendSubscribers: true,
+            showTrendContent: true,
+            showTrendEngagement: true,
+            showTrendPosting: true,
+            showTrendBestPostTime: true,
+            showTopPosts: true,
+            showMostDiscussed: true,
+            showMostEngaged: true,
+            showRising: true,
+            showHot: true,
+            showControversial: true,
+            trendAnalysisDays: 180,
+        },
     },
     {
         id: 'news',
@@ -109,18 +189,38 @@ export const PRESETS = [
             velocityHours: 6,
             velocityWeight: 3.0,
             analysisPoolSize: 30,
-            analysisDays: 14
+            analysisDays: 14,
         },
         storage: {
             snapshotFrequency: '12hours',
-            retentionDays: 90
-        }
+            retentionDays: 90,
+        },
+        report: {
+            showOverview: true,
+            showTiming: true,
+            showPosts: true,
+            showUsers: true,
+            showContent: true,
+            showActivity: true,
+            showTrendSubscribers: true,
+            showTrendContent: true,
+            showTrendEngagement: true,
+            showTrendPosting: true,
+            showTrendBestPostTime: true,
+            showTopPosts: true,
+            showMostDiscussed: true,
+            showMostEngaged: true,
+            showRising: true,
+            showHot: true,
+            showControversial: true,
+            trendAnalysisDays: 30,
+        },
     },
     {
         id: 'custom',
         label: 'Custom',
-        desc: 'Manually configured for your specific community.'
-    }
+        desc: 'Manually configured for your specific community.',
+    },
 ];
 export const THEMES = [
     { id: 'modscopeflow', label: 'ModScope Flow' },
@@ -129,11 +229,31 @@ export const THEMES = [
     { id: 'amber', label: 'Amber' },
     { id: 'nocturne', label: 'Nocturne' },
     { id: 'springtime', label: 'Springtime' },
-    { id: 'rosemeadow', label: 'Rose Meadow' }
+    { id: 'rosemeadow', label: 'Rose Meadow' },
 ];
 export const DEFAULT_STORAGE_SETTINGS = {
     snapshotFrequency: 'daily',
-    retentionDays: 180 // 30-365 by 30
+    retentionDays: 180, // 30-365 by 30
+};
+export const DEFAULT_REPORT_SETTINGS = {
+    showOverview: true,
+    showTiming: true,
+    showPosts: true,
+    showUsers: true,
+    showContent: true,
+    showActivity: true,
+    showTrendSubscribers: true,
+    showTrendContent: true,
+    showTrendEngagement: true,
+    showTrendPosting: true,
+    showTrendBestPostTime: true,
+    showTopPosts: true,
+    showMostDiscussed: true,
+    showMostEngaged: true,
+    showRising: true,
+    showHot: true,
+    showControversial: true,
+    trendAnalysisDays: 90,
 };
 // Each parameter has a default value and a range of values that can be set by the user.
 // The default value is the value that is set by the user.
@@ -152,11 +272,11 @@ export const DEFAULT_CALCULATION_SETTINGS = {
     velocityHours: 48, // 3-72 by 1
     velocityWeight: 1.3, // 0.5-4.0 by 0.25
     analysisPoolSize: 25, // 10-50 by 5
-    analysisDays: 30, // 7-90 by 1 
+    analysisDays: 30, // 7-90 by 1
     excludeOfficial: false, // true, false
     excludeBots: false, // true, false
-    excludeUsers: [] // array of user ids
+    excludeUsers: [], // array of user ids
 };
 export const DEFAULT_USER_SETTINGS = {
-    theme: 'modscopeflow'
+    theme: 'modscopeflow',
 };

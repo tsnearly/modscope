@@ -1,22 +1,28 @@
+import {
+  context as devvitContext,
+  requestExpandedMode,
+} from '@devvit/web/client';
 import * as React from 'react';
-import { useState, useEffect, useRef } from 'react';
-import { context as devvitContext, requestExpandedMode } from '@devvit/web/client';
-import './styles/main.css';
-import ReportView from './components/ReportView';
-import ConfigView from './components/ConfigView';
-import ScheduleView from './components/ScheduleView';
+import { useEffect, useState } from 'react';
+import { useTheme } from '../hooks/useTheme';
 import AboutView from './components/AboutView';
+import ConfigView from './components/ConfigView';
+import ReportView from './components/ReportView';
+import ScheduleView from './components/ScheduleView';
 import { SnapshotsView } from './components/SnapshotsView';
 import { Button } from './components/ui/button';
+import { Heading } from './components/ui/heading';
 import { Icon } from './components/ui/icon';
 import { Tooltip } from './components/ui/tooltip';
-import { Heading } from './components/ui/heading';
+import './styles/main.css';
 import { cn } from './utils/cn';
-import { useTheme } from '../hooks/useTheme';
 
 type View = 'report' | 'snapshots' | 'config' | 'schedule' | 'about';
 
-class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean, debugError: string | null }> {
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; debugError: string | null }
+> {
   constructor(props: any) {
     super(props);
     this.state = { hasError: false, debugError: null };
@@ -29,13 +35,13 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
   override componentDidCatch(error: any, errorInfo: any) {
     console.error('[CRITICAL] Dashboard Render Error:', error, errorInfo);
     fetch('/api/debug-error')
-      .then(res => res.json())
-      .then(data => {
+      .then((res) => res.json())
+      .then((data) => {
         if (data && data.error) {
           this.setState({ debugError: data.error });
         }
       })
-      .catch(err => console.error('Failed to fetch debug error:', err));
+      .catch((err) => console.error('Failed to fetch debug error:', err));
   }
 
   override render() {
@@ -43,14 +49,21 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
       return (
         <div className="flex flex-col items-center justify-center h-full p-8 text-center bg-red-50 border border-red-100 rounded-lg m-4">
           <Icon name="glass-warning" size={48} className="text-red-500 mb-4" />
-          <h2 className="text-lg font-bold text-red-900 mb-2">Something went wrong</h2>
-          <p className="text-sm text-red-700 mb-6">The application encountered a rendering error. Please try refreshing or clearing cache.</p>
+          <h2 className="text-lg font-bold text-red-900 mb-2">
+            Something went wrong
+          </h2>
+          <p className="text-sm text-red-700 mb-6">
+            The application encountered a rendering error. Please try refreshing
+            or clearing cache.
+          </p>
           {this.state.debugError && (
             <div className="mb-4 p-4 bg-red-100 text-red-900 text-xs text-left max-w-full overflow-auto rounded">
               <strong>Backend Error:</strong> {this.state.debugError}
             </div>
           )}
-          <Button onClick={() => window.location.reload()} variant="default">Refresh Dashboard</Button>
+          <Button onClick={() => window.location.reload()} variant="default">
+            Refresh Dashboard
+          </Button>
         </div>
       );
     }
@@ -68,7 +81,9 @@ export const App = () => {
   const [jobs, setJobs] = useState<any[]>([]);
   const [jobHistory, setJobHistory] = useState<any[]>([]);
   const [config, setConfig] = useState<any>(null);
-  const [appVersion, setAppVersion] = useState<string>(devvitContext?.appVersion || '0.0.x');
+  const [appVersion, setAppVersion] = useState<string>(
+    devvitContext?.appVersion || '0.0.x',
+  );
   const [isUnauthorized, setIsUnauthorized] = useState(false);
   const [isPrintMode, setIsPrintMode] = useState(false);
   const [printUrl, setPrintUrl] = useState<string | null>(null);
@@ -93,11 +108,21 @@ export const App = () => {
 
         if (res.ok) {
           const data = await res.json();
-          if (data.analytics) setReportData(data.analytics);
-          if (data.officialAccounts) setOfficialAccounts(data.officialAccounts);
-          if (data.jobs) setJobs(data.jobs);
-          if (data.jobHistory) setJobHistory(data.jobHistory);
-          if (data.config) setConfig(data.config);
+          if (data.analytics) {
+            setReportData(data.analytics);
+          }
+          if (data.officialAccounts) {
+            setOfficialAccounts(data.officialAccounts);
+          }
+          if (data.jobs) {
+            setJobs(data.jobs);
+          }
+          if (data.jobHistory) {
+            setJobHistory(data.jobHistory);
+          }
+          if (data.config) {
+            setConfig(data.config);
+          }
 
           // Use client context first, fallback to server data
           if (!devvitContext?.appVersion && data.appVersion) {
@@ -105,10 +130,16 @@ export const App = () => {
           }
 
           if (data.display?.theme) {
-            // Need to get the changeTheme function somehow. 
+            // Need to get the changeTheme function somehow.
             // We can just set the data-theme attribute directly on document.documentElement
-            document.documentElement.setAttribute('data-theme', data.display.theme);
-            localStorage.setItem('modscope_settings', JSON.stringify(data.display));
+            document.documentElement.setAttribute(
+              'data-theme',
+              data.display.theme,
+            );
+            localStorage.setItem(
+              'modscope_settings',
+              JSON.stringify(data.display),
+            );
           }
 
           if (!data.analytics) {
@@ -119,8 +150,8 @@ export const App = () => {
         console.error('Failed to auto-load latest snapshot:', err);
       }
 
-      // Wait a minimum time to show loading state
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      // Wait a minimum time to show loading state (reduced from 5s to 2s)
+      await new Promise((resolve) => setTimeout(resolve, 2000));
       setIsLoading(false);
       setShowSplash(false);
     };
@@ -133,7 +164,9 @@ export const App = () => {
       setReportLoading(true);
       const res = await fetch(`/api/snapshots/${scanId}`);
       if (!res.ok) {
-        console.error(`Failed to load snapshot ${scanId}: ${res.status} ${res.statusText}`);
+        console.error(
+          `Failed to load snapshot ${scanId}: ${res.status} ${res.statusText}`,
+        );
         return false;
       }
       const data = await res.json();
@@ -142,10 +175,35 @@ export const App = () => {
         setSelectedSnapshotId(scanId);
         setActiveView('report');
         return true;
-      } else {
-        console.warn(`[TABS] Snapshot ${scanId} returned no meta — possibly empty analysis pool:`, data);
-        return false;
+
+        //     // Re-evaluate Trends availability after loading a snapshot.
+        //     try {
+        //       const trendsRes = await fetch('/api/trends');
+        //       if (trendsRes.ok) {
+        //         const trends = await trendsRes.json();
+        //         const available =
+        //           Array.isArray(trends?.subscriberGrowth) && trends.subscriberGrowth.length > 0 ||
+        //           Array.isArray(trends?.engagementOverTime) && trends.engagementOverTime.length > 0 ||
+        //           Array.isArray(trends?.contentMix) && trends.contentMix.length > 0 ||
+        //           Array.isArray(trends?.bestPostingTimesChange?.bestTimesTimeline) && trends.bestPostingTimesChange.bestTimesTimeline.length > 0;
+        //         setHasTrendData(Boolean(available));
+        //       } else {
+        //         setHasTrendData(false);
+        //       }
+        //     } catch {
+        //       setHasTrendData(false);
+        //     }
+        //     return true;
+        //   } else {
+        //     console.warn(`[TABS] Snapshot ${scanId} returned no meta — possibly empty analysis pool:`, data);
+        //     return false;
       }
+
+      console.warn(
+        `[TABS] Snapshot ${scanId} returned no meta; payload may be incomplete.`,
+        data,
+      );
+      return false;
     } catch (error) {
       console.error('Failed to load snapshot:', error);
       return false;
@@ -171,8 +229,15 @@ export const App = () => {
     // Eagerly pre-generate the standalone HTML so it can be opened synchronously via an <a> tag
     setTimeout(async () => {
       try {
-        const container = document.querySelector('.print-report-container') as HTMLElement;
-        if (!container) return;
+        // Wait a bit longer for trends data to load and all charts to render
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        const container = document.querySelector(
+          '.print-report-container',
+        ) as HTMLElement;
+        if (!container) {
+          return;
+        }
         const { generateHtml } = await import('./utils/generateHtml');
         const subreddit = reportData?.meta?.subreddit || 'Unknown';
         const html = await generateHtml(container, subreddit);
@@ -184,7 +249,7 @@ export const App = () => {
       } catch (e) {
         console.error('Failed to pre-generate print HTML', e);
       }
-    }, 800); // Allow Recharts UI to fully mount and measure before capturing SVG
+    }, 500); // Initial delay to let print mode render, then wait additional 1500ms for trends
   };
 
   const closePrintDrawer = () => {
@@ -199,17 +264,41 @@ export const App = () => {
   const renderView = () => {
     switch (activeView) {
       case 'report':
-        return <ReportView data={reportData} isPrintMode={false} onPrint={handleOpenPrintDrawer} officialAccounts={officialAccounts} />;
+        return (
+          <ReportView
+            data={reportData}
+            isPrintMode={false}
+            onPrint={handleOpenPrintDrawer}
+            officialAccounts={officialAccounts}
+          />
+        );
       case 'snapshots':
-        return <SnapshotsView onSelectSnapshot={handleLoadSnapshot} onDeleteSnapshot={handleDeleteSnapshot} />;
+        return (
+          <SnapshotsView
+            onSelectSnapshot={handleLoadSnapshot}
+            onDeleteSnapshot={handleDeleteSnapshot}
+          />
+        );
       case 'config':
         return <ConfigView initialConfig={config} />;
       case 'schedule':
-        return <ScheduleView initialJobs={jobs} initialHistory={jobHistory} onRunComplete={handleLoadSnapshot} />;
+        return (
+          <ScheduleView
+            initialJobs={jobs}
+            initialHistory={jobHistory}
+            onRunComplete={handleLoadSnapshot}
+          />
+        );
       case 'about':
         return <AboutView appVersion={appVersion} />;
       default:
-        return <ReportView data={reportData} isPrintMode={false} onPrint={handleOpenPrintDrawer} />;
+        return (
+          <ReportView
+            data={reportData}
+            isPrintMode={false}
+            onPrint={handleOpenPrintDrawer}
+          />
+        );
     }
   };
 
@@ -217,20 +306,34 @@ export const App = () => {
     return (
       <div className="flex flex-col items-center justify-center h-full bg-[var(--color-bg)] text-[var(--color-primary)] p-8 overflow-hidden">
         <div className="flex flex-col items-center animate-in fade-in zoom-in duration-1000 max-w-full">
-          <img src="app-icon-stylized.png" className="w-24 h-24 mb-6 shadow-2xl rounded-2xl object-contain max-w-[min(25vw,120px)]" alt="ModScope Logo" />
+          <img
+            src="app-icon-stylized.png"
+            className="w-24 h-24 mb-6 shadow-2xl rounded-2xl object-contain max-w-[min(25vw,120px)]"
+            alt="ModScope Logo"
+          />
           <Heading size="xl">ModScope</Heading>
-          <Heading size="lg" className="text-[var(--color-text-muted)]">Analytics Dashboard</Heading>
-          <Heading size="default" className="text-[var(--color-text-muted)]">Version {appVersion}</Heading>
+          <Heading size="lg" className="text-[var(--color-text-muted)]">
+            Analytics Dashboard
+          </Heading>
+          <Heading size="default" className="text-[var(--color-text-muted)]">
+            Version {appVersion}
+          </Heading>
           <div className="h-4"></div>
 
           <div className="flex flex-col items-center gap-4 text-center">
             <div className="text-2xl font-bold">
-              Welcome, <span className="font-semibold text-[var(--color-text)]">{devvitContext?.username ?? 'Moderator'}</span>!
+              Welcome,{' '}
+              <span className="font-semibold text-[var(--color-text)]">
+                {devvitContext?.username ?? 'Moderator'}
+              </span>
+              !
             </div>
 
             <div className="flex items-center gap-2 text-[var(--color-primary)] text-sm animate-pulse">
               <div className="w-1.5 h-1.5 bg-[var(--color-primary)] rounded-full"></div>
-              {isLoading ? 'Loading Snapshot Data...' : 'Initializing Session...'}
+              {isLoading
+                ? 'Loading Snapshot Data...'
+                : 'Initializing Session...'}
             </div>
           </div>
         </div>
@@ -242,8 +345,12 @@ export const App = () => {
     return (
       <div className="flex flex-col items-center justify-center h-full p-8 text-center">
         <Icon name="glass-warning" size={48} className="text-orange-500 mb-4" />
-        <h2 className="text-lg font-bold text-gray-900 mb-2">Moderators Only</h2>
-        <p className="text-sm text-gray-500">This tool is restricted to subreddit moderators.</p>
+        <h2 className="text-lg font-bold text-gray-900 mb-2">
+          Moderators Only
+        </h2>
+        <p className="text-sm text-gray-500">
+          This tool is restricted to subreddit moderators.
+        </p>
       </div>
     );
   }
@@ -261,28 +368,54 @@ export const App = () => {
                   Report Export Preview
                 </h2>
                 <div className="text-slate-500 text-[10px] text-bold uppercase tracking-widest mt-0.5">
-                  <Tooltip content="Use Cmd+Click (Mac) or Ctrl+Click (Windows) on the Open Report button/link to launch in a new tab for native printing" side="bottom">
-                    <span className="text-blue-600 font-black cursor-help">Cmd+Click</span>
+                  <Tooltip
+                    content="Use Cmd+Click (Mac) or Ctrl+Click (Windows) on the Open Report button/link to launch in a new tab for native printing"
+                    side="bottom"
+                  >
+                    <span className="text-blue-600 font-black cursor-help">
+                      Cmd+Click
+                    </span>
                   </Tooltip>
                   <span> to Open • </span>
-                  <Tooltip content="Use Alt-Click on the Open Report button/link to automatically download the report" side="bottom">
-                    <span className="text-blue-600 font-black cursor-help">Alt+Click</span>
+                  <Tooltip
+                    content="Use Alt-Click on the Open Report button/link to automatically download the report"
+                    side="bottom"
+                  >
+                    <span className="text-blue-600 font-black cursor-help">
+                      Alt+Click
+                    </span>
                   </Tooltip>
                   <span> or </span>
-                  <Tooltip content="Use Right-Click ➔ 'Save As...' on the Open Report button/link to specify a filename" side="bottom">
-                    <span className="text-blue-600 font-black cursor-help">Right-Click</span>
+                  <Tooltip
+                    content="Use Right-Click ➔ 'Save As...' on the Open Report button/link to specify a filename"
+                    side="bottom"
+                  >
+                    <span className="text-blue-600 font-black cursor-help">
+                      Right-Click
+                    </span>
                   </Tooltip>
                   <span> to Download</span>
                 </div>
               </div>
               <div className="flex gap-3">
-                <Button variant="outline" onClick={closePrintDrawer}>Close Export</Button>
+                <Button variant="outline" onClick={closePrintDrawer}>
+                  Close Export
+                </Button>
                 {printUrl ? (
-                  <a href={printUrl} download={`ModScope-${reportData?.meta?.subreddit || 'Unknown'}-${(reportData?.meta?.scan_date ? new Date(reportData.meta.scan_date) : new Date()).toISOString().slice(0, 10).replace(/-/g, '')}.html`} title="Cmd/Ctrl+Click to open, or Right-Click to save" className="inline-block">
-                    <Button variant="default" icon="mono-html" iconSize={22}>Open Report</Button>
+                  <a
+                    href={printUrl}
+                    download={`ModScope-${reportData?.meta?.subreddit || 'Unknown'}-${(reportData?.meta?.scan_date ? new Date(reportData.meta.scan_date) : new Date()).toISOString().slice(0, 10).replace(/-/g, '')}.html`}
+                    title="Cmd/Ctrl+Click to open, or Right-Click to save"
+                    className="inline-block"
+                  >
+                    <Button variant="default" icon="mono-html" iconSize={22}>
+                      Open Report
+                    </Button>
                   </a>
                 ) : (
-                  <Button variant="default" size="sm" disabled loading>Generating HQ Print...</Button>
+                  <Button variant="default" size="sm" disabled loading>
+                    Generating HQ Print...
+                  </Button>
                 )}
               </div>
             </div>
@@ -291,22 +424,56 @@ export const App = () => {
           {/* Scrollable Preview Area */}
           <div className="flex-1 w-full overflow-y-auto bg-slate-100 p-8">
             <div className="max-w-6xl mx-auto bg-white shadow-2xl border border-slate-200 rounded-lg overflow-hidden">
-              <ReportView data={reportData} isPrintMode={true} officialAccounts={officialAccounts} />
+              <ReportView
+                data={reportData}
+                isPrintMode={true}
+                officialAccounts={officialAccounts}
+              />
             </div>
-            <div className="h-16" /> {/* Bottom padding for comfortable scrolling */}
+            <div className="h-16" />{' '}
+            {/* Bottom padding for comfortable scrolling */}
           </div>
         </div>
       )}
 
-      <div className="app-container" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: 'var(--color-bg)' }}>
+      <div
+        className="app-container"
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100%',
+          overflow: 'hidden',
+          background: 'var(--color-bg)',
+        }}
+      >
         {/* Top Navigation */}
         <div className="nav-toolbar">
           <div className="nav-group" role="group">
-            {[{ view: 'report', label: 'Report', icon: 'glass-trend.png', disabled: !reportData },
-            { view: 'snapshots', label: 'Snapshots', icon: 'glass-database.png', disabled: !reportData },
-            { view: 'config', label: 'Config', icon: 'glass-adjustments.png' },
-            { view: 'schedule', label: 'Schedule', icon: 'glass-schedule.png' },
-            { view: 'about', label: 'About', icon: 'glass-about.png' }].map(({ view, label, icon, disabled }) => {
+            {[
+              {
+                view: 'report',
+                label: 'Report',
+                icon: 'glass-trend.png',
+                disabled: !reportData,
+              },
+              {
+                view: 'snapshots',
+                label: 'Snapshots',
+                icon: 'glass-database.png',
+                disabled: false,
+              },
+              {
+                view: 'config',
+                label: 'Config',
+                icon: 'glass-adjustments.png',
+              },
+              {
+                view: 'schedule',
+                label: 'Schedule',
+                icon: 'glass-schedule.png',
+              },
+              { view: 'about', label: 'About', icon: 'glass-about.png' },
+            ].map(({ view, label, icon, disabled }) => {
               const isActive = activeView === view;
 
               return (
@@ -314,18 +481,9 @@ export const App = () => {
                   key={view}
                   onClick={() => setActiveView(view as View)}
                   disabled={disabled}
-                  className={cn(
-                    "nav-button",
-                    isActive
-                      ? "active"
-                      : "",
-                  )}
+                  className={cn('nav-button', isActive ? 'active' : '')}
                 >
-                  <Icon
-                    name={icon}
-                    size={16}
-                    className="nav-icon"
-                  />
+                  <Icon name={icon} size={16} className="nav-icon" />
                   <span className="nav-label">{label}</span>
                 </Button>
               );
@@ -340,7 +498,14 @@ export const App = () => {
               onClick={(e) => requestExpandedMode(e.nativeEvent, 'dashboard')}
             >
               {/* Expand icon */}
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <path d="M3 8V5a2 2 0 0 1 2-2h3" />
                 <path d="M16 3h3a2 2 0 0 1 2 2v3" />
                 <path d="M21 16v3a2 2 0 0 1-2 2h-3" />
@@ -351,21 +516,24 @@ export const App = () => {
         </div>
 
         {/* Content Area - Scrollable */}
-        <div className="content-area" style={{
-          flex: 1,
-          overflow: 'hidden', /* Changed to hidden so views handle scroll */
-          minHeight: 0, /* Important for flex scrolling */
-          background: 'var(--color-bg)'
-        }}>
+        <div
+          className="content-area"
+          style={{
+            flex: 1,
+            overflow: 'hidden' /* Changed to hidden so views handle scroll */,
+            minHeight: 0 /* Important for flex scrolling */,
+            background: 'var(--color-bg)',
+          }}
+        >
           {reportLoading ? (
             <div className="flex flex-col items-center justify-center h-full gap-4">
               <div className="w-12 h-12 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
-              <p className="text-gray-400 animate-pulse">Loading detailed report...</p>
+              <p className="text-gray-400 animate-pulse">
+                Loading detailed report...
+              </p>
             </div>
           ) : (
-            <ErrorBoundary>
-              {renderView()}
-            </ErrorBoundary>
+            <ErrorBoundary>{renderView()}</ErrorBoundary>
           )}
         </div>
       </div>

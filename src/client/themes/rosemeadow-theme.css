@@ -1,92 +1,113 @@
 /* ModScope Rose Meadow Theme - Simplified Core Palette */
 
 [data-theme='rosemeadow'] {
-    /* Core Palette from Rose Garnet Meadow */
-    --color-primary: #81142c;
-    --color-secondary: #b0d19a;
-    --color-accent: #cc2454;
-    --color-text: #131213;
-    --color-text-muted: #4c2c34;
-    --color-bg: #e7e6e7;
-    --color-surface: #dbbec4;
-    --color-error: #ec646c;
-    --color-border: #bdb7b9;
+  /* Core Palette from Rose Garnet Meadow */
+  --color-primary: #81142c;
+  --color-secondary: #b0d19a;
+  --color-accent: #cc2454;
+  --color-text: #131213;
+  --color-text-muted: #4c2c34;
+  --color-bg: #e7e6e7;
+  --color-surface: #dbbec4;
+  --color-error: #ec646c;
+  --color-border: #bdb7b9;
 
-    /* Derived semantic variables */
-    --tab-active-bg: var(--color-accent);
-    --tab-active-border: var(--color-primary);
-    --tab-active-text: #fbd3d9;
-    --tab-bg: var(--color-surface);
-    --tab-border: var(--color-border);
-    --tab-text: var(--color-text-muted);
-    --tab-hover: var(--color-primary);
+  /* Derived semantic variables */
+  --tab-active-bg: var(--color-accent);
+  --tab-active-border: var(--color-primary);
+  --tab-active-text: #fbd3d9;
+  --tab-bg: var(--color-surface);
+  --tab-border: var(--color-border);
+  --tab-text: var(--color-text-muted);
+  --tab-hover: var(--color-primary);
 
-    --btn-primary-bg: var(--color-primary);
-    --btn-primary-text: #fbd3d9;
-    --btn-primary-hover: #8e1638;
-    --btn-primary-active: #55091f;
+  --btn-primary-bg: var(--color-primary);
+  --btn-primary-text: #fbd3d9;
+  --btn-primary-hover: #8e1638;
+  --btn-primary-active: #55091f;
 
-    --nav-bg: var(--color-surface);
-    --nav-border: var(--color-border);
-    --nav-item-text: var(--color-text-muted);
-    --nav-item-hover: var(--color-primary);
-    --nav-item-active-bg: #c2919c;
-    --nav-item-active-text: var(--color-primary);
+  --nav-bg: var(--color-surface);
+  --nav-border: var(--color-border);
+  --nav-item-text: var(--color-text-muted);
+  --nav-item-hover: var(--color-primary);
+  --nav-item-active-bg: #c2919c;
+  --nav-item-active-text: var(--color-primary);
 
-    --text-primary: var(--color-text);
-    --text-secondary: var(--color-text-muted);
-    --text-muted: var(--color-text-muted);
+  --text-primary: var(--color-text);
+  --text-secondary: var(--color-text-muted);
+  --text-muted: var(--color-text-muted);
 
-    --card-bg: var(--color-surface);
-    --card-border: var(--color-border);
-    --card-header-text: var(--color-text);
-    --card-body-text: var(--color-text);
+  --card-bg: var(--color-surface);
+  --card-border: var(--color-border);
+  --card-header-text: var(--color-text);
+  --card-body-text: var(--color-text);
 
-    --border-default: var(--color-border);
-    --border-strong: var(--color-text-muted);
-    --border-subtle: #c0bdc0;
+  --border-default: var(--color-border);
+  --border-strong: var(--color-text-muted);
+  --border-subtle: #c0bdc0;
 
-    --bg-surface: var(--color-bg);
-    --bg-card: var(--color-surface);
+  --bg-surface: var(--color-bg);
+  --bg-card: var(--color-surface);
 
-    /* Chart & Visualization Colors */
-    --chart-primary: var(--color-primary);
-    --chart-secondary: var(--color-secondary);
-    --chart-tertiary: var(--color-accent);
-    --chart-light: #ec646c;
-    --chart-accent: #4c2c34;
-    --chart-highlight: var(--color-error);
+  /* Chart & Visualization Colors */
+  --chart-primary: var(--color-primary);
+  --chart-secondary: var(--color-secondary);
+  --chart-tertiary: var(--color-accent);
+  --chart-light: #ec646c;
+  --chart-accent: #4c2c34;
+  --chart-highlight: var(--color-error);
 
-    /* Heatmap gradient (light to dark) */
-    --heatmap-0: #fbd3d9;
-    --heatmap-1: #f89caa;
-    --heatmap-2: #f5577a;
-    --heatmap-3: #cc2454;
-    --heatmap-4: #be2245;
-    --heatmap-5: #8e1638;
-    --heatmap-6: #81142c;
-    --heatmap-7: #55091f;
-    --heatmap-8: #4c021a;
-    --heatmap-9: #2a020b;
+  /* Heatmap gradient (light to dark) */
+  --heatmap-0: #fbd3d9;
+  --heatmap-1: #f89caa;
+  --heatmap-2: #f5577a;
+  --heatmap-3: #cc2454;
+  --heatmap-4: #be2245;
+  --heatmap-5: #8e1638;
+  --heatmap-6: #81142c;
+  --heatmap-7: #55091f;
+  --heatmap-8: #4c021a;
+  --heatmap-9: #2a020b;
 
-    --spacing-xs: 2px;
-    --spacing-sm: 4px;
-    --spacing-md: 8px;
-    --spacing-lg: 12px;
-    --spacing-xl: 16px;
+  --spacing-xs: 2px;
+  --spacing-sm: 4px;
+  --spacing-md: 8px;
+  --spacing-lg: 12px;
+  --spacing-xl: 16px;
 
-    --radius-sm: 4px;
-    --radius-md: 6px;
-    --radius-lg: 8px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
 
-    --shadow-sm: 0 1px 3px rgba(12, 11, 18, 0.1);
-    --shadow-md: 0 2px 8px rgba(12, 11, 18, 0.15);
-    --shadow-lg: 0 4px 16px rgba(12, 11, 18, 0.2);
+  --shadow-sm: 0 1px 3px rgba(12, 11, 18, 0.1);
+  --shadow-md: 0 2px 8px rgba(12, 11, 18, 0.15);
+  --shadow-lg: 0 4px 16px rgba(12, 11, 18, 0.2);
 
-    /* Schedule View Semantics */
-    --summary-bg: #dbbec4;
-    --summary-text: var(--color-text);
-    --summary-header-text: var(--color-primary);
-    --summary-border: var(--color-border);
-    --primary-contrast-text: var(--color-surface);
+  /* Schedule View Semantics */
+  --summary-bg: #dbbec4;
+  --summary-text: var(--color-text);
+  --summary-header-text: var(--color-primary);
+  --summary-border: var(--color-border);
+  --primary-contrast-text: var(--color-surface);
+
+  /* Shadcn/Tailwind Variables (HSL format) */
+  --background: 300 1% 91%;
+  --foreground: 300 1% 7%;
+  --card: 348 29% 80%;
+  --card-foreground: 348 30% 15%;
+  --popover: 300 1% 95%;
+  --popover-foreground: 300 1% 7%;
+  --primary: 347 73% 29%;
+  --primary-foreground: 300 1% 95%;
+  --secondary: 96 36% 71%;
+  --secondary-foreground: 347 73% 29%;
+  --muted: 300 1% 85%;
+  --muted-foreground: 343 20% 45%;
+  --accent: 343 70% 47%;
+  --accent-foreground: 343 50% 95%;
+  --destructive: 356 79% 66%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 345 5% 73%;
+  --input: 345 5% 73%;
+  --ring: 347 73% 29%;
 }
