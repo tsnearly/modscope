@@ -184,7 +184,7 @@ export function TabPanel({
   }
 
   return (
-    <div className={cn('mt-4', className)} {...props}>
+    <div className={cn('mt-2 md:mt-4', className)} {...props}>
       {children}
     </div>
   );

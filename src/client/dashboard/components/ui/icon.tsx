@@ -1,8 +1,32 @@
-import React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
+import {
+  BarChart2,
+  Calendar,
+  CalendarClock,
+  CalendarDays,
+  ChevronDown,
+  ChevronUp,
+  Clock,
+  Database,
+  Edit,
+  Layers,
+  LayoutDashboard,
+  Play,
+  Plus,
+  RefreshCcw,
+  RefreshCw,
+  RotateCcw,
+  Save,
+  Settings,
+  Sliders,
+  SwatchBook,
+  Trash,
+  Trash2,
+  X,
+} from 'lucide-react';
+import React from 'react';
 import { cn } from '../../utils/cn';
 import { getIconPath } from '../../utils/iconMappings';
-import * as LucideIcons from 'lucide-react';
 
 const iconVariants = cva('inline-block object-contain flex-shrink-0', {
   variants: {
@@ -20,20 +44,38 @@ const iconVariants = cva('inline-block object-contain flex-shrink-0', {
   },
 });
 
-// Convert kebab-case "chevron-down" → PascalCase "ChevronDown" for Lucide lookup
-function toPascalCase(str: string): string {
-  return str
-    .split('-')
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join('');
-}
+const lucideIconMap = {
+  'bar-chart-2': BarChart2,
+  calendar: Calendar,
+  'calendar-clock': CalendarClock,
+  'calendar-days': CalendarDays,
+  'chevron-down': ChevronDown,
+  'chevron-up': ChevronUp,
+  clock: Clock,
+  database: Database,
+  edit: Edit,
+  layers: Layers,
+  'layout-dashboard': LayoutDashboard,
+  play: Play,
+  plus: Plus,
+  'refresh-ccw': RefreshCcw,
+  'refresh-cw': RefreshCw,
+  'rotate-ccw': RotateCcw,
+  save: Save,
+  settings: Settings,
+  sliders: Sliders,
+  'swatch-book': SwatchBook,
+  trash: Trash,
+  'trash-2': Trash2,
+  x: X,
+} as const;
 
 export interface IconProps
   extends Omit<React.ImgHTMLAttributes<HTMLImageElement>, 'size'> {
   name?: string;
   src?: string;
   variant?: 'outline' | 'solid' | 'mini' | 'micro' | string;
-  color?: string;
+  color?: string | undefined;
   size?: VariantProps<typeof iconVariants>['size'] | number;
 }
 
@@ -56,23 +98,12 @@ export function Icon({
       : undefined;
   if (lucideRef) {
     const iconName = lucideRef.slice(7); // strip "lucide:"
-    const componentName = toPascalCase(iconName);
-    const LucideIcon = (
-      LucideIcons as unknown as Record<
-        string,
-        | React.ComponentType<{
-            size?: number;
-            color?: string;
-            className?: string;
-            style?: React.CSSProperties;
-          }>
-        | undefined
-      >
-    )[componentName];
+    const LucideIcon =
+      lucideIconMap[iconName as keyof typeof lucideIconMap];
 
     if (!LucideIcon) {
       console.warn(
-        `[Icon] Lucide icon not found: "${componentName}" (from "${name}")`,
+        `[Icon] Lucide icon not found: "${iconName}" (from "${name}")`,
       );
       return null;
     }
@@ -136,7 +167,7 @@ export function Icon({
     }
     return (
       <div
-        className={cn(iconVariants({ size: size as any }), className)}
+        className={cn(iconVariants({ size: (typeof size === "string" &&  (size as any) === "default" ? "sm" : size) as any }), className)}
         style={maskedStyle}
       />
     );
@@ -158,7 +189,7 @@ export function Icon({
     <img
       src={resolvedSrc}
       alt={alt}
-      className={cn(iconVariants({ size: size as any }), className)}
+      className={cn(iconVariants({ size: (typeof size === "string" &&  (size as any) === "default" ? "sm" : size) as any }), className)}
       style={iconStyle}
       {...props}
     />

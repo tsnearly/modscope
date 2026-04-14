@@ -3,12 +3,13 @@ import { getDataGroupingIcon } from '../utils/iconMappings';
 import { Chart } from './ui/chart';
 import { Icon } from './ui/icon';
 import { NonIdealState } from './ui/non-ideal-state';
+import { Tooltip } from './ui/tooltip';
 
 type PostingHeatmapCell = {
   dayHour: string;
   delta: number;
-  dayOfWeek: number;
-  hour: number;
+  dayOfWeek?: number;
+  hour?: number;
 };
 
 type TrendsData = {
@@ -23,7 +24,16 @@ type PostingActivityHeatmapChartProps = {
 };
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const FULL_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const UTC_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+function formatDeltaValue(value: number): string {
+  const abs = Math.abs(value);
+  if (abs >= 100) {
+    return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(abs);
+  }
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(abs);
+}
 
 function formatHourLabel(hour: number): string {
   if (hour === 0) {
@@ -38,9 +48,17 @@ return '12 PM';
   return `${hour - 12} PM`;
 }
 
-function formatDayHourLabel(dayOfWeek: number, hour: number): string {
-  const dayName = DAYS[dayOfWeek] || 'Unknown';
-  return `${dayName} ${formatHourLabel(hour)}`;
+function formatHeatmapTooltipLine(dayOfWeek: number, hour: number, delta: number): string {
+  const dayName = FULL_DAYS[dayOfWeek] || 'Unknown day';
+  const hourLabel = formatHourLabel(hour);
+  const direction = delta > 0 ? 'Increased' : delta < 0 ? 'Decreased' : 'No Change';
+  const magnitude = formatDeltaValue(delta);
+
+  if (delta === 0) {
+    return `${dayName} - ${hourLabel}\nNo Change`;
+  }
+
+  return `${dayName} - ${hourLabel}\n${direction} ${magnitude} posts`;
 }
 
 function convertUTCBucketToLocal(utcBucket: string): { localDay: number; localHour: number } | null {
@@ -86,7 +104,6 @@ export function PostingActivityHeatmapChart({
 }: PostingActivityHeatmapChartProps) {
   const [hiddenCategories, setHiddenCategories] = useState<Record<string, boolean>>({});
   const postingHeatmap = trendsData.postingHeatmap || [];
-  const postingPatternRecap = trendsData.postingPatternRecap || '';
 
   const { heatmapGrid, maxAbsValue } = useMemo(() => {
     if (postingHeatmap.length === 0) {
@@ -133,6 +150,81 @@ export function PostingActivityHeatmapChart({
     return { heatmapGrid: grid, maxAbsValue: maxAbs };
   }, [postingHeatmap]);
 
+  const localizedRecap = useMemo(() => {
+    if (heatmapGrid.length === 0) return '';
+
+    let weekdayShift = 0;
+    let weekendShift = 0;
+    let maxDelta = 0;
+    let minDelta = 0;
+    const timeGroups = { morning: 0, afternoon: 0, evening: 0, night: 0 };
+
+    heatmapGrid.forEach((dayRow, dayIndex) => {
+      dayRow.forEach((cell) => {
+        if (!cell) return;
+        const { delta, hour } = cell;
+        maxDelta = Math.max(maxDelta, delta);
+        minDelta = Math.min(minDelta, delta);
+
+        if (dayIndex >= 5) {
+          weekendShift += delta;
+        } else {
+          weekdayShift += delta;
+        }
+
+        if (hour === undefined) return;
+        
+        if (hour >= 6 && hour <= 11) {
+          timeGroups.morning += delta;
+        } else if (hour >= 12 && hour <= 17) {
+          timeGroups.afternoon += delta;
+        } else if (hour >= 18 && hour <= 23) {
+          timeGroups.evening += delta;
+        } else {
+          timeGroups.night += delta;
+        }
+      });
+    });
+
+    const [maxTimePeriod, maxTimeShift] = Object.entries(timeGroups).reduce(
+      (a, b) => (b[1] > a[1] ? b : a),
+      ['', -Infinity]
+    );
+
+    const parts: string[] = [];
+    
+    // Day of week analysis (normalized per day to avoid bias from 5 weekdays vs 2 weekend days)
+    const normalizedWeekday = weekdayShift / 5;
+    const normalizedWeekend = weekendShift / 2;
+    
+    if (Math.abs(normalizedWeekday - normalizedWeekend) >= 1) {
+      const isShift = minDelta < 0 && maxDelta > 0;
+      const target = normalizedWeekday > normalizedWeekend ? 'weekdays' : 'weekends';
+      if (!isShift && (weekdayShift > 0 || weekendShift > 0)) {
+        parts.push(`Activity increased significantly on ${target}`);
+      } else {
+        parts.push(`Activity shifted toward ${target}`);
+      }
+    }
+
+    // Time of day analysis
+    if (maxTimeShift >= 5) {
+      if (parts.length > 0) {
+        parts.push(`with ${maxTimePeriod} hours gaining the most`);
+      } else {
+        parts.push(`Activity increased during ${maxTimePeriod} hours`);
+      }
+    }
+
+    if (parts.length === 0) {
+      return (maxDelta === 0 && minDelta === 0) 
+        ? 'Posting patterns have remained consistent.' 
+        : 'Posting activity has increased across most time slots.';
+    }
+
+    return parts.join(', ') + '.';
+  }, [heatmapGrid]);
+
   if (postingHeatmap.length === 0) {
     return (
       <Chart
@@ -158,9 +250,11 @@ return 'transparent';
 }
       return 'var(--color-bg)';
     }
-    
-    const intensity = Math.min(1, Math.abs(delta) / Math.max(maxAbsValue, 1));
-    const alpha = Math.max(0.1, intensity);
+
+    // Log scaling preserves visible separation when ranges are very wide (e.g. 40 vs 1650).
+    const maxAbs = Math.max(maxAbsValue, 1);
+    const normalized = Math.log10(Math.abs(delta) + 1) / Math.log10(maxAbs + 1);
+    const alpha = 0.18 + (normalized * 0.78);
     
     if (delta > 0) {
       if (hiddenCategories.increased) {
@@ -215,7 +309,7 @@ return 'transparent';
       <div className='space-y-4'>
         {renderLegend()}
         
-        <div style={{ width: '100%', overflowX: 'hidden' }}>
+        <div className="mx-auto" style={{ width: '100%', maxWidth: '1000px', overflowX: 'hidden' }}>
           <div style={{ width: '100%' }}>
             <div className='grid gap-1 mb-2' style={{ gridTemplateColumns: '40px repeat(24, 1fr)' }}>
               <div className='text-xs font-small text-muted-foreground'></div>
@@ -233,27 +327,38 @@ return 'transparent';
                 </div>
                 
                 {dayRow.map((cell, hourIndex) => (
-                  <div
+                  <Tooltip
                     key={hourIndex}
-                    className='aspect-square rounded-sm border border-border/20 cursor-default'
-                    style={{
-                      backgroundColor: cell ? getCellColor(cell.delta) : 'var(--color-bg)',
-                    }}
-                    title={
-                      cell
-                        ? `${formatDayHourLabel(cell.dayOfWeek, cell.hour)}: ${cell.delta > 0 ? '+' : ''}${cell.delta} posts`
-                        : `${formatDayHourLabel(dayIndex, hourIndex)}: No data`
+                    delayDuration={80}
+                    content={
+                      <span className='whitespace-pre-line'>
+                        {cell
+                          ? formatHeatmapTooltipLine(cell.dayOfWeek ?? dayIndex, cell.hour ?? hourIndex, cell.delta)
+                          : `${FULL_DAYS[dayIndex] || 'Unknown day'} - ${formatHourLabel(hourIndex)}\nNo Data`}
+                      </span>
                     }
-                  />
+                  >
+                    <div
+                      className='aspect-square rounded-sm border border-border/20 cursor-default'
+                      style={{
+                        backgroundColor: cell ? getCellColor(cell.delta) : 'var(--color-bg)',
+                      }}
+                      aria-label={
+                        cell
+                          ? formatHeatmapTooltipLine(cell.dayOfWeek ?? dayIndex, cell.hour ?? hourIndex, cell.delta)
+                          : `${FULL_DAYS[dayIndex] || 'Unknown day'} - ${formatHourLabel(hourIndex)}\nNo Data`
+                      }
+                    />
+                  </Tooltip>
                 ))}
               </div>
             ))}
           </div>
         </div>
 
-        {postingPatternRecap && (
+        {localizedRecap && (
           <div className='mt-3 px-3 py-2 bg-muted/50 rounded-md'>
-            <p className='text-sm text-muted-foreground text-center'>{postingPatternRecap}</p>
+            <p className='text-sm text-muted-foreground text-center'>{localizedRecap}</p>
           </div>
         )}
       </div>

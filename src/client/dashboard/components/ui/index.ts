@@ -6,7 +6,7 @@ export { Badge } from './badge';
 export type { BadgeVariant, BadgeSize } from './badge';
 
 export { Heading } from './heading';
-export type { HeadingLevel } from './heading';
+export type { HeadingProps } from './heading';
 
 export { EntityTitle } from './entity-title';
 

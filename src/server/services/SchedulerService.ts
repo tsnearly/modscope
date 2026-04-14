@@ -1,7 +1,7 @@
-import { Scheduler } from '@devvit/public-api';
+import type { SchedulerClient } from '@devvit/web/server';
 
 export class SchedulerService {
-  constructor(private scheduler: Scheduler) {}
+  constructor(private scheduler: SchedulerClient) {}
 
   async cancelJob(jobId: string) {
     await this.scheduler.cancelJob(jobId);

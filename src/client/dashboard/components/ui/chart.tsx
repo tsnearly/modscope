@@ -1,7 +1,7 @@
 import React from 'react';
 
 interface ChartProps {
-  title?: string;
+  title?: React.ReactNode;
   icon?: React.ReactNode;
   children: React.ReactNode;
   className?: string;

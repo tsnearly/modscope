@@ -12,6 +12,7 @@ import {
 import { getDataGroupingIcon } from '../utils/iconMappings';
 import { Chart } from './ui/chart';
 import { Icon } from './ui/icon';
+import { NonIdealState } from './ui/non-ideal-state';
 
 type TrendPoint = { timestamp: number; value: number };
 type ForecastPoint = {
@@ -127,34 +128,66 @@ export function CommunityGrowthChart({
   const growthRateLabel = `${growthRate >= 0 ? '+' : ''}${growthRate.toFixed(1)}%`;
 
   const chartData = useMemo<GrowthDatum[]>(() => {
-    const byTimestamp = new Map<number, GrowthDatum>();
+    const dayMs = 24 * 60 * 60 * 1000;
+    const toUtcDayNoon = (ts: number): number => {
+      const d = new Date(ts);
+      return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12, 0, 0, 0);
+    };
 
+    const actualByDay = new Map<number, number>();
     for (const point of trendsData.subscriberGrowth || []) {
-      byTimestamp.set(point.timestamp, {
-        ...(byTimestamp.get(point.timestamp) || {
-          timestamp: point.timestamp,
-          date: formatDate(point.timestamp),
-        }),
-        actual: point.value,
-      });
+      actualByDay.set(toUtcDayNoon(point.timestamp), point.value);
     }
 
+    const forecastByDay = new Map<number, { forecast?: number; lowerBand?: number; bandWidth?: number }>();
     for (const point of trendsData.growthForecast?.forecast || []) {
-      byTimestamp.set(point.timestamp, {
-        ...(byTimestamp.get(point.timestamp) || {
-          timestamp: point.timestamp,
-          date: formatDate(point.timestamp),
-        }),
+      forecastByDay.set(toUtcDayNoon(point.timestamp), {
         forecast: point.value,
         lowerBand: point.lowerBound,
         bandWidth: Math.max(0, point.upperBound - point.lowerBound),
       });
     }
 
-    return Array.from(byTimestamp.values()).sort(
-      (a, b) => a.timestamp - b.timestamp,
-    );
-  }, [trendsData]);
+    const now = new Date();
+    const todayUtcNoon = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12, 0, 0, 0);
+
+    let lastActual: number | undefined;
+    let lastForecast: { forecast?: number; lowerBand?: number; bandWidth?: number } | undefined;
+
+    return Array.from({ length: trendAnalysisDays }, (_, idx) => {
+      const offset = trendAnalysisDays - 1 - idx;
+      const timestamp = todayUtcNoon - offset * dayMs;
+
+      if (actualByDay.has(timestamp)) {
+        lastActual = actualByDay.get(timestamp);
+      }
+      if (forecastByDay.has(timestamp)) {
+        lastForecast = forecastByDay.get(timestamp);
+      }
+
+      const row: GrowthDatum = {
+        timestamp,
+        date: formatDate(timestamp),
+      };
+      if (lastActual !== undefined) {
+        row.actual = lastActual;
+      }
+
+      if (lastForecast) {
+        if (lastForecast.forecast !== undefined) {
+          row.forecast = lastForecast.forecast;
+        }
+        if (lastForecast.lowerBand !== undefined) {
+          row.lowerBand = lastForecast.lowerBand;
+        }
+        if (lastForecast.bandWidth !== undefined) {
+          row.bandWidth = lastForecast.bandWidth;
+        }
+      }
+
+      return row;
+    });
+  }, [trendAnalysisDays, trendsData]);
 
   const hasActual = (trendsData.subscriberGrowth || []).length > 0;
   const isActualHidden = hiddenSeries.actual === true;
@@ -225,9 +258,9 @@ export function CommunityGrowthChart({
           >
             <span
               style={{
-                width: '8px',
+                width: '10px',
                 height: '8px',
-                borderRadius: '999px',
+                borderRadius: '2px',
                 background: item.color,
                 border: `1px solid ${item.hidden ? 'var(--color-border)' : item.color}`,
               }}
@@ -250,184 +283,193 @@ export function CommunityGrowthChart({
       }
       height={340}
     >
-      <div
-        className="mb-3 flex items-center gap-2"
-        style={{ position: 'relative', zIndex: 3 }}
-      >
-        <span className="text-[10px] font-semibold uppercase text-muted-foreground tracking-wide">
-          Growth Rate
-        </span>
-        <span className="inline-flex items-center rounded-full border border-border bg-card px-2 py-1 text-xs font-bold text-foreground">
-          {growthRateLabel}
-        </span>
-        {highlightedPoint && (
-          <span className="inline-flex items-center rounded-md border border-border bg-card px-2 py-1 text-[11px] text-foreground">
-            {highlightedPoint.date}
-            {typeof highlightedPoint.actual === 'number'
-              ? ` | Actual ${formatSubscribers(highlightedPoint.actual)}`
-              : ''}
-            {typeof highlightedPoint.forecast === 'number'
-              ? ` | Forecast ${formatSubscribers(highlightedPoint.forecast)}`
-              : ''}
-            {typeof highlightedUpper === 'number' &&
-            typeof highlightedPoint.lowerBand === 'number'
-              ? ` | Band ${formatSubscribers(highlightedPoint.lowerBand)}-${formatSubscribers(highlightedUpper)}`
-              : ''}
-          </span>
-        )}
-      </div>
-
-      <div className="mb-2" style={{ position: 'relative', zIndex: 3 }}>
-        {renderLegend()}
-      </div>
-
       {!hasActual ? (
-        <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-          Missing subscriber growth history. Run additional snapshots to
-          populate historical points.
+        <div className="h-full flex items-center justify-center">
+          <NonIdealState
+            title="No Subscriber Data"
+            message="No subscriber growth history available for this time period. Run additional snapshots to populate trends."
+            icon="mono-unavailable"
+          />
         </div>
       ) : (
-        <div
-          style={{
-            width: '100%',
-            height: '250px',
-            minWidth: 0,
-            position: 'relative',
-            zIndex: 1,
-          }}
-        >
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart
-              data={chartData}
-              margin={{ top: 10, right: 10, left: 5, bottom: 5 }}
-              onMouseMove={(state: any) => {
-                if (state?.activePayload?.[0]?.payload) {
-                  setHighlightedPoint(
-                    state.activePayload[0].payload as GrowthDatum,
-                  );
-                }
-              }}
-              onMouseLeave={() => setHighlightedPoint(null)}
-            >
-              <CartesianGrid
-                strokeDasharray="3 3"
-                stroke="rgba(8,10,12,.175)"
-                opacity={1}
-              />
-              <XAxis
-                dataKey="date"
-                interval="preserveStartEnd"
-                minTickGap={22}
-                height={42}
-                angle={-45}
-                tickMargin={10}
-                axisLine={{ stroke: 'var(--color-border)', strokeWidth: 1 }}
-                tickLine={{ stroke: 'var(--color-border)', strokeWidth: 1 }}
-                tick={{ fontSize: 8, fill: 'var(--text-primary)' }}
-              />
-              <YAxis
-                tick={{ fontSize: 8, fill: 'var(--color-text)' }}
-                tickFormatter={(value) => Number(value).toLocaleString()}
-              />
-              <RechartsTooltip content={<GrowthTooltip />} />
+        <>
+          <div
+            className="mb-3 flex items-center gap-2"
+            style={{ position: 'relative', zIndex: 3 }}
+          >
+            <span className="text-[10px] font-semibold uppercase text-muted-foreground tracking-wide">
+              Growth Rate
+            </span>
+            <span className="inline-flex items-center rounded-full border border-border bg-card px-2 py-1 text-xs font-bold text-foreground">
+              {growthRateLabel}
+            </span>
+            {highlightedPoint && (
+              <span className="inline-flex items-center rounded-md border border-border bg-card px-2 py-1 text-[11px] text-foreground">
+                {highlightedPoint.date}
+                {typeof highlightedPoint.actual === 'number'
+                  ? ` | Actual ${formatSubscribers(highlightedPoint.actual)}`
+                  : ''}
+                {typeof highlightedPoint.forecast === 'number'
+                  ? ` | Forecast ${formatSubscribers(highlightedPoint.forecast)}`
+                  : ''}
+                {typeof highlightedUpper === 'number' &&
+                typeof highlightedPoint.lowerBand === 'number'
+                  ? ` | Band ${formatSubscribers(highlightedPoint.lowerBand)}-${formatSubscribers(highlightedUpper)}`
+                  : ''}
+              </span>
+            )}
+          </div>
 
-              <defs>
-                <linearGradient
-                  id="confidenceBandGradient"
-                  x1="0"
-                  y1="1"
-                  x2="0"
-                  y2="0"
-                >
-                  <stop offset="0%" stopColor="#ef4444" stopOpacity={0.34} />
-                  <stop offset="45%" stopColor="#facc15" stopOpacity={0.26} />
-                  <stop offset="100%" stopColor="#22c55e" stopOpacity={0.34} />
-                </linearGradient>
-              </defs>
+          <div className="mb-2" style={{ position: 'relative', zIndex: 3 }}>
+            {renderLegend()}
+          </div>
 
-              {/* Confidence band (lower + width stacked) */}
-              <Area
-                type="monotone"
-                dataKey="lowerBand"
-                stackId="forecast-band"
-                stroke="none"
-                fill="transparent"
-                isAnimationActive={!isPrintMode}
-                name="Band Base"
-                legendType="none"
-              />
-              <Area
-                type="monotone"
-                dataKey="bandWidth"
-                stackId="forecast-band"
-                stroke="rgba(250, 204, 21, 0.55)"
-                strokeWidth={0.6}
-                fill="url(#confidenceBandGradient)"
-                isAnimationActive={!isPrintMode}
-                name="Confidence Band"
-                hide={isBandHidden}
-              />
+          <div
+            style={{
+              width: '100%',
+              height: '250px',
+              minWidth: 0,
+              position: 'relative',
+              zIndex: 1,
+            }}
+          >
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart
+                data={chartData}
+                margin={{ top: 10, right: 10, left: 5, bottom: 5 }}
+                onMouseMove={(state: any) => {
+                  if (state?.activePayload?.[0]?.payload) {
+                    setHighlightedPoint(
+                      state.activePayload[0].payload as GrowthDatum,
+                    );
+                  }
+                }}
+                onMouseLeave={() => setHighlightedPoint(null)}
+              >
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="rgba(8,10,12,.175)"
+                  opacity={1}
+                />
+                <XAxis
+                  dataKey="timestamp"
+                  type="number"
+                  scale="time"
+                  domain={['dataMin', 'dataMax']}
+                  tickFormatter={(value) => formatDate(Number(value))}
+                  tickCount={6}
+                  minTickGap={22}
+                  height={42}
+                  angle={-45}
+                  tickMargin={10}
+                  axisLine={{ stroke: 'var(--color-border)', strokeWidth: 1 }}
+                  tickLine={{ stroke: 'var(--color-border)', strokeWidth: 1 }}
+                  tick={{ fontSize: 8, fill: 'var(--text-secondary)' }}
+                />
+                <YAxis
+                  tick={{ fontSize: 8, fill: 'var(--color-text)' }}
+                  tickFormatter={(value) => Number(value).toLocaleString()}
+                />
+                <RechartsTooltip content={<GrowthTooltip />} />
 
-              <Line
-                type="monotone"
-                dataKey="actual"
-                name="Actual"
-                stroke="var(--chart-primary)"
-                strokeWidth={2.25}
-                connectNulls={false}
-                dot={false}
-                activeDot={false}
-                isAnimationActive={!isPrintMode}
-                hide={isActualHidden}
-              />
-              <Line
-                type="linear"
-                dataKey="forecast"
-                name="Forecast"
-                stroke="var(--chart-accent)"
-                strokeWidth={2.25}
-                dot={false}
-                activeDot={false}
-                connectNulls
-                isAnimationActive={!isPrintMode}
-                hide={isForecastHidden}
-              />
-              <Line
-                type="linear"
-                dataKey="lowerBand"
-                name="Lower Bound"
-                stroke="#ef4444"
-                strokeWidth={1.25}
-                strokeOpacity={0.8}
-                dot={false}
-                activeDot={false}
-                connectNulls
-                isAnimationActive={!isPrintMode}
-                hide={isBandHidden}
-                legendType="none"
-              />
-              <Line
-                type="linear"
-                dataKey={(row: GrowthDatum) =>
-                  typeof row.lowerBand === 'number' &&
-                  typeof row.bandWidth === 'number'
-                    ? row.lowerBand + row.bandWidth
-                    : undefined
-                }
-                name="Upper Bound"
-                stroke="#22c55e"
-                strokeWidth={1.25}
-                strokeOpacity={0.8}
-                dot={false}
-                activeDot={false}
-                connectNulls
-                isAnimationActive={!isPrintMode}
-                hide={isBandHidden}
-                legendType="none"
-              />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
+                <defs>
+                  <linearGradient
+                    id="confidenceBandGradient"
+                    x1="0"
+                    y1="1"
+                    x2="0"
+                    y2="0"
+                  >
+                    <stop offset="0%" stopColor="#ef4444" stopOpacity={0.34} />
+                    <stop offset="45%" stopColor="#facc15" stopOpacity={0.26} />
+                    <stop offset="100%" stopColor="#22c55e" stopOpacity={0.34} />
+                  </linearGradient>
+                </defs>
+
+                {/* Confidence band (lower + width stacked) */}
+                <Area
+                  type="monotone"
+                  dataKey="lowerBand"
+                  stackId="forecast-band"
+                  stroke="none"
+                  fill="transparent"
+                  isAnimationActive={!isPrintMode}
+                  name="Band Base"
+                  legendType="none"
+                />
+                <Area
+                  type="monotone"
+                  dataKey="bandWidth"
+                  stackId="forecast-band"
+                  stroke="rgba(250, 204, 21, 0.55)"
+                  strokeWidth={0.6}
+                  fill="url(#confidenceBandGradient)"
+                  isAnimationActive={!isPrintMode}
+                  name="Confidence Band"
+                  hide={isBandHidden}
+                />
+
+                <Line
+                  type="monotone"
+                  dataKey="actual"
+                  name="Actual"
+                  stroke="var(--chart-primary)"
+                  strokeWidth={2.25}
+                  connectNulls={false}
+                  dot={false}
+                  activeDot={false}
+                  isAnimationActive={!isPrintMode}
+                  hide={isActualHidden}
+                />
+                <Line
+                  type="linear"
+                  dataKey="forecast"
+                  name="Forecast"
+                  stroke="var(--chart-secondary)"
+                  strokeWidth={2.25}
+                  dot={false}
+                  activeDot={false}
+                  connectNulls
+                  isAnimationActive={!isPrintMode}
+                  hide={isForecastHidden}
+                />
+                <Line
+                  type="linear"
+                  dataKey="lowerBand"
+                  name="Lower Bound"
+                  stroke="#ef4444"
+                  strokeWidth={1.25}
+                  strokeOpacity={0.8}
+                  dot={false}
+                  activeDot={false}
+                  connectNulls
+                  isAnimationActive={!isPrintMode}
+                  hide={isBandHidden}
+                  legendType="none"
+                />
+                <Line
+                  type="linear"
+                  dataKey={(row: GrowthDatum) =>
+                    typeof row.lowerBand === 'number' &&
+                    typeof row.bandWidth === 'number'
+                      ? row.lowerBand + row.bandWidth
+                      : undefined
+                  }
+                  name="Upper Bound"
+                  stroke="#22c55e"
+                  strokeWidth={1.25}
+                  strokeOpacity={0.8}
+                  dot={false}
+                  activeDot={false}
+                  connectNulls
+                  isAnimationActive={!isPrintMode}
+                  hide={isBandHidden}
+                  legendType="none"
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </>
       )}
     </Chart>
   );

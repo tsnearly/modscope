@@ -14,8 +14,10 @@ import { Button } from './components/ui/button';
 import { Heading } from './components/ui/heading';
 import { Icon } from './components/ui/icon';
 import { Tooltip } from './components/ui/tooltip';
+import { AppConfig, JobDescriptor, JobHistoryEntry, AnalyticsSnapshot } from '../../shared/types/api';
 import './styles/main.css';
 import { cn } from './utils/cn';
+import { getIconPath } from './utils/iconMappings';
 
 type View = 'report' | 'snapshots' | 'config' | 'schedule' | 'about';
 
@@ -23,7 +25,7 @@ class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
   { hasError: boolean; debugError: string | null }
 > {
-  constructor(props: any) {
+  constructor(props: { children: React.ReactNode }) {
     super(props);
     this.state = { hasError: false, debugError: null };
   }
@@ -32,7 +34,7 @@ class ErrorBoundary extends React.Component<
     return { hasError: true };
   }
 
-  override componentDidCatch(error: any, errorInfo: any) {
+  override componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error('[CRITICAL] Dashboard Render Error:', error, errorInfo);
     fetch('/api/debug-error')
       .then((res) => res.json())
@@ -74,13 +76,15 @@ class ErrorBoundary extends React.Component<
 export const App = () => {
   useTheme(); // Initialize and apply theme on mount
   const [activeView, setActiveView] = useState<View>('report');
-  const [, setSelectedSnapshotId] = useState<number | null>(null);
+  const [selectedSnapshotId, setSelectedSnapshotId] = useState<number | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
-  const [reportData, setReportData] = useState<any>(null);
+  const [reportData, setReportData] = useState<AnalyticsSnapshot | null>(null);
   const [officialAccounts, setOfficialAccounts] = useState<string[]>([]);
-  const [jobs, setJobs] = useState<any[]>([]);
-  const [jobHistory, setJobHistory] = useState<any[]>([]);
-  const [config, setConfig] = useState<any>(null);
+  const [jobs, setJobs] = useState<JobDescriptor[]>([]);
+  const [jobHistory, setJobHistory] = useState<JobHistoryEntry[]>([]);
+  const [config, setConfig] = useState<AppConfig | null>(null);
+  const [snapshots, setSnapshots] = useState<AnalyticsSnapshot[]>([]);
+  const [snapshotsLoading, setSnapshotsLoading] = useState(false);
   const [appVersion, setAppVersion] = useState<string>(
     devvitContext?.appVersion || '0.0.x',
   );
@@ -99,11 +103,11 @@ export const App = () => {
 
         if (res.status === 403) {
           // Non-moderator accessed the post
-          setIsLoading(false);
-          setShowSplash(false);
-          // Render a blocked state — see below
-          setIsUnauthorized(true);
-          return;
+          // PLAYTEST_BYPASS: Temporarily allow non-mods to access for playtesting
+          // setIsLoading(false);
+          // setShowSplash(false);
+          // setIsUnauthorized(true);
+          // return;
         }
 
         if (res.ok) {
@@ -157,7 +161,23 @@ export const App = () => {
     };
 
     loadData();
+    fetchSnapshots();
   }, []);
+
+  const fetchSnapshots = async () => {
+    try {
+      setSnapshotsLoading(true);
+      const res = await fetch('/api/snapshots');
+      if (res.ok) {
+        const data = await res.json();
+        setSnapshots(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch snapshots:', err);
+    } finally {
+      setSnapshotsLoading(false);
+    }
+  };
 
   const handleLoadSnapshot = async (scanId: number): Promise<boolean> => {
     try {
@@ -231,7 +251,7 @@ export const App = () => {
       try {
         // Wait a bit longer for trends data to load and all charts to render
         await new Promise(resolve => setTimeout(resolve, 1500));
-        
+
         const container = document.querySelector(
           '.print-report-container',
         ) as HTMLElement;
@@ -265,39 +285,58 @@ export const App = () => {
     switch (activeView) {
       case 'report':
         return (
-          <ReportView
-            data={reportData}
-            isPrintMode={false}
-            onPrint={handleOpenPrintDrawer}
-            officialAccounts={officialAccounts}
-          />
+          <ErrorBoundary>
+            <ReportView
+              data={reportData || undefined}
+              isPrintMode={false}
+              onPrint={handleOpenPrintDrawer}
+              officialAccounts={officialAccounts}
+            />
+          </ErrorBoundary>
         );
       case 'snapshots':
         return (
-          <SnapshotsView
-            onSelectSnapshot={handleLoadSnapshot}
-            onDeleteSnapshot={handleDeleteSnapshot}
-          />
+          <ErrorBoundary>
+            <SnapshotsView
+              snapshots={snapshots as any}
+              loading={snapshotsLoading}
+              onSelectSnapshot={handleLoadSnapshot}
+              onDeleteSnapshot={handleDeleteSnapshot}
+              onRefresh={fetchSnapshots}
+            />
+          </ErrorBoundary>
         );
       case 'config':
-        return <ConfigView initialConfig={config} />;
+        return (
+          <ErrorBoundary>
+            <ConfigView initialConfig={config} />
+          </ErrorBoundary>
+        );
       case 'schedule':
         return (
-          <ScheduleView
-            initialJobs={jobs}
-            initialHistory={jobHistory}
-            onRunComplete={handleLoadSnapshot}
-          />
+          <ErrorBoundary>
+            <ScheduleView
+              initialJobs={jobs as any}
+              initialHistory={jobHistory}
+              onRunComplete={handleLoadSnapshot}
+            />
+          </ErrorBoundary>
         );
       case 'about':
-        return <AboutView appVersion={appVersion} />;
+        return (
+          <ErrorBoundary>
+            <AboutView appVersion={appVersion} />
+          </ErrorBoundary>
+        );
       default:
         return (
-          <ReportView
-            data={reportData}
-            isPrintMode={false}
-            onPrint={handleOpenPrintDrawer}
-          />
+          <ErrorBoundary>
+            <ReportView
+              data={reportData || undefined}
+              isPrintMode={false}
+              onPrint={handleOpenPrintDrawer}
+            />
+          </ErrorBoundary>
         );
     }
   };
@@ -307,8 +346,8 @@ export const App = () => {
       <div className="flex flex-col items-center justify-center h-full bg-[var(--color-bg)] text-[var(--color-primary)] p-8 overflow-hidden">
         <div className="flex flex-col items-center animate-in fade-in zoom-in duration-1000 max-w-full">
           <img
-            src="app-icon-stylized.png"
-            className="w-24 h-24 mb-6 shadow-2xl rounded-2xl object-contain max-w-[min(25vw,120px)]"
+            src={getIconPath('app-icon-stylized.png')}
+            className="w-32 h-32 mb-6 drop-shadow-2xl animate-in zoom-in-50 duration-700"
             alt="ModScope Logo"
           />
           <Heading size="xl">ModScope</Heading>
@@ -404,7 +443,7 @@ export const App = () => {
                 {printUrl ? (
                   <a
                     href={printUrl}
-                    download={`ModScope-${reportData?.meta?.subreddit || 'Unknown'}-${(reportData?.meta?.scan_date ? new Date(reportData.meta.scan_date) : new Date()).toISOString().slice(0, 10).replace(/-/g, '')}.html`}
+                    download={`ModScope-${reportData?.meta?.subreddit || 'Unknown'}-${(reportData?.meta?.scanDate ? new Date(reportData.meta.scanDate) : new Date()).toISOString().slice(0, 10).replace(/-/g, '')}.html`}
                     title="Cmd/Ctrl+Click to open, or Right-Click to save"
                     className="inline-block"
                   >
@@ -425,7 +464,7 @@ export const App = () => {
           <div className="flex-1 w-full overflow-y-auto bg-slate-100 p-8">
             <div className="max-w-6xl mx-auto bg-white shadow-2xl border border-slate-200 rounded-lg overflow-hidden">
               <ReportView
-                data={reportData}
+                data={reportData || undefined}
                 isPrintMode={true}
                 officialAccounts={officialAccounts}
               />
@@ -495,7 +534,9 @@ export const App = () => {
             <button
               className="fullscreen-btn"
               aria-label="Open full screen"
-              onClick={(e) => requestExpandedMode(e.nativeEvent, 'dashboard')}
+              onClick={(e) => {
+              requestExpandedMode(e as unknown as PointerEvent, 'expanded');
+            }}
             >
               {/* Expand icon */}
               <svg

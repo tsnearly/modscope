@@ -1,17 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import { context as devvitContext } from '@devvit/web/client';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { EntityTitle } from './ui/entity-title';
-import { Icon } from './ui/icon';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from './ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { Tooltip } from './ui/tooltip';
+import { NonIdealState } from './ui/non-ideal-state';
 
 interface Snapshot {
   scanId: number;
@@ -26,13 +20,19 @@ interface Snapshot {
 }
 
 interface SnapshotsViewProps {
+  snapshots: Snapshot[];
+  loading: boolean;
   onSelectSnapshot: (scanId: number) => Promise<boolean>;
   onDeleteSnapshot?: (scanId: number) => Promise<boolean>;
+  onRefresh?: () => Promise<void>;
 }
 
 export function SnapshotsView({
+  snapshots: snapshotsProp,
+  loading: loadingProp,
   onSelectSnapshot,
   onDeleteSnapshot,
+  onRefresh,
 }: SnapshotsViewProps) {
   const formatDate = (dateStr: string) => {
     if (!dateStr) {
@@ -62,9 +62,8 @@ export function SnapshotsView({
       return dateStr;
     }
   };
-  const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
+  const [snapshots, setSnapshots] = useState<Snapshot[]>(snapshotsProp);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [bootstrapping, setBootstrapping] = useState(false);
@@ -72,21 +71,64 @@ export function SnapshotsView({
   const [pendingClear, setPendingClear] = useState(false);
 
   useEffect(() => {
-    fetchSnapshots();
+    setSnapshots(snapshotsProp);
+  }, [snapshotsProp]);
+
+  // Invokes a native Toast message from the server side via the bridge
+  const showNativeToast = useCallback(async (message: string) => {
+    try {
+      await fetch('/api/ui/toast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message })
+      });
+    } catch (err) {
+      console.error('Failed to trigger native toast:', err);
+    }
   }, []);
 
+  const registerWebView = useCallback(async () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const webViewId = urlParams.get('webviewId');
+
+    if (webViewId) {
+      try {
+        await fetch('/api/ui/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ webViewId })
+        });
+      } catch (err) {
+        console.error('Failed to register WebView:', err);
+      }
+    }
+  }, []);
+
+  // Backward link: Listen for messages from the server bridge
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      const msg = event.data;
+      if (msg.type === 'SNAPSHOT_DELETED' && msg.scanId) {
+        // Show the native toast via bridge upon job completion
+        showNativeToast(`Snapshot #${msg.scanId} has been successfully cleaned up along with all artifacts.`);
+        
+        // Update local state
+        setSnapshots(prev => prev.filter(s => s.scanId !== msg.scanId));
+        if (selectedId === msg.scanId) setSelectedId(null);
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    registerWebView();
+
+    return () => {
+      window.removeEventListener('message', handleMessage);
+    };
+  }, [selectedId, showNativeToast, registerWebView]);
+
   const fetchSnapshots = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch('/api/snapshots');
-      const data = await res.json();
-      setSnapshots(data);
-      setError(null);
-    } catch (err) {
-      console.error('Failed to fetch snapshots:', err);
-      setError('Failed to load snapshots');
-    } finally {
-      setLoading(false);
+    if (onRefresh) {
+      await onRefresh();
     }
   };
 
@@ -122,17 +164,12 @@ export function SnapshotsView({
       setPendingClear(false);
       const res = await fetch('/api/clear-snapshots', { method: 'POST' });
       if (res.ok) {
-        // setBootstrapStatus('Storage cleared successfully.'); // Removed as bootstrapStatus is removed
         setSnapshots([]);
-      } else {
-        // setBootstrapStatus('Failed to clear storage.'); // Removed as bootstrapStatus is removed
       }
     } catch (err) {
       console.error('Clear failed:', err);
-      // setBootstrapStatus('Network error while clearing.'); // Removed as bootstrapStatus is removed
     } finally {
       setBootstrapping(false);
-      // setTimeout(() => setBootstrapStatus(null), 3000); // Removed as bootstrapStatus is removed
     }
   };
 
@@ -155,11 +192,21 @@ export function SnapshotsView({
         const res = await fetch(`/api/snapshots/${selectedId}`, {
           method: 'DELETE',
         });
-        if (res.ok) {
-          setSnapshots((prev) => prev.filter((s) => s.scanId !== selectedId));
-          setSelectedId(null);
-        } else {
-          setError('Failed to delete snapshot.');
+        if (res.status === 202) {
+          // Deletion started in background
+          fetch('/api/ui/toast', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              message: `Deletion of snapshot #${selectedId} started in the background...`,
+              type: 'info'
+            })
+          }).catch(() => {});
+          
+          // Optimistically mark as pending or just wait for the realtime event
+          // For now, we'll keep the row but wait for the background job to finish
+        } else if (!res.ok) {
+          setError('Failed to initiate deletion.');
         }
       }
     } catch (err) {
@@ -171,18 +218,36 @@ export function SnapshotsView({
     }
   };
 
-  if (loading) {
+  if (loadingProp && snapshots.length === 0) {
     return (
       <div className="flex items-center justify-center h-full">
-        <p className="text-gray-400">Loading snapshots...</p>
+        <NonIdealState
+          title="Loading Snapshots"
+          message="Retrieving historical analysis data from the server..."
+          icon="spinner.gif"
+        />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <p className="text-red-400">{error}</p>
+      <div className="flex flex-col items-center justify-center h-full gap-4 p-8 text-center">
+        <NonIdealState
+          title="Snapshot Loading Error"
+          message={error}
+          icon="mono-unavailable"
+          action={
+            <Button
+              onClick={fetchSnapshots}
+              variant="secondary"
+              className="mt-2"
+              icon="lucide:refresh-cw"
+            >
+              Retry
+            </Button>
+          }
+        />
       </div>
     );
   }
@@ -190,21 +255,21 @@ export function SnapshotsView({
   if (snapshots.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4">
-        <Icon name="lucide:database" size={48} className="opacity-50" />
-        <p className="text-gray-400">No snapshots available</p>
-        <p className="text-sm text-gray-500">
-          Run a manual analysis or wait for a scheduled job to populate this
-          view.
-        </p>
-
-        <Button
-          onClick={fetchSnapshots}
-          variant="secondary"
-          className="mt-4"
-          icon="lucide:refresh-cw"
-        >
-          Check Again
-        </Button>
+        <NonIdealState
+          title="No Snapshots Available"
+          message="Run a manual analysis or wait for a scheduled job to populate this view."
+          icon="lucide:database"
+          action={
+            <Button
+              onClick={fetchSnapshots}
+              variant="secondary"
+              className="mt-4"
+              icon="lucide:refresh-cw"
+            >
+              Check Again
+            </Button>
+          }
+        />
       </div>
     );
   }
@@ -232,12 +297,13 @@ export function SnapshotsView({
 
             <Table
               containerClassName="overflow-auto min-h-0"
-              containerStyle={{ maxHeight: '50vh' }}
             >
               <TableHeader className="bg-background sticky top-0 z-10 shadow-sm">
                 <TableRow>
                   <TableHead className="w-[160px] text-center">
-                    Scan Date
+                    <Tooltip content="All dates & times have been converted to your local timezone — {userLocalTimezoneLabel}">
+                      <span>Scan Date</span>
+                    </Tooltip>
                   </TableHead>
                   <TableHead className="w-[140px] whitespace-nowrap text-center">
                     Subreddit
@@ -284,12 +350,12 @@ export function SnapshotsView({
                     style={
                       selectedId === snapshot.scanId
                         ? {
-                            backgroundColor: 'var(--color-primary, #3b82f6)',
-                            opacity: 0.85,
-                            fontWeight: 600,
-                            outline: '2px solid var(--color-primary, #3b82f6)',
-                            outlineOffset: '-2px',
-                          }
+                          backgroundColor: 'var(--color-primary, #3b82f6)',
+                          opacity: 0.85,
+                          fontWeight: 600,
+                          outline: '2px solid var(--color-primary, #3b82f6)',
+                          outlineOffset: '-2px',
+                        }
                         : {}
                     }
                   >

@@ -25,6 +25,13 @@ body {
   background: var(--color-bg);
 }
 
+:root {
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
+}
+
 /* Box-sizing reset only — do NOT zero out margin/padding universally.
    That pattern beats Tailwind's @layer utilities and causes invisible padding bugs.
    Each component is responsible for its own spacing. */
@@ -58,6 +65,8 @@ body {
   flex-direction: column;
   height: 100%;
   background: var(--color-bg);
+  padding-left: var(--safe-area-left);
+  padding-right: var(--safe-area-right);
 }
 
 .content-area {
@@ -74,7 +83,7 @@ body {
   align-items: center;
   background-color: var(--nav-bg);
   border-bottom: 2px solid var(--nav-border);
-  padding: 8px 16px;
+  padding: 8px; /* Consistent top, bottom, left, right padding */
   box-shadow: var(--shadow-md);
   z-index: 1000;
   flex-shrink: 0;
@@ -406,14 +415,19 @@ body {
 /* Mobile: ≤ 400px — icon-only nav, single-column everything */
 @media (max-width: 400px) {
   .nav-toolbar {
-    padding: 4px 6px;
+    padding: calc(4px + var(--safe-area-top)) 6px 4px;
+    gap: 6px;
   }
 
   .nav-group {
     gap: 0;
     padding: 2px;
-    width: 100%;
-    justify-content: space-around;
+    width: auto;
+    min-width: 0;
+    flex: 1;
+    justify-content: flex-start;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   .nav-button {
@@ -434,7 +448,7 @@ body {
 
   .content-area {
     padding: 0;
-    padding-bottom: 0;
+    padding-bottom: max(8px, var(--safe-area-bottom));
   }
 
   .view-content {
@@ -452,6 +466,17 @@ body {
 
   .report-users-grid {
     grid-template-columns: 1fr;
+  }
+
+  .report-tabs-bar {
+    padding-right: 4px;
+  }
+
+  .report-tabs-content {
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: var(--safe-area-bottom);
   }
 }
 
@@ -472,7 +497,7 @@ body {
 
   .content-area {
     padding: 0;
-    padding-bottom: 20px;
+    padding-bottom: max(20px, var(--safe-area-bottom));
   }
 
   .view-content {
@@ -492,7 +517,7 @@ body {
 /* Desktop: > 550px — restore original look */
 @media (min-width: 551px) {
   .nav-toolbar {
-    padding: 12px 24px;
+    padding: 12px;
     min-height: 55px;
     max-height: 65px;
   }

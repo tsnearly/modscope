@@ -1,7 +1,7 @@
-import { RedditAPIClient } from '@devvit/public-api';
+import type { RedditClient } from '@devvit/web/server';
 
 export async function getOfficialAccounts(
-  reddit: RedditAPIClient,
+  reddit: RedditClient,
   subredditName: string,
 ): Promise<string[]> {
   const official: string[] = [];

@@ -1,4 +1,4 @@
-import { RedisClient } from '@devvit/public-api';
+import type { RedisClient } from '@devvit/web/server';
 import {
   ConfigSettings,
   CalculationSettings,
@@ -8,7 +8,7 @@ import {
 export class ConfigService {
   private readonly CONFIG_KEY = 'modscope:config';
 
-  constructor(private redis: RedisClient) {}
+  constructor(private redis: RedisClient) { }
 
   async getConfig(): Promise<ConfigSettings> {
     const configStr = await this.redis.get(this.CONFIG_KEY);

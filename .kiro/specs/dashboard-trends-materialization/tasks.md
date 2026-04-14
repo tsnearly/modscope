@@ -234,50 +234,50 @@ Priority order: Config/Schedule → Report restructuring → Backend service →
 
 ## 14. Testing: Unit Tests
 
-- [ ] 14.1 Test calculation logic
+- [x] 14.1 Test calculation logic
 
-  - [ ] 14.1.1 Test linear regression calculation with various data distributions
-  - [ ] 14.1.2 Test forecast horizon adaptation logic
-  - [ ] 14.1.3 Test growth rate percentage calculation including edge cases (zero prior, single point)
-  - [ ] 14.1.4 Test engagement average calculation from per-post TS ZSETs across retained window
-  - [ ] 14.1.5 Test spike/dip detection with 1.5 standard deviation threshold
+  - [x] 14.1.1 Test linear regression calculation with various data distributions
+  - [x] 14.1.2 Test forecast horizon adaptation logic
+  - [x] 14.1.3 Test growth rate percentage calculation including edge cases (zero prior, single point)
+  - [x] 14.1.4 Test engagement average calculation from per-post TS ZSETs across retained window
+  - [x] 14.1.5 Test spike/dip detection with 1.5 standard deviation threshold
 
-- [ ] 14.2 Test data transformation logic
+- [x] 14.2 Test data transformation logic
 
-  - [ ] 14.2.1 Test flair tally normalization with zero-fill
-  - [ ] 14.2.2 Test content mix recap generation with significant delta detection
-  - [ ] 14.2.3 Test heatmap bucketing and delta computation (days 1-15 vs 16-30)
-  - [ ] 14.2.4 Test posting pattern recap generation with weekday/weekend grouping
-  - [ ] 14.2.5 Test best posting times slot scoring
+  - [x] 14.2.1 Test flair tally normalization with zero-fill
+  - [x] 14.2.2 Test content mix recap generation with significant delta detection
+  - [x] 14.2.3 Test heatmap bucketing and delta computation (days 1-15 vs 16-30)
+  - [x] 14.2.4 Test posting pattern recap generation with weekday/weekend grouping
+  - [x] 14.2.5 Test best posting times slot scoring
 
-- [ ] 14.3 Test serialization logic
+- [x] 14.3 Test serialization logic
 
-  - [ ] 14.3.1 Test serializer-parser round-trip behavior
-  - [ ] 14.3.2 Test malformed entry skip behavior with logging
+  - [x] 14.3.1 Test serializer-parser round-trip behavior
+  - [x] 14.3.2 Test malformed entry skip behavior with logging
 
 ---
 
 ## 15. Testing: Integration Tests
 
-- [ ] 15.1 Test settings and snapshot flow
+- [x] 15.1 Test settings and snapshot flow
 
-  - [ ] 15.1.1 Test save settings including analysisPoolSize and retention
-  - [ ] 15.1.2 Test manual snapshot trigger and materialized key creation
-  - [ ] 15.1.3 Test scheduled worker path and materialized key creation
+  - [x] 15.1.1 Test save settings including analysisPoolSize and retention
+  - [x] 15.1.2 Test manual snapshot trigger and materialized key creation
+  - [x] 15.1.3 Test scheduled worker path and materialized key creation
 
-- [ ] 15.2 Test API response validation
+- [x] 15.2 Test API response validation
 
-  - [ ] 15.2.1 Test GET /api/trends payload shape and values
-  - [ ] 15.2.2 Test growthForecast confidence bands and growthRate
-  - [ ] 15.2.3 Test engagementAnomalies array structure
-  - [ ] 15.2.4 Test contentMixRecap and postingPatternRecap strings
-  - [ ] 15.2.5 Test bestPostingTimesChange structure
+  - [x] 15.2.1 Test GET /api/trends payload shape and values
+  - [x] 15.2.2 Test growthForecast confidence bands and growthRate
+  - [x] 15.2.3 Test engagementAnomalies array structure
+  - [x] 15.2.4 Test contentMixRecap and postingPatternRecap strings
+  - [x] 15.2.5 Test bestPostingTimesChange structure
 
-- [ ] 15.3 Test retention and cleanup
+- [x] 15.3 Test retention and cleanup
 
-  - [ ] 15.3.1 Test purge removes trend artifacts for expired scans
-  - [ ] 15.3.2 Test purge recomputes recap strings from remaining data
-  - [ ] 15.3.3 Test idempotent rerun behavior for all key families
+  - [x] 15.3.1 Test purge removes trend artifacts for expired scans
+  - [x] 15.3.2 Test purge recomputes recap strings from remaining data
+  - [x] 15.3.3 Test idempotent rerun behavior for all key families
 
 ---
 
@@ -286,8 +286,7 @@ Priority order: Config/Schedule → Report restructuring → Backend service →
 - [ ] 16.1 Test Config and Schedule views
 
   - [ ] 16.1.1 Navigate Config and verify Retention and Analysis Pool Size inputs display
-  - [ ] 16.1.2 Verify retention synchronization between Config and Schedule
-  - [ ] 16.1.3 Verify validation errors appear for out-of-range values
+  - [ ] 16.1.2 Verify validation errors appear for out-of-range values
 
 - [ ] 16.2 Test Report view structure
 

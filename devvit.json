@@ -2,7 +2,12 @@
   "$schema": "https://developers.reddit.com/schema/config-file.v1.json",
   "name": "modscope",
   "permissions": {
-    "reddit": true
+    "reddit": true,
+    "redis": true,
+    "http": {
+      "enable": true,
+      "domains": ["modscope-production.onrender.com"]
+    }
   },
   "post": {
     "dir": "dist/client",
@@ -11,7 +16,7 @@
         "inline": true,
         "entry": "dashboard.html"
       },
-      "dashboard": {
+      "expanded": {
         "entry": "dashboard.html"
       }
     }
@@ -21,10 +26,10 @@
     "entry": "index.cjs"
   },
   "media": {
-    "dir": "assets"
+    "dir": "assets/"
   },
   "marketingAssets": {
-    "icon": "assets/app-icon-stylized.png"
+    "icon": "assets/icon.png"
   },
   "menu": {
     "items": [
@@ -39,18 +44,32 @@
         "label": "Reset Launcher Post",
         "location": "subreddit",
         "forUserType": "moderator",
-        "endpoint": "/internal/clear-cache"
+        "endpoint": "/internal/menu/clear-cache"
       }
     ]
   },
   "triggers": {
-    "onAppInstall": "/internal/on-app-install"
+    "onAppInstall": "/internal/triggers/on-app-install"
   },
   "scheduler": {
     "tasks": {
-      "snapshot_worker": {
-        "endpoint": "/internal/tasks/snapshot_worker"
+      "snapshot-worker": {
+        "endpoint": "/internal/triggers/tasks/snapshot-worker"
+      },
+      "delete-snapshot": {
+        "endpoint": "/internal/triggers/tasks/delete-snapshot"
+      },
+      "check-for-updates": {
+        "endpoint": "/internal/triggers/tasks/check-for-updates",
+        "cron": "*/60 * * * *"
       }
     }
+  },
+  "dev": {
+    "subreddit": "modscope_dev"
+  },
+  "scripts": {
+    "dev": "vite build --watch",
+    "build": "vite build"
   }
 }

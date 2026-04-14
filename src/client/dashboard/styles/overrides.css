@@ -28,17 +28,15 @@ body {
   align-items: center !important;
 }
 
-.entity-title-container > *,
-[class*='entity-title'] > *,
-[class*='EntityTitle'] > * {
+.entity-title-container>*,
+[class*='entity-title']>*,
+[class*='EntityTitle']>* {
   display: inline-flex !important;
 }
 
 /* ── Chart headers: force inline layout ─────────────────────────────────*/
-[class*='chart']:not([class*='chart-tooltip'])
-  > div:first-child:not([class*='chart-tooltip']),
-[class*='Chart']:not([class*='chart-tooltip'])
-  > div:first-child:not([class*='chart-tooltip']) {
+[class*='chart']:not([class*='chart-tooltip'])>div:first-child:not([class*='chart-tooltip']),
+[class*='Chart']:not([class*='chart-tooltip'])>div:first-child:not([class*='chart-tooltip']) {
   display: flex !important;
   flex-direction: row !important;
   align-items: center !important;
@@ -70,12 +68,12 @@ body {
 }
 
 /* Icon images inside headings */
-h1 > img,
-h2 > img,
-h3 > img,
-h4 > img,
-h5 > img,
-h6 > img {
+h1>img,
+h2>img,
+h3>img,
+h4>img,
+h5>img,
+h6>img {
   display: inline-block !important;
   flex-shrink: 0 !important;
   margin-right: 0.5rem !important;
@@ -98,6 +96,7 @@ h6 > img {
 
 /* ── Print styles ────────────────────────────────────────────────────────*/
 @media print {
+
   /* Hide everything by default for a clean report */
   body.is-printing * {
     visibility: hidden;
@@ -124,7 +123,7 @@ h6 > img {
   /* Hide UI chrome */
   body.is-printing .nav-toolbar,
   body.is-printing .tabs-list,
-  body.is-printing [data-report-view] > div:first-child,
+  body.is-printing [data-report-view]>div:first-child,
   body.is-printing .absolute.bottom-0 {
     display: none !important;
   }
@@ -219,7 +218,7 @@ html body .print-report-container .print-title {
 .chart-tooltip-container {
   display: flex !important;
   flex-direction: column !important;
-  border-radius: 4px;
+  border-radius: 8px;
   overflow: hidden;
   font-size: 8px;
   font-weight: normal;

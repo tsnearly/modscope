@@ -1,4 +1,4 @@
-import { reddit } from '@devvit/web/server';
+import { reddit, type RedditClient } from '@devvit/web/server';
 import {
   AnalyticsSnapshot,
   PostData,
@@ -12,6 +12,16 @@ import {
 import { NormalizationService } from './NormalizationService';
 import { getOfficialAccounts } from './OfficialAccountsService';
 
+export interface TrendMaterializer {
+  materializeForScan(subreddit: string, scanId: number): Promise<void>;
+  materializeTrends(subreddit: string, scanId: number): Promise<void>;
+  cleanupTrendArtifacts(
+    subreddit: string,
+    deletedScanIds: number[],
+    deletedScanTimestamps: number[],
+  ): Promise<void>;
+}
+
 export type SnapshotPhase =
   | 'fetch'
   | 'deep-analysis'
@@ -23,6 +33,16 @@ type SnapshotPhaseReporter = (
   phase: SnapshotPhase,
   detail?: string
 ) => Promise<void> | void;
+
+export interface LifecycleOptions {
+  isManual: boolean;
+  isContinuation: boolean;
+  jobId?: string;
+  retentionDays?: number;
+  trendingService: TrendMaterializer;
+  redis: any;
+  scheduler?: any;
+}
 
 export class SnapshotService {
   private normalizer: NormalizationService;
@@ -142,7 +162,7 @@ export class SnapshotService {
       // 1. Meta & basic Stats
       const [about, newPostsListing, topPostsListing, hotPostsListing, rules] =
         await Promise.all([
-          reddit.getSubredditByName(subredditName) as any,
+          reddit.getSubredditByName(subredditName),
           reddit.getNewPosts({ subredditName, limit: 1000 }),
           reddit.getTopPosts({
             subredditName,
@@ -160,7 +180,7 @@ export class SnapshotService {
 
       const currentUser = await reddit.getCurrentUsername();
       const officialAccounts = await getOfficialAccounts(
-        reddit as any,
+        reddit as RedditClient,
         subredditName,
       );
 
@@ -208,11 +228,11 @@ export class SnapshotService {
             }
             // Completed successfully, exit retry loop
             break;
-          } catch (e: any) {
-            const isRateLimit = e.message && e.message.includes('429');
+          } catch (e: unknown) {
+            const errorMessage = e instanceof Error ? e.message : String(e);
+            const isRateLimit = errorMessage.includes('429');
             const isServerError =
-              e.message &&
-              (e.message.includes('500') || e.message.includes('503'));
+              errorMessage.includes('500') || errorMessage.includes('503');
 
             if (isRateLimit || isServerError) {
               retries++;
@@ -255,7 +275,7 @@ export class SnapshotService {
           console.warn(
             `[SNAPSHOT] Falling back to partial/empty new posts listing: ${e instanceof Error ? e.message : String(e)}`,
           );
-          return [] as any[];
+          return [] as { id: string; createdAt: Date; authorName: string; isSelf: boolean; score: number; nsfw: boolean }[];
         }),
         withTimeout(
           fetchBounded(topPostsListing, maxPostsPerList),
@@ -265,7 +285,7 @@ export class SnapshotService {
           console.warn(
             `[SNAPSHOT] Falling back to partial/empty top posts listing: ${e instanceof Error ? e.message : String(e)}`,
           );
-          return [] as any[];
+          return [] as { id: string; createdAt: Date; authorName: string; isSelf: boolean; score: number; nsfw: boolean }[];
         }),
         withTimeout(
           fetchBounded(hotPostsListing, maxPostsPerList),
@@ -275,13 +295,13 @@ export class SnapshotService {
           console.warn(
             `[SNAPSHOT] Falling back to partial/empty hot posts listing: ${e instanceof Error ? e.message : String(e)}`,
           );
-          return [] as any[];
+          return [] as { id: string; createdAt: Date; authorName: string; isSelf: boolean; score: number; nsfw: boolean }[];
         }),
       ]);
 
-      const uniquePosts = new Map<string, any>();
+      const uniquePosts = new Map<string, { id: string; createdAt: Date; createdUtc?: number; authorName: string; isSelf: boolean; score: number; commentCount?: number; numberOfComments?: number; numComments?: number; flair?: { text: string }; nsfw: boolean }>();
       [...allNew, ...allTop, ...allHot].forEach((p) =>
-        uniquePosts.set(p.id, p),
+        uniquePosts.set(p.id, p as any),
       );
 
       // Devvit Post#createdAt is a Date object — convert to unix seconds for comparison
@@ -436,7 +456,7 @@ export class SnapshotService {
                     COMMENT_TRAVERSAL_TIMEOUT_MS,
                     `comment listing traversal for post ${p.id}`,
                   );
-                  for (const c of batch as any[]) {
+                  for (const c of batch as { authorName: string; createdAt: Date; createdUtc?: number; type?: string; count?: number; children?: any; replies?: any }[]) {
                     // Skip MoreComments placeholder objects
                     if (
                       c.type === 'MoreComments' ||
@@ -486,8 +506,9 @@ export class SnapshotService {
                       }
                     }
                   }
-                } catch (e: any) {
-                  if (e.message && e.message.includes('429')) {
+                } catch (e: unknown) {
+                  const errorMessage = e instanceof Error ? e.message : String(e);
+                  if (errorMessage.includes('429')) {
                     console.warn(
                       `[SNAPSHOT] Rate limit 429 hit traversing replies for ${p.id}. Keeping ${allComments.length} comments collected.`,
                     );
@@ -500,7 +521,7 @@ export class SnapshotService {
               // Top-level comments are at depth 1
               await withTimeout(
                 flattenReplies(
-                  reddit.getComments({ postId: p.id, limit: 50 }),
+                  reddit.getComments({ postId: p.id as `t3_${string}`, limit: 50 }),
                   1,
                 ),
                 COMMENT_TRAVERSAL_TIMEOUT_MS,
@@ -535,11 +556,11 @@ export class SnapshotService {
               : p.createdUtc || 0;
           const postData: PostData = {
             id: p.id,
-            title: p.title,
-            url: p.url,
+            title: (p as any).title,
+            url: (p as any).url,
             created_utc: postCreatedSec,
-            author: p.authorName || '[deleted]',
-            is_self: p.isSelf || false,
+            author: (p as any).authorName || '[deleted]',
+            is_self: typeof (p as any).isSelf === 'function' ? (p as any).isSelf() : ((p as any).isSelf || false),
             score: p.score,
             comments:
               p.commentCount ?? p.numberOfComments ?? p.numComments ?? 0,
@@ -592,11 +613,11 @@ export class SnapshotService {
               : p.createdUtc || 0;
           const postData: PostData = {
             id: p.id,
-            title: p.title,
-            url: p.url,
+            title: (p as any).title,
+            url: (p as any).url,
             created_utc: postCreatedSec,
-            author: p.authorName || '[deleted]',
-            is_self: p.isSelf || false,
+            author: (p as any).authorName || '[deleted]',
+            is_self: typeof (p as any).isSelf === 'function' ? (p as any).isSelf() : ((p as any).isSelf || false),
             score: p.score,
             comments: commentCount,
             flair: p.flair?.text || null,
@@ -667,7 +688,7 @@ export class SnapshotService {
       );
 
       // Helper: map raw Reddit post to PostData using pool data if available
-      const rawToPostData = (p: any): PostData => {
+      const rawToPostData = (p: { id: string; createdAt: Date; createdUtc?: number; title: string; url: string; authorName: string; isSelf: boolean; score: number; commentCount?: number; numberOfComments?: number; numComments?: number; flair?: { text: string }; nsfw: boolean }): PostData => {
         const existing = analysisPoolMap.get(p.id);
         if (existing) {
           return existing;
@@ -682,7 +703,7 @@ export class SnapshotService {
           url: p.url,
           created_utc: postCreatedSec,
           author: p.authorName || '[deleted]',
-          is_self: p.isSelf || false,
+          is_self: typeof (p as any).isSelf === 'function' ? (p as any).isSelf() : ((p as any).isSelf || false),
           score: p.score,
           comments: p.commentCount ?? p.numberOfComments ?? p.numComments ?? 0,
           flair: p.flair?.text || null,
@@ -694,7 +715,7 @@ export class SnapshotService {
       };
 
       // Hot: derived from the initial allHot fetch (already in memory)
-      const hotList = allHot.slice(0, 100).map(rawToPostData);
+      const hotList = (allHot as any[]).slice(0, 100).map(rawToPostData as any);
 
       // Rising: recent posts (last 48h) sorted by score velocity
       const risingList = [...analysisPool]
@@ -724,7 +745,7 @@ export class SnapshotService {
           .sort((a, b) => b.engagement_score - a.engagement_score)
           .slice(0, 100),
         rising: risingList,
-        hot: hotList,
+        hot: hotList as PostData[],
         controversial: controversialList,
       };
 
@@ -740,14 +761,14 @@ export class SnapshotService {
       const snapshot: AnalyticsSnapshot = {
         meta: {
           subreddit: subredditName,
-          scan_date: now.toISOString(),
-          proc_date: finishTime.toISOString(),
-          official_account: currentUser || '',
-          official_accounts: officialAccounts,
+          scanDate: now.toISOString(),
+          procDate: finishTime.toISOString(),
+          officialAccount: currentUser || '',
+          officialAccounts: officialAccounts,
         },
         stats,
         lists,
-        analysis_pool: analysisPool,
+        analysisPool: analysisPool,
       };
 
       // 7. Store / Normalize
@@ -764,6 +785,289 @@ export class SnapshotService {
       console.error('[SNAPSHOT] Critical error during analysis:', error);
       throw error;
     }
+  }
+
+  /**
+   * Orchestrates the entire lifecycle of a snapshot: history tracking, analysis, and post-processing.
+   */
+  async runLifecycle(
+    subreddit: string,
+    settings: CalculationSettings,
+    options: LifecycleOptions,
+  ): Promise<number> {
+    const { isManual, isContinuation, jobId, retentionDays, trendingService, redis, scheduler } = options;
+    const startTime = Date.now();
+    const historyEntry: any = {
+      id: `h-${startTime}`,
+      jobName: isManual
+        ? (isContinuation ? 'Replacement Snapshot' : 'Manual Snapshot')
+        : (isContinuation ? 'Replacement Snapshot' : 'Snapshot'),
+      startTime,
+      status: 'running',
+      jobType: isManual ? 'one-time' : 'recurring',
+      details: `${isManual ? (isContinuation ? 'Continuation' : 'Manual scan') : (isContinuation ? 'Continuation' : 'Auto-scan')} for r/${subreddit} started`,
+      isContinuation,
+      jobId,
+    };
+    let historyEntryStr = JSON.stringify(historyEntry);
+
+    const updateRunningDetails = async (details: string): Promise<void> => {
+      if (historyEntry.status !== 'running' || historyEntry.details === details) return;
+      await redis.zRem('jobs:history', [historyEntryStr]);
+      historyEntry.details = details;
+      historyEntryStr = JSON.stringify(historyEntry);
+      await redis.zAdd('jobs:history', { member: historyEntryStr, score: startTime });
+    };
+
+    let scanId: number | undefined;
+
+    try {
+      await redis.zAdd('jobs:history', { member: historyEntryStr, score: startTime });
+
+      const resolvedScanId = await this.takeSnapshot(subreddit, settings, async (phase, detail) => {
+        try {
+          const prefix = isManual ? 'Manual scan' : 'Auto-scan';
+          await updateRunningDetails(this.formatSnapshotPhaseDetail(`${prefix} for r/${subreddit} in progress`, phase, detail));
+        } catch (e) { /* skip */ }
+      });
+      scanId = resolvedScanId;
+
+      const endTime = Date.now();
+      const duration = Math.round((endTime - startTime) / 1000);
+      await redis.zRem('jobs:history', [historyEntryStr]);
+      historyEntry.status = 'success';
+      historyEntry.scanId = resolvedScanId;
+      historyEntry.endTime = endTime;
+      historyEntry.duration = duration;
+      const nextStep = 'Trend Service queued';
+      historyEntry.details = `${isManual ? 'Manual' : 'Auto'}-scan completed [${resolvedScanId}]. ${nextStep}.`;
+      await redis.zAdd('jobs:history', { member: JSON.stringify(historyEntry), score: startTime });
+
+      // DIAGNOSTICS: Track successful snapshot
+      try {
+        const successEvent = {
+          timestamp: endTime,
+          scanId: resolvedScanId,
+          duration,
+          isManual,
+          postCount: 0,
+          chainId: jobId || 'unknown',
+        };
+        const successLogKey = `diag:success-log:${subreddit}`;
+        await redis.zAdd(successLogKey, { member: JSON.stringify(successEvent), score: endTime });
+        const successLogSize = await redis.zCard(successLogKey);
+        if (successLogSize > 100) {
+          await redis.zRemRangeByRank(successLogKey, 0, successLogSize - 101);
+        }
+        
+        // Clear retry window for this subreddit on success
+        const windowKey = `diag:retry-window:${subreddit}:${Math.floor(endTime / 900000)}`;
+        await redis.del(`${windowKey}:count`);
+      } catch (diagError) {
+        console.warn('[DIAGNOSTICS] Failed to record success diagnostics:', diagError);
+      }
+
+      // Trigger post-processing asynchronously
+      void (async () => {
+        const psStart = Date.now();
+        const psTimeout = 3 * 60 * 1000;
+        let deletedCount = 0;
+        let matStatus = 'Trend update: not attempted';
+        let postProcessFailed = false;
+        let postProcessFailureReason: string | null = null;
+
+        const postHistoryEntry: any = {
+          id: `h-${psStart}-post`,
+          jobName: 'Trend Service',
+          startTime: psStart,
+          status: 'running',
+          jobType: historyEntry.jobType,
+          scanId: resolvedScanId,
+          details: `Trend forecasting for scan [${resolvedScanId}] started.`,
+          jobId,
+        };
+        let postHistoryEntryStr = JSON.stringify(postHistoryEntry);
+        await redis.zAdd('jobs:history', { member: postHistoryEntryStr, score: psStart });
+
+        try {
+          await Promise.race([
+            (async () => {
+              // ONLY purge expired snapshots if NOT manual
+              if (!isManual) {
+                const deleted = await this.purgeExpiredSnapshots(resolvedScanId, retentionDays || 180, psStart, psTimeout, redis);
+                deletedCount = deleted.length;
+              }
+              try {
+                await trendingService.materializeForScan(subreddit, resolvedScanId);
+                matStatus = 'Trend update: success';
+              } catch (e) {
+                matStatus = `Trend update: failed (${String(e)})`;
+                postProcessFailed = true;
+              }
+            })(),
+            new Promise<never>((_, rej) => setTimeout(() => rej(new Error('Timeout')), psTimeout))
+          ]);
+        } catch (postError) {
+          postProcessFailed = true;
+          postProcessFailureReason = String(postError);
+        }
+
+        const postEndTime = Date.now();
+        postHistoryEntry.endTime = postEndTime;
+        postHistoryEntry.status = postProcessFailed ? 'failure' : 'success';
+        postHistoryEntry.duration = Math.max(0, Math.round((postEndTime - psStart) / 1000));
+        const cleanupDetail = deletedCount > 0 ? ` Cleaned up ${deletedCount} snapshots.` : '';
+        postHistoryEntry.details = `Trend Service completed.${cleanupDetail} ${matStatus}${postProcessFailureReason ? ` | Reason: ${postProcessFailureReason}` : ''}`;
+        await redis.zRem('jobs:history', [postHistoryEntryStr]);
+        postHistoryEntryStr = JSON.stringify(postHistoryEntry);
+        await redis.zAdd('jobs:history', { member: postHistoryEntryStr, score: psStart });
+      })();
+
+      return resolvedScanId;
+    } catch (error) {
+      historyEntry.status = 'failure';
+      historyEntry.details = String(error);
+      await redis.zAdd('jobs:history', { member: JSON.stringify(historyEntry), score: startTime });
+
+      // Automatic "Replacement Snapshot" on failure
+      if (!isContinuation && scheduler) {
+        try {
+          console.log(`[LIFECYCLE] Scheduling replacement snapshot for r/${subreddit} due to failure:`, error);
+          const nextRun = isManual ? new Date(Date.now() + 5000) : (() => {
+            const n = new Date();
+            n.setMinutes(Math.ceil((n.getMinutes() + 1) / 15) * 15, 0, 0);
+            return n;
+          })();
+
+          // DIAGNOSTICS: Track retry events for clustering analysis
+          try {
+            const now = Date.now();
+            const windowKey = `diag:retry-window:${subreddit}:${Math.floor(now / 900000)}`; // 15-min window
+            const retryScanId = scanId ?? historyEntry.scanId ?? -1;
+            const retryEvent = {
+              timestamp: now,
+              scanId: retryScanId,
+              errorType: error instanceof Error ? error.message.split('\n')[0] : String(error),
+              isManual,
+              scheduledFor: nextRun.getTime(),
+              chainId: jobId || 'unknown',
+            };
+            
+            // Track retry in 15-min window
+            const windowCount = await redis.incr(`${windowKey}:count`);
+            if (windowCount === 1) {
+              await redis.expire(`${windowKey}:count`, 1800); // 30 min TTL
+            }
+            
+            // Store detailed retry events (keep last 100 per subreddit)
+            const retryLogKey = `diag:retry-log:${subreddit}`;
+            await redis.zAdd(retryLogKey, { member: JSON.stringify(retryEvent), score: now });
+            const retryLogSize = await redis.zCard(retryLogKey);
+            if (retryLogSize > 100) {
+              await redis.zRemRangeByRank(retryLogKey, 0, retryLogSize - 101);
+            }
+            
+            // Flag for clustering if 3+ retries in 15-min window
+            if (windowCount >= 3) {
+              console.warn(
+                `[DIAGNOSTICS] RETRY CLUSTERING DETECTED: ${windowCount} retries for r/${subreddit} in 15-min window (${nextRun.toISOString()})`
+              );
+              await redis.hSet(`diag:clustering:${subreddit}`, {
+                lastClusterTime: String(now),
+                windowSize: String(windowCount),
+                latestError: String(error).substring(0, 200),
+              });
+            }
+            
+            console.log(
+              `[DIAGNOSTICS] Retry scheduled for r/${subreddit}. Window count: ${windowCount}, NextRun: ${nextRun.toISOString()}`
+            );
+          } catch (diagError) {
+            console.warn('[DIAGNOSTICS] Failed to record retry diagnostics:', diagError);
+          }
+
+          await scheduler.runJob({
+            name: 'snapshot_worker',
+            data: { subreddit, continuation: true },
+            runAt: nextRun,
+          } as any);
+        } catch (schedError) {
+          console.error('[LIFECYCLE] Failed to schedule replacement snapshot:', schedError);
+        }
+      }
+      throw error;
+    }
+  }
+
+  private formatSnapshotPhaseDetail(
+    prefix: string,
+    phase: SnapshotPhase,
+    detail?: string,
+  ): string {
+    const phaseLabel = phase
+      .split('-')
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
+    const suffix = detail ? `: ${detail}` : '';
+    return `${prefix} (${phaseLabel}${suffix})`;
+  }
+
+  private async purgeExpiredSnapshots(
+    currentScanId: number,
+    retentionDays: number,
+    startTime: number,
+    timeoutMs: number,
+    redis: any,
+  ): Promise<number[]> {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
+    const cutoffTimestamp = cutoffDate.getTime();
+    const deletedScanIds: number[] = [];
+
+    const timelineSize = await redis.zCard('global:snapshots:timeline');
+    if (timelineSize === 0) {
+      const scanCountStr = await redis.get('global:scan_counter');
+      if (scanCountStr) {
+        const maxId = parseInt(scanCountStr, 10);
+        for (let id = 1; id <= maxId; id++) {
+          if (Date.now() - startTime > timeoutMs) break;
+          try {
+            const meta = await redis.hGetAll(`run:${id}:meta`);
+            if (meta && (meta.scan_date || meta.proc_date)) {
+              const dateStr = meta.scan_date || meta.proc_date!;
+              await redis.zAdd('global:snapshots:timeline', {
+                score: new Date(dateStr).getTime(),
+                member: id.toString(),
+              });
+            }
+          } catch { /* skip */ }
+        }
+      }
+    }
+
+    const expiredEntries = await redis.zRange(
+      'global:snapshots:timeline',
+      0,
+      cutoffTimestamp,
+      { by: 'score' },
+    );
+
+    for (const entry of expiredEntries) {
+      const idStr = typeof entry === 'string' ? entry : (entry as { member: string }).member;
+      const id = parseInt(idStr, 10);
+      if (Date.now() - startTime > timeoutMs) break;
+      if (Number.isNaN(id) || id === currentScanId) continue;
+
+      try {
+        await this.normalizer.deleteSnapshot(id);
+        await redis.zRem('global:snapshots:timeline', [idStr]);
+        deletedScanIds.push(id);
+      } catch (e) {
+        console.error(`[PURGE] Failed to evict snapshot #${id}:`, e);
+      }
+    }
+
+    return deletedScanIds;
   }
 
   private calculateEngagementScore(
@@ -811,5 +1115,114 @@ export class SnapshotService {
     engagement += creatorBonus;
 
     return parseFloat(engagement.toFixed(2));
+  }
+
+  /**
+   * Query retry clustering diagnostics for a subreddit
+   * Used to analyze H1 hypothesis: failure-driven retry cascading
+   */
+  static async getRetryDiagnostics(
+    subreddit: string,
+    redis: any,
+  ): Promise<{
+    retryCount: number;
+    recentRetries: any[];
+    successCount: number;
+    recentSuccesses: any[];
+    clusteringFlags: any;
+    failureRate: string;
+    summary: string;
+  }> {
+    try {
+      const retryLogKey = `diag:retry-log:${subreddit}`;
+      const successLogKey = `diag:success-log:${subreddit}`;
+      const clusterKey = `diag:clustering:${subreddit}`;
+
+      const [recentRetries, recentSuccesses, clusteringFlags] = await Promise.all([
+        redis.zRange(retryLogKey, -10, -1), // Last 10 retries
+        redis.zRange(successLogKey, -10, -1), // Last 10 successes
+        redis.hGetAll(clusterKey),
+      ]);
+
+      const retryCount = await redis.zCard(retryLogKey);
+      const successCount = await redis.zCard(successLogKey);
+
+      const parsedRetries = recentRetries
+        .map((item: string) => {
+          try {
+            return JSON.parse(item);
+          } catch {
+            return null;
+          }
+        })
+        .filter(Boolean);
+
+      const parsedSuccesses = recentSuccesses
+        .map((item: string) => {
+          try {
+            return JSON.parse(item);
+          } catch {
+            return null;
+          }
+        })
+        .filter(Boolean);
+
+      const total = retryCount + successCount;
+      const failureRate =
+        total > 0 ? ((retryCount / total) * 100).toFixed(1) : 'N/A';
+
+      let summary = `r/${subreddit}: ${retryCount} retries, ${successCount} successes (${failureRate}% failure rate)`;
+      if (clusteringFlags && Object.keys(clusteringFlags).length > 0) {
+        summary += ` [CLUSTERING DETECTED: ${clusteringFlags.windowSize} retries in 15-min window]`;
+      }
+
+      return {
+        retryCount,
+        recentRetries: parsedRetries,
+        successCount,
+        recentSuccesses: parsedSuccesses,
+        clusteringFlags: clusteringFlags || {},
+        failureRate: failureRate as string,
+        summary,
+      };
+    } catch (error) {
+      console.error('[DIAGNOSTICS] Failed to fetch retry diagnostics:', error);
+      return {
+        retryCount: 0,
+        recentRetries: [],
+        successCount: 0,
+        recentSuccesses: [],
+        clusteringFlags: {},
+        failureRate: 'error',
+        summary: `Error fetching diagnostics for r/${subreddit}`,
+      };
+    }
+  }
+
+  /**
+   * Get clustering summary across all tracked subreddits
+   */
+  static async getAllClusteringEvents(redis: any): Promise<any[]> {
+    try {
+      const keys = await redis.keys('diag:clustering:*');
+      const events: any[] = [];
+
+      for (const key of keys) {
+        const data = await redis.hGetAll(key);
+        if (data && Object.keys(data).length > 0) {
+          const subreddit = key.replace('diag:clustering:', '');
+          events.push({
+            subreddit,
+            ...data,
+            detected_at: new Date(parseInt(data.lastClusterTime)).toISOString(),
+          });
+        }
+      }
+
+      return events.sort((a, b) => parseInt(b.lastClusterTime) - parseInt(a.lastClusterTime));
+    } catch (error) {
+      console.error('[DIAGNOSTICS] Failed to fetch clustering events:', error);
+      return [];
+    }
   }
 }

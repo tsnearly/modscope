@@ -1,11 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
+import {
+  type AnalyticsSnapshot,
+  type JobHistoryEntry,
+} from '../../../shared/types/api';
+import { useSettings } from '../hooks/useSettings';
 import { Button } from './ui/button';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from './ui/card';
 import { EntityTitle } from './ui/entity-title';
 import { Icon } from './ui/icon';
 import { Input } from './ui/input';
-
-import { TimePicker } from './ui/time-picker';
-
 import { Label } from './ui/label';
 import { RadioGroup, RadioItem } from './ui/radio';
 import {
@@ -16,16 +25,7 @@ import {
   TableHeader,
   TableRow,
 } from './ui/table';
-
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from './ui/card';
-
-import { useSettings } from '../hooks/useSettings';
+import { TimePicker } from './ui/time-picker';
 import { Tooltip } from './ui/tooltip';
 
 type ScheduleType =
@@ -46,12 +46,18 @@ interface Job {
   scheduleType: string;
   createdAt: number;
   status: string;
-  config?: any;
+  config?: {
+    name: string;
+    scheduleType: string;
+    startTime: string;
+    daysOfWeek?: number[];
+    customCron?: string;
+  };
 }
 
 interface ScheduleViewProps {
   initialJobs?: Job[];
-  initialHistory?: any[];
+  initialHistory?: JobHistoryEntry[];
   onRunComplete?: (scanId: number) => Promise<boolean>;
 }
 
@@ -62,9 +68,9 @@ function ScheduleView({
 }: ScheduleViewProps) {
   const { settings } = useSettings();
   const [jobs, setJobs] = useState<Job[]>(initialJobs);
-  const [history, setHistory] = useState<any[]>(initialHistory);
+  const [history, setHistory] = useState<JobHistoryEntry[]>(initialHistory);
   const [loading, setLoading] = useState(false);
-  const [snapshots, setSnapshots] = useState<any[]>([]);
+  const [snapshots, setSnapshots] = useState<AnalyticsSnapshot[]>([]);
   const [editingJobId, setEditingJobId] = useState<string | null>(null);
 
   // Sorting state
@@ -72,6 +78,7 @@ function ScheduleView({
     'jobName' | 'scanId' | 'startTime' | 'endTime' | 'duration' | 'status'
   >('startTime');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [autoScrollHistory, _setAutoScrollHistory] = useState(true);
   const historyTableRef = useRef<HTMLDivElement>(null);
 
   // Dynamic formatting utility
@@ -140,29 +147,28 @@ function ScheduleView({
 
   // Auto-scroll logic execution when component renders or sortedHistory updates
   useEffect(() => {
-    if (
-      historyTableRef.current &&
-      sortDirection === 'asc' &&
-      sortKey === 'startTime'
-    ) {
-      const tableElement = historyTableRef.current;
-      // Only force scroll if we haven't mounted AND scrolled successfully yet
+    if (!autoScrollHistory) return;
+    const tableElement = historyTableRef.current;
+    if (tableElement) {
       if (!hasScrolledRef.current && sortedHistory.length > 0) {
-        tableElement.scrollTop = tableElement.scrollHeight;
-        hasScrolledRef.current = true;
+        requestAnimationFrame(() => {
+          tableElement.scrollTop = tableElement.scrollHeight;
+          hasScrolledRef.current = true;
+        });
       } else if (hasScrolledRef.current) {
-        // If they are already scrolled to the bottom (within a 50px threshold), keep them at the bottom
         const isAtBottom =
           tableElement.scrollHeight -
-            tableElement.scrollTop -
-            tableElement.clientHeight <
-          50;
+          tableElement.scrollTop -
+          tableElement.clientHeight <
+          100;
         if (isAtBottom) {
-          tableElement.scrollTop = tableElement.scrollHeight;
+          requestAnimationFrame(() => {
+            tableElement.scrollTop = tableElement.scrollHeight;
+          });
         }
       }
     }
-  }, [sortedHistory, sortDirection, sortKey]);
+  }, [sortedHistory, autoScrollHistory]);
 
   // Calculate dynamic stats
   const totalRuns = history.length;
@@ -181,16 +187,16 @@ function ScheduleView({
     let durationCount = 0;
     let totalDataPoints = 0;
     snapshots.forEach((s) => {
-      if (s.scanDate && s.procDate) {
+      if (s.meta?.scanDate && s.meta?.procDate) {
         const start = new Date(
-          s.scanDate.includes(' ')
-            ? s.scanDate.replace(' ', 'T') + 'Z'
-            : s.scanDate,
+          s.meta.scanDate.includes(' ')
+            ? s.meta.scanDate.replace(' ', 'T') + 'Z'
+            : s.meta.scanDate,
         ).getTime();
         const end = new Date(
-          s.procDate.includes(' ')
-            ? s.procDate.replace(' ', 'T') + 'Z'
-            : s.procDate,
+          s.meta.procDate.includes(' ')
+            ? s.meta.procDate.replace(' ', 'T') + 'Z'
+            : s.meta.procDate,
         ).getTime();
         const duration = (end - start) / 1000;
         if (!isNaN(duration) && duration > 0 && duration < 300) {
@@ -199,7 +205,7 @@ function ScheduleView({
           durationCount++;
         }
         // Accumulate actual data points from the analysis pool size
-        totalDataPoints += s.poolSize || 0;
+        totalDataPoints += s.analysisPool?.length || 0;
       }
     });
     if (durationCount > 0) {
@@ -322,18 +328,15 @@ function ScheduleView({
   };
 
   const handleEditJob = (job: Job) => {
-    if (!job.config) {
-      return;
-    }
     setEditingJobId(job.id);
-    setName(job.config.name || '');
-    setScheduleType(job.config.scheduleType || 'daily');
-    setStartTime(job.config.startTime || '08:00');
-    if (job.config.daysOfWeek) {
+    setName(job.config?.name || job.name || 'Snapshot Job');
+    setScheduleType((job.config?.scheduleType || 'daily') as ScheduleType);
+    setStartTime(job.config?.startTime || '08:00');
+    if (job.config?.daysOfWeek) {
       setDaysOfWeek(job.config.daysOfWeek);
     }
-    if (job.config.customCron) {
-      setCustomCron(job.config.customCron);
+    if (job.config?.customCron || job.cron) {
+      setCustomCron(job.config?.customCron || job.cron || '');
     }
 
     // Scroll to top
@@ -505,13 +508,13 @@ function ScheduleView({
   };
 
   return (
-    <div className="schedule-view h-full flex flex-col bg-[var(--color-surface)] text-left">
+    <div className="schedule-view h-full flex flex-col bg-[var(--color-bg)] overflow-hidden max-h-full">
       <EntityTitle
         icon="lucide:calendar-clock"
         iconColor="var(--color-text)"
-        title="Snapshot Scheduling"
-        subtitle="Automate your community health checks and historical data collection"
-        className="mb-6 p-4 bg-transparent border-b border-border"
+        title="Automated Snapshot Scheduling"
+        subtitle="Configure analysis frequency and review performance audit logs"
+        className="mb-2 p-4 bg-transparent border-b border-border flex-shrink-0"
         actions={
           <Button
             variant="default"
@@ -525,11 +528,11 @@ function ScheduleView({
           </Button>
         }
       />
-      <div className="view-content flex-1 overflow-y-auto px-6 pb-6 w-full">
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+      <div className="flex-1 flex flex-col px-6 pb-4 pt-2 min-h-0 overflow-y-auto relative">
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-4">
           {/* Main Configuration Card */}
           <div className="xl:col-span-2 space-y-6">
-            <Card className="overflow-hidden shadow-md border-border bg-background">
+            <Card className="overflow-hidden shadow-md border-border bg-background h-full">
               <CardHeader className="bg-muted/50 border-b border-border">
                 <CardTitle className="text-lg flex items-center gap-2">
                   <Icon
@@ -552,7 +555,7 @@ function ScheduleView({
                     value={scheduleType}
                     onChange={(val) => setScheduleType(val as ScheduleType)}
                     variant="cards"
-                    className="mb-8"
+                    className="mb-4"
                   >
                     <RadioItem
                       value="daily"
@@ -581,7 +584,7 @@ function ScheduleView({
                   </RadioGroup>
 
                   {/* Common Parameters Cluster */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 bg-muted/20 rounded-xl border border-border ring-1 ring-primary/20 mb-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-3 bg-muted/20 rounded-xl border border-border ring-1 ring-primary/20 mb-4">
                     <div className="space-y-6 md:pr-6">
                       <div className="grid grid-cols-2 gap-4 align-bottom">
                         <TimePicker
@@ -671,8 +674,8 @@ function ScheduleView({
             </Card>
           </div>
 
-          {/* Sidebar - Active Jobs & History */}
-          <div className="space-y-6">
+          {/* Sidebar - Active Jobs */}
+          <div className="xl:col-span-1">
             <Card className="shadow-sm border-border bg-background">
               <CardHeader className="pb-3 border-b border-border bg-muted/50">
                 <CardTitle className="text-lg flex items-center gap-2 justify-between">
@@ -706,7 +709,7 @@ function ScheduleView({
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
                             <div className="font-bold text-sm truncate">
-                              {job.name}
+                              {job.config?.name || job.name}
                             </div>
                             <div className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1.5 font-mono">
                               <Icon name="mono-planner.png" size={10} />
@@ -714,18 +717,16 @@ function ScheduleView({
                             </div>
                           </div>
                           <div className="flex items-center gap-1 opacity-50 group-hover:opacity-100 transition-opacity">
-                            {job.config && (
-                              <Button
-                                variant="outline"
-                                size="xs"
-                                square
-                                className="text-primary hover:bg-primary/10"
-                                onClick={() => handleEditJob(job)}
-                                tooltip="Edit Schedule"
-                              >
-                                <Icon name="outline-write.png" size={12} />
-                              </Button>
-                            )}
+                            <Button
+                              variant="outline"
+                              size="xs"
+                              square
+                              className="text-primary hover:bg-primary/10"
+                              onClick={() => handleEditJob(job)}
+                              tooltip="Edit Schedule"
+                            >
+                              <Icon name="outline-write.png" size={12} />
+                            </Button>
                             <Button
                               variant="outline"
                               size="xs"
@@ -753,163 +754,164 @@ function ScheduleView({
                 )}
               </CardContent>
             </Card>
+          </div>
+        </div>
 
-            <Card className="shadow-sm border-border bg-background">
-              <CardHeader className="pb-3 border-b border-border bg-muted/50">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Icon
-                    name="mono-historical.png"
-                    size={16}
-                    color="var(--color-primary)"
-                  />
-                  Job History
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <Table
-                  ref={historyTableRef}
-                  containerClassName="overflow-auto relative"
-                  containerStyle={{ maxHeight: '192px' }}
-                >
-                  <TableHeader className="bg-background sticky top-0 z-10 shadow-sm">
+        {/* Bottom Section - Job History (Full Width) - Always give it room */}
+        <div className="flex-shrink-0 min-h-[400px] mb-6">
+          <Card className="shadow-sm border-border bg-background flex flex-col h-full overflow-hidden">
+            <CardHeader className="pb-3 border-b border-border bg-muted/50 flex-shrink-0">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Icon
+                  name="mono-historical.png"
+                  size={16}
+                  color="var(--color-primary)"
+                />
+                Job History & Audit Log
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0 flex-1 flex flex-col min-h-0 overflow-hidden">
+              <Table
+                ref={historyTableRef}
+                containerClassName="flex-1 overflow-auto relative"
+              >
+                <TableHeader className="bg-background sticky top-0 z-20 shadow-sm">
+                  <TableRow>
+                    <TableHead
+                      className="w-[150px] text-xs"
+                      sortable
+                      sortDirection={
+                        sortKey === 'jobName' ? sortDirection : null
+                      }
+                      onSort={() => handleSort('jobName')}
+                    >
+                      Job Name
+                    </TableHead>
+                    <TableHead
+                      className="w-[80px] text-xs text-center"
+                      sortable
+                      sortDirection={
+                        sortKey === 'scanId' ? sortDirection : null
+                      }
+                      onSort={() => handleSort('scanId')}
+                    >
+                      Scan ID
+                    </TableHead>
+                    <TableHead
+                      className="w-[150px] text-xs"
+                      sortable
+                      sortDirection={
+                        sortKey === 'startTime' ? sortDirection : null
+                      }
+                      onSort={() => handleSort('startTime')}
+                    >
+                      Start Time
+                    </TableHead>
+                    <TableHead
+                      className="w-[150px] text-xs"
+                      sortable
+                      sortDirection={
+                        sortKey === 'endTime' ? sortDirection : null
+                      }
+                      onSort={() => handleSort('endTime')}
+                    >
+                      End Time
+                    </TableHead>
+                    <TableHead
+                      className="w-[90px] text-xs text-center"
+                      sortable
+                      sortDirection={
+                        sortKey === 'duration' ? sortDirection : null
+                      }
+                      onSort={() => handleSort('duration')}
+                    >
+                      Duration
+                    </TableHead>
+                    <TableHead className="text-xs">Details</TableHead>
+                    <TableHead
+                      className="text-right w-[100px] text-xs"
+                      sortable
+                      sortDirection={
+                        sortKey === 'status' ? sortDirection : null
+                      }
+                      onSort={() => handleSort('status')}
+                    >
+                      Status
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {sortedHistory.length === 0 ? (
                     <TableRow>
-                      <TableHead
-                        className="w-[120px] text-xs"
-                        sortable
-                        sortDirection={
-                          sortKey === 'jobName' ? sortDirection : null
-                        }
-                        onSort={() => handleSort('jobName')}
+                      <TableCell
+                        colSpan={7}
+                        className="text-center text-muted-foreground text-xs py-8"
                       >
-                        Job
-                      </TableHead>
-                      <TableHead
-                        className="w-[70px] text-xs"
-                        sortable
-                        sortDirection={
-                          sortKey === 'scanId' ? sortDirection : null
-                        }
-                        onSort={() => handleSort('scanId')}
-                      >
-                        Scan ID
-                      </TableHead>
-                      <TableHead
-                        className="w-[130px] text-xs"
-                        sortable
-                        sortDirection={
-                          sortKey === 'startTime' ? sortDirection : null
-                        }
-                        onSort={() => handleSort('startTime')}
-                      >
-                        Start Time
-                      </TableHead>
-                      <TableHead
-                        className="w-[130px] text-xs"
-                        sortable
-                        sortDirection={
-                          sortKey === 'endTime' ? sortDirection : null
-                        }
-                        onSort={() => handleSort('endTime')}
-                      >
-                        End Time
-                      </TableHead>
-                      <TableHead
-                        className="w-[70px] text-xs"
-                        sortable
-                        sortDirection={
-                          sortKey === 'duration' ? sortDirection : null
-                        }
-                        onSort={() => handleSort('duration')}
-                      >
-                        Duration
-                      </TableHead>
-                      <TableHead className="text-xs">Details</TableHead>
-                      <TableHead
-                        className="text-right w-[80px] text-xs"
-                        sortable
-                        sortDirection={
-                          sortKey === 'status' ? sortDirection : null
-                        }
-                        onSort={() => handleSort('status')}
-                      >
-                        Status
-                      </TableHead>
+                        No historical job records available.
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {sortedHistory.length === 0 ? (
-                      <TableRow>
-                        <TableCell
-                          colSpan={6}
-                          className="text-center text-muted-foreground text-xs py-4"
-                        >
-                          No history available
+                  ) : (
+                    sortedHistory.map((h, i) => (
+                      <TableRow key={i}>
+                        <TableCell className="py-2.5 text-[10px] font-bold">
+                          {h.jobName}
+                        </TableCell>
+                        <TableCell className="py-2.5 text-[10px] text-muted-foreground text-center">
+                          {h.scanId ? `#${h.scanId}` : '-'}
+                        </TableCell>
+                        <TableCell className="py-2.5 text-[10px] text-muted-foreground whitespace-nowrap">
+                          {formatDateTime(h.startTime || h.timestamp)}
+                        </TableCell>
+                        <TableCell className="py-2.5 text-[10px] text-muted-foreground whitespace-nowrap">
+                          {h.endTime ? formatDateTime(h.endTime) : '-'}
+                        </TableCell>
+                        <TableCell className="py-2.5 text-[10px] text-muted-foreground text-center">
+                          {h.duration !== undefined ? `${h.duration}s` : '-'}
+                        </TableCell>
+                        <TableCell className="py-2.5 text-[10px] text-muted-foreground leading-snug">
+                          {h.details}
+                        </TableCell>
+                        <TableCell className="py-2.5 text-right">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${h.status === 'success' ||
+                              h.status === 'completed'
+                              ? 'bg-background text-[#78C12A]'
+                              : h.status === 'running' ||
+                                h.status === 'pending'
+                                ? 'bg-background text-[#0797EA]'
+                                : 'bg-background text-[#F24318]'
+                              }`}
+                          >
+                            {h.status}
+                          </span>
                         </TableCell>
                       </TableRow>
-                    ) : (
-                      sortedHistory.map((h, i) => (
-                        <TableRow key={i}>
-                          <TableCell className="py-2 text-[9px] font-bold">
-                            {h.jobName}
-                          </TableCell>
-                          <TableCell className="py-2 text-[9px] text-muted-foreground">
-                            {h.scanId ? `#${h.scanId}` : '-'}
-                          </TableCell>
-                          <TableCell className="py-2 text-[9px] text-muted-foreground whitespace-nowrap">
-                            {formatDateTime(h.startTime || h.timestamp)}
-                          </TableCell>
-                          <TableCell className="py-2 text-[9px] text-muted-foreground whitespace-nowrap">
-                            {h.endTime ? formatDateTime(h.endTime) : '-'}
-                          </TableCell>
-                          <TableCell className="py-2 text-[9px] text-muted-foreground">
-                            {h.duration !== undefined ? `${h.duration}s` : '-'}
-                          </TableCell>
-                          <TableCell className="py-2 text-[9px] text-muted-foreground leading-tight">
-                            {h.details}
-                          </TableCell>
-                          <TableCell className="py-2 text-right">
-                            <span
-                              className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase ${
-                                h.status === 'success' ||
-                                h.status === 'completed'
-                                  ? 'bg-background text-[#78C12A]'
-                                  : h.status === 'running' ||
-                                      h.status === 'pending'
-                                    ? 'bg-background text-[#0797EA]'
-                                    : 'bg-background text-[#F24318]'
-                              }`}
-                            >
-                              {h.status}
-                            </span>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-                <div className="p-4 bg-muted/20 border-t border-border text-xs text-muted-foreground space-y-1">
-                  <div className="flex justify-between">
-                    <span>
-                      Generated Snapshots: <strong>{totalRuns}</strong>
-                    </span>
-                    <span>
-                      Successful:{' '}
-                      <strong className="text-[#78C12A]">{successCount}</strong>
-                    </span>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+              <div className="p-4 bg-muted/20 border-t border-border text-xs text-muted-foreground">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="flex flex-col">
+                    <span className="text-[10px] uppercase font-bold text-muted-foreground/60">Generated</span>
+                    <strong className="text-sm">{totalRuns} Snapshots</strong>
                   </div>
-                  <div className="flex justify-between">
-                    <span>
-                      Avg Processing: <strong>{avgProcTime}</strong>
-                    </span>
-                    <span>
-                      Failed:{' '}
-                      <strong className="text-[#F24318]]">{failedCount}</strong>
-                    </span>
+                  <div className="flex flex-col">
+                    <span className="text-[10px] uppercase font-bold text-muted-foreground/60">Successful</span>
+                    <strong className="text-sm text-[#78C12A]">{successCount} Runs</strong>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[10px] uppercase font-bold text-muted-foreground/60">Processing</span>
+                    <strong className="text-sm">{avgProcTime} Avg</strong>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[10px] uppercase font-bold text-muted-foreground/60">Failed</span>
+                    <strong className="text-sm text-[#F24318]">{failedCount} Total</strong>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>

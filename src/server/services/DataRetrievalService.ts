@@ -4,7 +4,7 @@ import {
   SubredditStats,
   PostLists,
 } from '../../shared/types/api';
-import type { RedisClient } from '@devvit/redis';
+import type { RedisClient } from '@devvit/web/server';
 
 export class DataRetrievalService {
   private redis: RedisClient;
@@ -28,8 +28,8 @@ export class DataRetrievalService {
         break;
       }
       const members = batch.map((m) =>
-        typeof m === 'object' && m !== null && 'member' in (m as any)
-          ? (m as any).member
+        'member' in m
+          ? (m as { member: string }).member
           : String(m),
       );
       all.push(...members);
@@ -94,13 +94,13 @@ export class DataRetrievalService {
 
     const baseMeta = {
       subreddit: meta.subreddit || 'unknown',
-      scan_date: meta.scan_date || new Date().toISOString(),
-      proc_date: meta.proc_date || '',
+      scanDate: meta.scan_date || new Date().toISOString(),
+      procDate: meta.proc_date || '',
       ...(meta.official_account
-        ? { official_account: meta.official_account }
+        ? { officialAccount: meta.official_account }
         : {}),
       ...(meta.official_accounts
-        ? { official_accounts: JSON.parse(meta.official_accounts) }
+        ? { officialAccounts: JSON.parse(meta.official_accounts) }
         : {}),
     };
 
@@ -118,7 +118,29 @@ export class DataRetrievalService {
       created: stats.created || '',
     };
 
-    // --- Try new JSON blob format first (fast path: 1 Redis read) ---
+    // 1. Try new ZSET-based pool reassembly first (most reliable, handles large sizes)
+    const [poolRaw, listsJson] = await Promise.all([
+      this.zRangeAll(`scan:${scanId}:pool:json`),
+      this.redis.get(`scan:${scanId}:lists`),
+    ]);
+
+    if (poolRaw.length > 0) {
+      try {
+        const analysisPool = poolRaw.map((p) => JSON.parse(p));
+        const lists = listsJson ? JSON.parse(listsJson) : {};
+        console.log(`[RETRIEVER] ✓ Reassembled ${analysisPool.length} posts from ZSET for scan ${scanId}`);
+        return {
+          meta: baseMeta,
+          stats: baseStats as SubredditStats,
+          lists: lists as PostLists,
+          analysisPool,
+        };
+      } catch (e) {
+        console.warn(`[RETRIEVER] ZSET reassembly failed for scan ${scanId}, falling back...`);
+      }
+    }
+
+    // 2. Try legacy single JSON blob path (if still exists)
     const jsonData = await this.redis.get(`scan:${scanId}:data`);
     if (jsonData) {
       try {
@@ -130,7 +152,7 @@ export class DataRetrievalService {
           meta: baseMeta,
           stats: baseStats as SubredditStats,
           lists: (parsed.lists as PostLists) || ({} as PostLists),
-          analysis_pool: parsed.analysis_pool || [],
+          analysisPool: parsed.analysis_pool || [],
         };
       } catch (e) {
         console.warn(
@@ -197,7 +219,7 @@ export class DataRetrievalService {
       meta: baseMeta,
       stats: baseStats as SubredditStats,
       lists: lists as PostLists,
-      analysis_pool: allPosts,
+      analysisPool: allPosts,
     };
   }
 
@@ -213,19 +235,19 @@ export class DataRetrievalService {
           `post:${postKey}:ts:score`,
           scanTimestamp,
           scanTimestamp,
-          { by: 'score' } as any,
+          { by: 'score' },
         ),
         this.redis.zRange(
           `post:${postKey}:ts:comments`,
           scanTimestamp,
           scanTimestamp,
-          { by: 'score' } as any,
+          { by: 'score' },
         ),
         this.redis.zRange(
           `post:${postKey}:ts:engagement`,
           scanTimestamp,
           scanTimestamp,
-          { by: 'score' } as any,
+          { by: 'score' },
         ),
       ]);
     if (!staticData.title) {

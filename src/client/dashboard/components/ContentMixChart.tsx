@@ -3,8 +3,8 @@ import {
   Area,
   AreaChart,
   CartesianGrid,
-  ResponsiveContainer,
   Tooltip as RechartsTooltip,
+  ResponsiveContainer,
   XAxis,
   YAxis,
 } from 'recharts';
@@ -25,6 +25,7 @@ type TrendsData = {
 
 type ContentMixChartProps = {
   trendsData: TrendsData;
+  trendAnalysisDays?: number;
   iconContext: 'screen' | 'printed';
   isPrintMode?: boolean;
 };
@@ -46,7 +47,15 @@ function formatTooltipDate(ts: number): string {
   });
 }
 
-function ContentMixTooltip({ active, payload, label }: any) {
+function ContentMixTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: any[];
+  label?: string;
+}) {
   if (!active || !payload || payload.length === 0) {
     return null;
   }
@@ -73,6 +82,7 @@ function ContentMixTooltip({ active, payload, label }: any) {
 
 export function ContentMixChart({
   trendsData,
+  trendAnalysisDays = 90,
   iconContext,
   isPrintMode = false,
 }: ContentMixChartProps) {
@@ -85,6 +95,12 @@ export function ContentMixChart({
       return { chartData: [], contentKeys: [] };
     }
 
+    const dayMs = 24 * 60 * 60 * 1000;
+    const toUtcDayNoon = (ts: number): number => {
+      const d = new Date(ts);
+      return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12, 0, 0, 0);
+    };
+
     const allFlairs = new Set<string>();
     contentMixData.forEach(point => {
       Object.keys(point.flairs).forEach(flair => allFlairs.add(flair));
@@ -92,16 +108,29 @@ export function ContentMixChart({
 
     const flairKeys = Array.from(allFlairs).sort();
 
-    const transformedData = contentMixData.map(point => {
-      const row: any = {
-        timestamp: point.timestamp,
-        date: formatShortDate(point.timestamp),
+    const byDay = new Map<number, Record<string, number>>();
+    for (const point of contentMixData) {
+      const dayKey = toUtcDayNoon(point.timestamp);
+      const existing = byDay.get(dayKey) || {};
+      for (const flair of flairKeys) {
+        existing[flair] = (existing[flair] || 0) + (point.flairs[flair] || 0);
+      }
+      byDay.set(dayKey, existing);
+    }
+
+    const now = new Date();
+    const todayUtcNoon = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12, 0, 0, 0);
+    const transformedData = Array.from({ length: trendAnalysisDays }, (_, idx) => {
+      const offset = trendAnalysisDays - 1 - idx;
+      const timestamp = todayUtcNoon - offset * dayMs;
+      const dayValues = byDay.get(timestamp) || {};
+      const row: Record<string, string | number> = {
+        timestamp,
+        date: formatShortDate(timestamp),
       };
-
       flairKeys.forEach(flair => {
-        row[flair] = point.flairs[flair] || 0;
+        row[flair] = dayValues[flair] || 0;
       });
-
       return row;
     });
 
@@ -109,7 +138,7 @@ export function ContentMixChart({
       chartData: transformedData,
       contentKeys: flairKeys,
     };
-  }, [contentMixData]);
+  }, [contentMixData, trendAnalysisDays]);
 
   if (contentMixData.length === 0) {
     return (
@@ -158,7 +187,7 @@ export function ContentMixChart({
           }}
           aria-pressed={!hiddenSeries[flair]}
         >
-          <span style={{ width: '8px', height: '8px', borderRadius: '999px', background: `hsl(${(idx * 47) % 360} 70% 55%)`, border: `1px solid ${hiddenSeries[flair] ? 'var(--color-border)' : `hsl(${(idx * 47) % 360} 70% 45%)`}` }} />
+          <span style={{ width: '10px', height: '8px', borderRadius: '2px', background: `hsl(${(idx * 47) % 360} 70% 55%)`, border: `1px solid ${hiddenSeries[flair] ? 'var(--color-border)' : `hsl(${(idx * 47) % 360} 70% 45%)`}` }} />
           <span>{flair}</span>
         </button>
       ))}
@@ -178,7 +207,16 @@ export function ContentMixChart({
         <ResponsiveContainer width='100%' height='100%'>
           <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 5, bottom: 5 }}>
             <CartesianGrid strokeDasharray='3 3' stroke='rgba(8,10,12,.175)' opacity={1} />
-            <XAxis dataKey='date' interval='preserveStartEnd' tick={{ fontSize: 8, fill: 'var(--text-primary)' }} />
+            <XAxis
+              dataKey='timestamp'
+              type='number'
+              scale='time'
+              domain={['dataMin', 'dataMax']}
+              tickCount={6}
+              minTickGap={18}
+              tickFormatter={(value) => formatShortDate(Number(value))}
+              tick={{ fontSize: 8, fill: 'var(--text-primary)' }}
+            />
             <YAxis tick={{ fontSize: 8, fill: 'var(--text-primary)' }} />
             <RechartsTooltip {...compactTooltipProps} />
             {contentKeys.map((flair: string, idx: number) => (
@@ -190,6 +228,7 @@ export function ContentMixChart({
                 stroke={`hsl(${(idx * 47) % 360} 70% 45%)`}
                 strokeWidth={2.25}
                 fill={`hsl(${(idx * 47) % 360} 70% 55%)`}
+                fillOpacity={0.15}
                 isAnimationActive={!isPrintMode}
                 hide={!!hiddenSeries[flair]}
               />
@@ -197,7 +236,7 @@ export function ContentMixChart({
           </AreaChart>
         </ResponsiveContainer>
       </div>
-      
+
       {contentMixRecap && (
         <div className='mt-3 px-3 py-2 bg-muted/50 rounded-md'>
           <p className='text-sm text-muted-foreground text-center'>{contentMixRecap}</p>

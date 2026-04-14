@@ -3,7 +3,7 @@ import { cn } from '../../utils/cn';
 import { Icon } from './icon';
 import { Card, CardContent } from './card';
 
-export interface SectionProps extends React.HTMLAttributes<HTMLDivElement> {
+export interface SectionProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "title"> {
   title: React.ReactNode;
   subtitle?: React.ReactNode;
   icon?: string;

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { TrendMaterializationService } from './TrendMaterializationService';
+import { TrendingService } from './TrendingService';
 
 // Enhanced Mock Redis client for rate limiting and timeout testing
 class RateLimitMockRedisClient {
@@ -64,14 +64,23 @@ class RateLimitMockRedisClient {
     });
   }
 
-  async zAdd(key: string, score: number, member: string): Promise<number> {
+  async zAdd(key: string, scoreOrOptions: number | { score: number; member: string }, member?: string): Promise<number> {
     return this.trackOperation('zAdd', async () => {
       const zset = this.data.get(key) || [];
-      const existingIndex = zset.findIndex((item: any) => item.member === member);
+      let score: number;
+      let memberValue: string;
+      if (typeof scoreOrOptions === 'object' && scoreOrOptions !== null) {
+        score = scoreOrOptions.score;
+        memberValue = scoreOrOptions.member;
+      } else {
+        score = scoreOrOptions as number;
+        memberValue = member!;
+      }
+      const existingIndex = zset.findIndex((item: any) => item.member === memberValue);
       if (existingIndex >= 0) {
         zset[existingIndex].score = score;
       } else {
-        zset.push({ score, member });
+        zset.push({ score, member: memberValue });
       }
       this.data.set(key, zset);
       return 1;
@@ -105,6 +114,13 @@ class RateLimitMockRedisClient {
       const existed = this.data.has(key);
       this.data.delete(key);
       return existed ? 1 : 0;
+    });
+  }
+
+  async zCard(key: string): Promise<number> {
+    return this.trackOperation('zCard', async () => {
+      const zset = this.data.get(key) || [];
+      return zset.length;
     });
   }
 
@@ -224,15 +240,15 @@ function generateRateLimitTestData(subreddit: string, scanId: number, postCount:
 
   return mockRedis;
 }
-describe('TrendMaterializationService Rate Limiting and Timeout Tests', () => {
-  let service: TrendMaterializationService;
+describe('TrendingService Rate Limiting and Timeout Tests', () => {
+  let service: TrendingService;
   let mockRedis: RateLimitMockRedisClient;
   const testSubreddit = 'testsubreddit';
   const testScanId = 2000;
 
   beforeEach(() => {
     mockRedis = generateRateLimitTestData(testSubreddit, testScanId, 50, 30);
-    service = new TrendMaterializationService(mockRedis as any);
+    service = new TrendingService(mockRedis as any);
   });
 
   afterEach(() => {
@@ -277,7 +293,7 @@ describe('TrendMaterializationService Rate Limiting and Timeout Tests', () => {
     it('should respect batch size of 50 for per-post operations', async () => {
       // Create test data with exactly 100 posts to verify batching
       mockRedis = generateRateLimitTestData(testSubreddit, testScanId, 100, 5);
-      service = new TrendMaterializationService(mockRedis as any);
+      service = new TrendingService(mockRedis as any);
       
       mockRedis.clearOperationTimes();
       
@@ -341,7 +357,7 @@ describe('TrendMaterializationService Rate Limiting and Timeout Tests', () => {
         await service.materializeTrends(testSubreddit, testScanId);
         
         // If we reach here, either no timeout occurred or it was handled gracefully
-        console.log('Materialization completed without timeout error');
+        console.log('Trend forecasting completed without timeout error');
         expect(true).toBe(true); // Test passes if no error thrown
         
       } catch (error) {
@@ -353,7 +369,7 @@ describe('TrendMaterializationService Rate Limiting and Timeout Tests', () => {
     });
 
     it('should measure timeout threshold accuracy', async () => {
-      const TIMEOUT_THRESHOLD = 4500; // 4.5 seconds as defined in service
+      const TIMEOUT_THRESHOLD = (service as any).TIMEOUT_THRESHOLD_MS;
       
       // Mock startTime to simulate long-running operation that exceeds threshold
       const mockStartTime = Date.now() - TIMEOUT_THRESHOLD - 100; // 100ms past timeout
@@ -374,7 +390,7 @@ describe('TrendMaterializationService Rate Limiting and Timeout Tests', () => {
     it('should handle 30-day retention window efficiently', async () => {
       // Test with 30 days of retention
       mockRedis = generateRateLimitTestData(testSubreddit, testScanId, 50, 30);
-      service = new TrendMaterializationService(mockRedis as any);
+      service = new TrendingService(mockRedis as any);
       
       mockRedis.clearOperationTimes();
       
@@ -400,7 +416,7 @@ describe('TrendMaterializationService Rate Limiting and Timeout Tests', () => {
       
       for (const retention of retentionSizes) {
         mockRedis = generateRateLimitTestData(testSubreddit, testScanId + retention, 50, retention);
-        service = new TrendMaterializationService(mockRedis as any);
+        service = new TrendingService(mockRedis as any);
         
         mockRedis.clearOperationTimes();
         
@@ -429,7 +445,7 @@ describe('TrendMaterializationService Rate Limiting and Timeout Tests', () => {
       
       // Time should scale reasonably (not more than 5x per doubling)
       timeRatios.forEach(ratio => {
-        expect(ratio).toBeLessThan(5);
+        expect(ratio ?? 1).toBeLessThan(5);
       });
     });
   });
@@ -511,7 +527,7 @@ describe('TrendMaterializationService Rate Limiting and Timeout Tests', () => {
       
       // Verify checkpoints are in logical order
       for (let i = 1; i < checkpoints.length; i++) {
-        expect(checkpoints[i].timestamp).toBeGreaterThanOrEqual(checkpoints[i-1].timestamp);
+        expect(checkpoints[i]!.timestamp).toBeGreaterThanOrEqual(checkpoints[i-1]!.timestamp);
       }
     });
   });
@@ -542,7 +558,7 @@ describe('TrendMaterializationService Rate Limiting and Timeout Tests', () => {
         expect(operations.length).toBeGreaterThan(0);
         expect(endTime - startTime).toBeGreaterThan(0);
         
-        // Test passed if materialization completed successfully
+        // Test passed if trend forecasting completed successfully
         expect(true).toBe(true);
         
       } catch (error) {

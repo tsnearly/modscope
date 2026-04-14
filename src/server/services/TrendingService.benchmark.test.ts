@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { TrendMaterializationService } from './TrendMaterializationService';
+import { TrendingService } from './TrendingService';
 
 // Comprehensive benchmark test with working retention logic
 class BenchmarkMockRedisClient {
@@ -161,7 +161,7 @@ class BenchmarkMockRedisClient {
   }
 }
 
-// Generate benchmark data that will actually trigger materialization
+// Generate benchmark data that will actually trigger trend forecasting
 function generateBenchmarkData(subreddit: string, scanId: number, postCount: number = 50) {
   const mockRedis = new BenchmarkMockRedisClient();
   const now = Date.now();
@@ -197,8 +197,8 @@ function generateBenchmarkData(subreddit: string, scanId: number, postCount: num
     const posts = [];
     for (let j = 0; j < postCount; j++) {
       const postCreatedTime = timestamp - (j * 60 * 1000);
-      const dayOfWeek = new Date(postCreatedTime).getDay();
-      const hourOfDay = new Date(postCreatedTime).getHours();
+      new Date(postCreatedTime).getDay();
+      new Date(postCreatedTime).getHours();
       
       const post = {
         id: `post_${currentScanId}_${j}`,
@@ -278,15 +278,15 @@ function generateBenchmarkData(subreddit: string, scanId: number, postCount: num
   return mockRedis;
 }
 
-describe('TrendMaterializationService Benchmark Tests', () => {
-  let service: TrendMaterializationService;
+describe('TrendingService Benchmark Tests', () => {
+  let service: TrendingService;
   let mockRedis: BenchmarkMockRedisClient;
   const testSubreddit = 'benchmark';
   const testScanId = 3000;
 
   beforeEach(() => {
     mockRedis = generateBenchmarkData(testSubreddit, testScanId, 50);
-    service = new TrendMaterializationService(mockRedis as any);
+    service = new TrendingService(mockRedis as any);
   });
 
   afterEach(() => {
@@ -294,7 +294,7 @@ describe('TrendMaterializationService Benchmark Tests', () => {
   });
 
   describe('Comprehensive Performance Benchmark', () => {
-    it('should complete full materialization with realistic data under 5 seconds', async () => {
+    it('should complete full trend forecasting with realistic data under 5 seconds', async () => {
       const TARGET_TIME_MS = 5000;
       
       console.log('\n🚀 Starting comprehensive performance benchmark...');
@@ -343,11 +343,12 @@ describe('TrendMaterializationService Benchmark Tests', () => {
             operations: []
           };
         }
-        stats[op.operation].count++;
-        stats[op.operation].totalTime += op.duration;
-        stats[op.operation].maxTime = Math.max(stats[op.operation].maxTime, op.duration);
-        stats[op.operation].minTime = Math.min(stats[op.operation].minTime, op.duration);
-        stats[op.operation].operations.push(op);
+        const s = stats[op.operation]!;
+        s.count++;
+        s.totalTime += op.duration;
+        s.maxTime = Math.max(s.maxTime, op.duration);
+        s.minTime = Math.min(s.minTime, op.duration);
+        s.operations.push(op);
         return stats;
       }, {} as Record<string, { 
         count: number; 
@@ -397,8 +398,8 @@ describe('TrendMaterializationService Benchmark Tests', () => {
       expect(totalTime).toBeLessThan(5000);
     });
 
-    it('should verify data materialization completeness and accuracy', async () => {
-      console.log('\n🔬 Verifying data materialization...');
+    it('should verify data trend forecasting completeness and accuracy', async () => {
+      console.log('\n🔬 Verifying data trend forecasting...');
       
       await service.materializeTrends(testSubreddit, testScanId);
       
@@ -451,13 +452,13 @@ describe('TrendMaterializationService Benchmark Tests', () => {
       
       const memoryBefore = process.memoryUsage();
       
-      // Run multiple materializations to test memory stability
+      // Run multiple trend forecastings to test memory stability
       // Use the same scanId to avoid missing metadata issues
       for (let i = 0; i < 3; i++) {
         try {
           await service.materializeTrends(testSubreddit, testScanId); // Use same scanId
         } catch (error) {
-          console.log(`   ⚠️  Materialization ${i + 1} completed with expected behavior (no retained scans)`);
+          console.log(`   ⚠️  Trend forecasting ${i + 1} completed with expected behavior (no retained scans)`);
           // This is expected since we have no retained scans in the test data
         }
       }
@@ -486,7 +487,7 @@ describe('TrendMaterializationService Benchmark Tests', () => {
         console.log(`   ⚠️  WARNING: High memory usage detected`);
       }
 
-      // Memory should be reasonable for processing multiple materializations
+      // Memory should be reasonable for processing multiple trend forecastings
       expect(Math.abs(memoryDelta.heapUsed)).toBeLessThan(100 * 1024 * 1024); // Less than 100MB
     });
   });
@@ -502,7 +503,7 @@ describe('TrendMaterializationService Benchmark Tests', () => {
       for (let i = 0; i < runs; i++) {
         // Fresh data for each run to avoid caching effects
         mockRedis = generateBenchmarkData(testSubreddit, testScanId + i, 50);
-        service = new TrendMaterializationService(mockRedis as any);
+        service = new TrendingService(mockRedis as any);
 
         const startTime = performance.now();
         await service.materializeTrends(testSubreddit, testScanId + i);

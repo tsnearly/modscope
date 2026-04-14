@@ -151,54 +151,31 @@ _Note: ModScope runs entirely within the Devvit ecosystem. It requires no extern
 
 ## Changelog
 
-### v0.0.97 [Submitted for Review]
+### v0.9.5 [In Development]
 
-**Trend Analytics Engine**
+**Dashboard Date/Time Values**
 
-- **Configurable Reporting:** Introduced a granular report configuration UI allowing moderators to individually toggle specific trend visualizations (Subscriber Growth, Content Type, Engagement, and Posting Patterns) directly from the settings panel.
+- Now all date/timestamp values are displayed in the user's local time. This makes is much easier to interpret the data, rather than having to convert from UTC to your local clock. So all date stamps in the snapshot report are converted, including the prime posting times, entries being displayed in the snapshots summary table, and entries in the job history table. When the user creates/modifies an automated schedule, it is shown in the user's local time. When the schedule is initialized back to the server, it is automatically converted to UTC for storage—as that is the format the server operates on.
+- Aligned code with new organization paradigm; modified all code to use client, server, and shared imports only from devvit; added configurations for TypeScript, and Vite (with React and Tailwind CSS plugins).
+- Added check-for-update functionality using a static website on Render.com to store version info, and policy documents. System will send ModMail if an update is detected alerting the moderators to perform an upgrade.
+
+### v0.0.97
+
+**Report Configuration & New Trend Forecasting Reports**
+
+- **Comprehensive Report Settings:** Implemented granular report configuration controls allowing moderators to individually toggle all report sections (Overview, Timing, Posts, Users, Content, Activity) and specific trend charts (Subscribers, Engagement, Content Mix, Posting Patterns, Best Post Times) from the Config view.
 - **Subscriber Growth Tracking:** Implemented a new historical trend chart using retained snapshots to map community subscriber growth dynamically based on a user-defined analysis window.
 - **Content Evolution:** Added a 30-day staked area chart isolating shifts in the distribution of the community's top 5 most popular post flairs.
 - **Engagement Tracking:** Built a unified engagement score visualizer to spot spikes in community activity and a 24-hour comparative relationship chart for engagement to sheer votes.
 - **Posting Pattern Heatmap:** Designed an hourly 7-day comparative heatmap that splits the recent analysis pool in half to elegantly visualize specific days and times where posting frequency is actively increasing or decreasing.
 
-**Report Configuration & Export Improvements**
+- **Interactive Legend Support:** Added clickable legend functionality to the various charts, allowing users to toggle visibility of select data series independently.
 
-- **Comprehensive Report Settings:** Implemented granular report configuration controls allowing moderators to individually toggle all report sections (Overview, Timing, Posts, Users, Content, Activity) and specific trend charts (Subscribers, Engagement, Content Mix, Posting Patterns, Best Post Times) from the Config view.
-- **Activity Charts in Export:** Fixed critical issue where Activity tab charts (Activity Trend 30d, Engagement vs Votes 24h) were not appearing in exported HTML reports. Implemented inline chart rendering in print mode to ensure all enabled charts are captured.
-- **Trends Export Timing:** Resolved timing issue where Trend charts were visible in preview but missing from saved HTML files. Increased HTML capture delay from 800ms to 2000ms (500ms initial + 1500ms for async data loading) to allow trends data to fully load and render before export.
-- **Conditional Tab Filtering:** Added intelligent tab filtering based on report settings - tabs are automatically hidden when their corresponding sections are disabled, and the Trends tab only appears when at least one trend chart is enabled.
-- **Print Mode Data Loading:** Enhanced trends data loading to trigger in print mode when any trend chart is enabled, ensuring data is available for export even if the Trends tab hasn't been manually visited.
+**Trend Analytics Engine**
 
-**Configuration & Development**
-
-- **Subreddit Override Removal:** Removed temporary playtest override that forced all operations to analyze QuizPlanetGame. App now correctly processes the subreddit where it is installed, restoring normal context-driven behavior.
-- **ESLint Test File Exclusion:** Fixed ESLint parsing errors for test files by adding explicit ignore patterns for `**/*.test.{ts,js}`, `**/*.spec.{ts,js}`, and `**/*.benchmark.test.{ts,js}` in both client and server configurations, preventing type-aware linting from attempting to parse files excluded from their respective tsconfigs.
-
-**Activity Tab Restoration & Chart Improvements**
-
-- **Activity Trend Chart Restored:** Re-implemented the missing Activity Trend (30d) chart in the Activity tab using a dual Y-axis LineChart displaying Posts/Day as a solid line and Comments/Day as a dashed line, matching the original design specifications.
-- **Interactive Legend Support:** Added clickable legend functionality to the Activity Trend chart with proper state management, allowing users to toggle visibility of Posts/Day and Comments/Day series independently.
-- **Chart Type Correction:** Fixed chart implementation from AreaChart to LineChart with proper dual Y-axis configuration, stroke styling, and legend labels to match the original Activity Trend visualization.
-
-**Trends Tab Implementation**
-
-- **New Trends Tab:** Created a dedicated Trends tab in the ReportView component to house all materialized trend visualizations, separating them from the Activity tab for better organization.
-- **Trend Data Loading:** Implemented async trend data loading with proper loading states, error handling, and stale data warnings when trend data is older than 24 hours.
-- **NonIdealState Component:** Created a reusable NonIdealState component for consistent empty states and error messaging across the application, supporting customizable icons, titles, and messages.
-- **Stale Data Warning:** Added automatic detection and warning banner for trend data that hasn't been materialized within 24 hours, using the NonIdealState component with `mono-expired` icon.
-- **Trend Visualizations:** Integrated Community Growth forecasting, Engagement Over Time tracking, Content Mix evolution, Posting Activity Heatmap, and Best Posting Times Change analysis in the new Trends tab.
-
-**Code Quality & Development Tools**
-
-- **ESLint Configuration:** Implemented comprehensive ESLint configuration with TypeScript support, React hooks validation, and code style enforcement including single quotes, semicolons, and trailing commas.
-- **Multi-Project TypeScript Support:** Configured ESLint to properly handle separate TypeScript configurations for client (`src/client/tsconfig.json`) and server (`src/server/tsconfig.json`) directories.
-- **React Hooks Compliance:** Fixed React hooks rule violations by moving `useState` calls from switch case statements to component top level, ensuring proper hooks usage patterns.
-
-**Bug Fixes & Code Cleanup**
-
-- **Import Cleanup:** Removed unused imports including `Curve` from recharts and unused type definitions to eliminate ESLint warnings.
-- **State Management:** Properly organized component state with dedicated state for trends loading, error handling, and chart series visibility management.
-- **TypeScript Error Handling:** Addressed TypeScript strict mode issues and improved type safety across chart components and data handling.
+- **Trend Data Loading:** Implemented async trend data loading with proper loading states, error handling.
+- **Stale Data Warning:** Added automatic detection and warning banner for trend data that hasn't been materialized within 24 hours, using a new NonIdealState component to convey the state to the user using icon, title, and message.
+- **Forecast Materialization:** Introduced new forecasting data processing task that executes after the snapshot worker has completed. It allows the process ample time for calculating and reviewing previous snapshots to produce higher accurate data and better forecasting of trend values.
 
 ### v0.0.93
 

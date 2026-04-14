@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { TrendMaterializationService } from './TrendMaterializationService';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { TrendingService } from './TrendingService';
 
 // Enhanced Mock Redis client that properly handles the retention logic
 class EnhancedMockRedisClient {
@@ -23,20 +23,27 @@ class EnhancedMockRedisClient {
     });
   }
 
-  async zRange(key: string, start: number, stop: number, options?: { REV?: boolean; BYSCORE?: boolean }): Promise<string[]> {
+  async zRange(key: string, start: number | string, stop: number | string, options?: { REV?: boolean; BYSCORE?: boolean; by?: string }): Promise<string[]> {
     return this.trackOperation('zRange', async () => {
       const zset = this.data.get(key) || [];
       
-      if (options?.BYSCORE) {
+      const isByScore = options?.BYSCORE || options?.by === 'score';
+
+      if (isByScore) {
         // When BYSCORE is used, start and stop are score values
-        return zset.filter((item: any) => item.score >= start && item.score <= stop)
+        const minScore = typeof start === 'string' && start === '-inf' ? -Infinity : Number(start);
+        const maxScore = typeof stop === 'string' && (stop === '+inf' || stop === 'inf') ? Infinity : Number(stop);
+        
+        return zset.filter((item: any) => item.score >= minScore && item.score <= maxScore)
                    .sort((a: any, b: any) => options?.REV ? b.score - a.score : a.score - b.score)
                    .map((item: any) => item.member);
       } else {
         // Normal range by index
         const sorted = zset.sort((a: any, b: any) => options?.REV ? b.score - a.score : a.score - b.score);
-        const actualStart = start < 0 ? Math.max(0, sorted.length + start) : start;
-        const actualStop = stop < 0 ? sorted.length + stop + 1 : stop + 1;
+        const numStart = Number(start);
+        const numStop = Number(stop);
+        const actualStart = numStart < 0 ? Math.max(0, sorted.length + numStart) : numStart;
+        const actualStop = numStop < 0 ? sorted.length + numStop + 1 : numStop + 1;
         return sorted.slice(actualStart, actualStop).map((item: any) => item.member);
       }
     });
@@ -277,15 +284,15 @@ function generateRealisticTestData(subreddit: string, scanId: number, postCount:
   return mockRedis;
 }
 
-describe('TrendMaterializationService Integration Performance Tests', () => {
-  let service: TrendMaterializationService;
+describe('TrendingService Integration Performance Tests', () => {
+  let service: TrendingService;
   let mockRedis: EnhancedMockRedisClient;
   const testSubreddit = 'testsubreddit';
   const testScanId = 2000;
 
   beforeEach(() => {
     mockRedis = generateRealisticTestData(testSubreddit, testScanId, 50);
-    service = new TrendMaterializationService(mockRedis as any);
+    service = new TrendingService(mockRedis as any);
   });
 
   afterEach(() => {
@@ -293,7 +300,7 @@ describe('TrendMaterializationService Integration Performance Tests', () => {
   });
 
   describe('Full Pipeline Performance Tests', () => {
-    it('should complete full materialization pipeline within 5 seconds', async () => {
+    it('should complete full trend forecasting pipeline within 5 seconds', async () => {
       const TARGET_TIME_MS = 5000;
       
       const startTime = performance.now();
@@ -314,7 +321,7 @@ describe('TrendMaterializationService Integration Performance Tests', () => {
       expect(executionTime).toBeLessThan(TARGET_TIME_MS);
     });
 
-    it('should profile Redis operations during full materialization', async () => {
+    it('should profile Redis operations during full trend forecasting', async () => {
       mockRedis.clearOperationTimes();
       
       const startTime = performance.now();
@@ -329,10 +336,11 @@ describe('TrendMaterializationService Integration Performance Tests', () => {
         if (!stats[op.operation]) {
           stats[op.operation] = { count: 0, totalTime: 0, maxTime: 0, minTime: Infinity };
         }
-        stats[op.operation].count++;
-        stats[op.operation].totalTime += op.duration;
-        stats[op.operation].maxTime = Math.max(stats[op.operation].maxTime, op.duration);
-        stats[op.operation].minTime = Math.min(stats[op.operation].minTime, op.duration);
+        const s = stats[op.operation]!;
+        s.count++;
+        s.totalTime += op.duration;
+        s.maxTime = Math.max(s.maxTime, op.duration);
+        s.minTime = Math.min(s.minTime, op.duration);
         return stats;
       }, {} as Record<string, { count: number; totalTime: number; maxTime: number; minTime: number }>);
 
@@ -407,7 +415,7 @@ describe('TrendMaterializationService Integration Performance Tests', () => {
       }
     });
 
-    it('should measure memory efficiency during full materialization', async () => {
+    it('should measure memory efficiency during full trend forecasting', async () => {
       // Force garbage collection if available
       if (global.gc) {
         global.gc();
@@ -436,7 +444,7 @@ describe('TrendMaterializationService Integration Performance Tests', () => {
       expect(Math.abs(memoryDelta.heapUsed)).toBeLessThan(50 * 1024 * 1024); // Less than 50MB growth
     });
 
-    it('should verify data integrity after materialization', async () => {
+    it('should verify data integrity after trend forecasting', async () => {
       await service.materializeTrends(testSubreddit, testScanId);
       
       // Verify trend data was created
@@ -462,7 +470,7 @@ describe('TrendMaterializationService Integration Performance Tests', () => {
     it('should handle maximum analysis pool size efficiently', async () => {
       // Test with maximum pool size of 50 posts
       const maxPoolRedis = generateRealisticTestData(testSubreddit, testScanId, 50);
-      const maxPoolService = new TrendMaterializationService(maxPoolRedis as any);
+      const maxPoolService = new TrendingService(maxPoolRedis as any);
       
       const startTime = performance.now();
       await maxPoolService.materializeTrends(testSubreddit, testScanId);
@@ -498,7 +506,7 @@ describe('TrendMaterializationService Integration Performance Tests', () => {
         });
       }
       
-      const longRetentionService = new TrendMaterializationService(longRetentionRedis as any);
+      const longRetentionService = new TrendingService(longRetentionRedis as any);
       
       const startTime = performance.now();
       await longRetentionService.materializeTrends(testSubreddit, testScanId);

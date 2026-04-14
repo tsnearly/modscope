@@ -1,0 +1,198 @@
+
+<style>
+  .ppt-wrap { padding: 1rem 0; font-family: var(--font-sans); }
+  .controls { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+  .controls label { font-size: 13px; color: var(--color-text-secondary); display: flex; align-items: center; gap: 6px; }
+  .controls select { font-size: 13px; padding: 4px 8px; border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); background: var(--color-background-primary); color: var(--color-text-primary); }
+  .section-label { font-size: 11px; font-weight: 500; color: var(--color-text-tertiary); letter-spacing: .04em; text-transform: uppercase; margin-bottom: 8px; }
+  .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
+  .chart-card { background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 14px 16px; }
+  .chart-title { font-size: 13px; font-weight: 500; color: var(--color-text-primary); margin-bottom: 2px; }
+  .chart-sub { font-size: 11px; color: var(--color-text-tertiary); margin-bottom: 12px; }
+  .slot-row { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+  .slot-label { font-size: 12px; color: var(--color-text-secondary); width: 80px; flex-shrink: 0; }
+  .bar-track { flex: 1; height: 20px; background: var(--color-background-secondary); border-radius: 4px; overflow: hidden; position: relative; }
+  .bar-fill { height: 100%; border-radius: 4px; transition: width .4s; }
+  .bar-val { font-size: 11px; color: var(--color-text-tertiary); width: 32px; text-align: right; flex-shrink: 0; }
+  .delta-badge { font-size: 11px; padding: 2px 6px; border-radius: 10px; flex-shrink: 0; }
+  .delta-up { background: #EAF3DE; color: #3B6D11; }
+  .delta-dn { background: #FCEBEB; color: #A32D2D; }
+  .delta-flat { background: var(--color-background-secondary); color: var(--color-text-tertiary); }
+  .shift-panel { background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 14px 16px; margin-bottom: 24px; }
+  .shift-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-top: 10px; }
+  .shift-day { text-align: center; }
+  .shift-day-label { font-size: 11px; color: var(--color-text-tertiary); margin-bottom: 4px; }
+  .shift-dot { width: 28px; height: 28px; border-radius: 50%; margin: 0 auto 3px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 500; }
+  .shift-peak { font-size: 10px; color: var(--color-text-tertiary); }
+  .trend-panel { background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 14px 16px; }
+  .sparkline-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .sparkline-label { font-size: 12px; color: var(--color-text-secondary); width: 96px; flex-shrink: 0; }
+  .sparkline-wrap { flex: 1; }
+  .sparkline-endval { font-size: 12px; color: var(--color-text-secondary); width: 36px; text-align: right; }
+  .legend-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--color-text-secondary); }
+  .legend-dot { width: 8px; height: 8px; border-radius: 2px; }
+</style>
+<div class="ppt-wrap">
+  <h2 class="sr-only">Prime posting times trend analysis — shift comparison over 30 to 90 days</h2>
+  <div class="controls">
+    <label>Window
+      <select id="window-sel" onchange="render()">
+        <option value="30">Last 30 days</option>
+        <option value="60">Last 60 days</option>
+        <option value="90" selected>Last 90 days</option>
+      </select>
+    </label>
+    <label>Compare halves
+      <select id="split-sel" onchange="render()">
+        <option value="2">Recent vs prior half</option>
+        <option value="3">3 equal thirds</option>
+      </select>
+    </label>
+  </div>
+
+  <div class="section-label">Top posting windows — shift</div>
+  <div class="charts-row" id="top-slots-grid"></div>
+
+  <div class="section-label">Day-of-week momentum</div>
+  <div class="shift-panel">
+    <div class="chart-title">Activity shift by day</div>
+    <div class="chart-sub">Dot size = current period activity · Color = direction of change</div>
+    <div class="shift-grid" id="day-grid"></div>
+  </div>
+
+  <div class="section-label">30-day window trend — top 5 slots</div>
+  <div class="trend-panel">
+    <div class="chart-title">Slot activity over time</div>
+    <div class="chart-sub">Each sparkline = one prime window's rolling activity score</div>
+    <div class="legend-row" id="spark-legend"></div>
+    <div id="sparklines"></div>
+  </div>
+</div>
+
+<script>
+const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const SLOTS = [
+  '12–3 am','3–6 am','6–9 am','9 am–12','12–3 pm',
+  '3–6 pm','6–9 pm','9 pm–12'
+];
+
+function seed(s) { let x=s^0xdeadbeef; return ()=>{x=Math.imul(x^x>>>15,1|x);x^=x+Math.imul(x^x>>>7,61|x);return((x^x>>>14)>>>0)/2**32}; }
+
+function genData(windowDays, splits) {
+  const r = seed(windowDays * 100 + splits);
+  const baseline = SLOTS.map(()=> 30 + r()*50);
+  const dailyBase = DAYS.map(()=> 20 + r()*60);
+  const periods = [];
+  for (let p=0; p<splits; p++) {
+    const drift = 1 + (p/(splits-1)) * 0.6;
+    const slots = baseline.map((b,i)=>{
+      const trend = i>=4 && i<=6 ? 1.3 : (i<=1 ? 0.7 : 1.0);
+      return Math.round(b * drift * trend * (0.85 + r()*0.3));
+    });
+    const days = dailyBase.map((b,i)=>{
+      const wknd = (i===0||i===6) ? 1.25 : 1.0;
+      return Math.round(b * drift * wknd * (0.8 + r()*0.4));
+    });
+    periods.push({slots, days});
+  }
+  const sparkPoints = 30;
+  const sparkSlots = [4,5,6,2,7];
+  const sparks = sparkSlots.map(si=>{
+    let v = baseline[si];
+    return Array.from({length:sparkPoints},(_,i)=>{
+      v = Math.max(5, v + (r()-0.46)*12 + (i>18?2.5:0));
+      return Math.round(v);
+    });
+  });
+  return {periods, sparks, sparkSlots};
+}
+
+function barColor(pct, delta) {
+  if (delta > 8) return '#1D9E75';
+  if (delta < -8) return '#D85A30';
+  return '#378ADD';
+}
+
+function renderTopSlots(periods, splits) {
+  const recent = periods[splits-1];
+  const prior = periods[splits-2];
+  const ranked = SLOTS.map((s,i)=>({s,i,v:recent.slots[i],delta:recent.slots[i]-prior.slots[i]}))
+    .sort((a,b)=>b.v-a.v).slice(0,4);
+  const max = Math.max(...ranked.map(r=>r.v));
+  const el = document.getElementById('top-slots-grid');
+  el.innerHTML = ranked.map(({s,v,delta})=>{
+    const pct = Math.round(v/max*100);
+    const d = Math.round(delta);
+    const badgeCls = d>8?'delta-up':d<-8?'delta-dn':'delta-flat';
+    const arrow = d>8?'↑':d<-8?'↓':'→';
+    return `<div class="chart-card">
+      <div class="chart-title">${s}</div>
+      <div class="chart-sub">Prime window · rank ${ranked.indexOf(ranked.find(r=>r.s===s))+1}</div>
+      <div class="slot-row">
+        <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${barColor(pct,d)}"></div></div>
+        <div class="bar-val">${v}</div>
+        <span class="delta-badge ${badgeCls}">${arrow} ${Math.abs(d)}</span>
+      </div>
+      <div style="font-size:11px;color:var(--color-text-tertiary)">vs prior period · ${d>0?'+':''}${d} posts</div>
+    </div>`;
+  }).join('');
+}
+
+function renderDayGrid(periods, splits) {
+  const recent = periods[splits-1];
+  const prior = periods[splits-2];
+  const maxV = Math.max(...recent.days);
+  const el = document.getElementById('day-grid');
+  el.innerHTML = DAYS.map((d,i)=>{
+    const v = recent.days[i];
+    const delta = v - prior.days[i];
+    const size = 18 + Math.round(v/maxV*18);
+    const bg = delta>6?'#1D9E75':delta<-6?'#D85A30':'#888780';
+    const fg = '#fff';
+    const arrow = delta>6?'↑':delta<-6?'↓':'–';
+    return `<div class="shift-day">
+      <div class="shift-day-label">${d}</div>
+      <div class="shift-dot" style="width:${size}px;height:${size}px;background:${bg};color:${fg};margin:0 auto 3px;">${arrow}</div>
+      <div class="shift-peak" style="font-size:10px;color:var(--color-text-tertiary)">${v}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderSparklines(sparks, sparkSlots) {
+  const colors = ['#1D9E75','#378ADD','#EF9F27','#D85A30','#7F77DD'];
+  const labels = sparkSlots.map(i=>SLOTS[i]);
+  const el = document.getElementById('sparklines');
+  const leg = document.getElementById('spark-legend');
+  leg.innerHTML = labels.map((l,i)=>`<div class="legend-item"><span class="legend-dot" style="background:${colors[i]}"></span>${l}</div>`).join('');
+  el.innerHTML = sparks.map((pts,i)=>{
+    const max = Math.max(...pts), min = Math.min(...pts);
+    const w = 300, h = 36;
+    const xs = pts.map((_,j)=>Math.round(j/(pts.length-1)*w));
+    const ys = pts.map(p=>Math.round(h - (p-min)/(max-min||1)*(h-4)-2));
+    const path = pts.map((p,j)=>`${j===0?'M':'L'}${xs[j]},${ys[j]}`).join(' ');
+    const area = `${path} L${w},${h+2} L0,${h+2} Z`;
+    return `<div class="sparkline-row">
+      <div class="sparkline-label">${labels[i]}</div>
+      <div class="sparkline-wrap">
+        <svg width="100%" viewBox="0 0 ${w} ${h+4}" preserveAspectRatio="none" style="display:block;height:36px">
+          <path d="${area}" fill="${colors[i]}" opacity=".12"/>
+          <path d="${path}" fill="none" stroke="${colors[i]}" stroke-width="1.5" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="sparkline-endval">${pts[pts.length-1]}</div>
+    </div>`;
+  }).join('');
+}
+
+function render() {
+  const win = +document.getElementById('window-sel').value;
+  const splits = +document.getElementById('split-sel').value;
+  const {periods, sparks, sparkSlots} = genData(win, splits);
+  renderTopSlots(periods, splits);
+  renderDayGrid(periods, splits);
+  renderSparklines(sparks, sparkSlots);
+}
+
+render();
+</script>

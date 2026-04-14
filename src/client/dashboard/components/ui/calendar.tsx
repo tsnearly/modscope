@@ -56,17 +56,15 @@ function Calendar({
         ...classNames,
       }}
       components={{
-        IconLeft: ({ className, ...props }) => (
-          <ChevronLeft className={cn('h-4 w-4', className)} {...props} />
-        ),
-        IconRight: ({ className, ...props }) => (
-          <ChevronRight className={cn('h-4 w-4', className)} {...props} />
-        ),
+        Chevron: ({ orientation }) => {
+          const Icon = orientation === "left" ? ChevronLeft : ChevronRight;
+          return <Icon className="h-4 w-4" />;
+        },
       }}
       formatters={{
-        formatWeekdayName: (date) => {
+        formatWeekdayName: (date: Date) => {
           const days = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
-          return days[date.getDay()];
+          return days[date.getDay()] ?? "";
         },
       }}
       {...props}
