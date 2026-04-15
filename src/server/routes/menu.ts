@@ -50,11 +50,17 @@ menu.post('/cancel-job', async (c) => {
     const postId = body.targetId;
     const jobId = await redis.get(`job:${postId}`);
     if (!jobId) {
-      return c.json({ showToast: { text: 'No job found', appearance: 'neutral' } });
+      return c.json({
+        showToast: { text: 'No job found', appearance: 'neutral' },
+      });
     }
     await (redis as any).scheduler.cancelJob(jobId);
-    return c.json({ showToast: { text: 'Job canceled', appearance: 'success' } });
+    return c.json({
+      showToast: { text: 'Job canceled', appearance: 'success' },
+    });
   } catch (error) {
-    return c.json({ showToast: { text: 'Cancel failed', appearance: 'neutral' } });
+    return c.json({
+      showToast: { text: 'Cancel failed', appearance: 'neutral' },
+    });
   }
 });

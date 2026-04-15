@@ -157,7 +157,7 @@ _Note: ModScope runs entirely within the Devvit ecosystem. It requires no extern
 
 - Now all date/timestamp values are displayed in the user's local time. This makes is much easier to interpret the data, rather than having to convert from UTC to your local clock. So all date stamps in the snapshot report are converted, including the prime posting times, entries being displayed in the snapshots summary table, and entries in the job history table. When the user creates/modifies an automated schedule, it is shown in the user's local time. When the schedule is initialized back to the server, it is automatically converted to UTC for storage—as that is the format the server operates on.
 - Aligned code with new organization paradigm; modified all code to use client, server, and shared imports only from devvit; added configurations for TypeScript, and Vite (with React and Tailwind CSS plugins).
-- Added check-for-update functionality using a static website on Render.com to store version info, and policy documents. System will send ModMail if an update is detected alerting the moderators to perform an upgrade.
+- Added check-for-update functionality using published pages on github.com to store version info, and policy documents. System will send ModMail if an update is detected alerting the moderators to perform an upgrade.
 
 ### v0.0.97
 

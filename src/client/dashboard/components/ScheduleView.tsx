@@ -158,8 +158,8 @@ function ScheduleView({
       } else if (hasScrolledRef.current) {
         const isAtBottom =
           tableElement.scrollHeight -
-          tableElement.scrollTop -
-          tableElement.clientHeight <
+            tableElement.scrollTop -
+            tableElement.clientHeight <
           100;
         if (isAtBottom) {
           requestAnimationFrame(() => {
@@ -173,11 +173,11 @@ function ScheduleView({
   // Calculate dynamic stats
   const totalRuns = history.length;
   const successCount = history.filter(
-    (h) => h.status === 'success' || h.status === 'completed',
+    (h) => h.status === 'success' || h.status === 'completed'
   ).length;
   const failedCount = history.filter(
     (h) =>
-      h.status === 'error' || h.status === 'failed' || h.status === 'failure',
+      h.status === 'error' || h.status === 'failed' || h.status === 'failure'
   ).length;
 
   // Calculate avg processing time from snapshots
@@ -191,12 +191,12 @@ function ScheduleView({
         const start = new Date(
           s.meta.scanDate.includes(' ')
             ? s.meta.scanDate.replace(' ', 'T') + 'Z'
-            : s.meta.scanDate,
+            : s.meta.scanDate
         ).getTime();
         const end = new Date(
           s.meta.procDate.includes(' ')
             ? s.meta.procDate.replace(' ', 'T') + 'Z'
-            : s.meta.procDate,
+            : s.meta.procDate
         ).getTime();
         const duration = (end - start) / 1000;
         if (!isNaN(duration) && duration > 0 && duration < 300) {
@@ -217,7 +217,7 @@ function ScheduleView({
   const [scheduleType, setScheduleType] = useState<ScheduleType>(
     settings?.storage?.snapshotFrequency === '12hours'
       ? '12h'
-      : (settings?.storage?.snapshotFrequency as ScheduleType) || 'daily',
+      : (settings?.storage?.snapshotFrequency as ScheduleType) || 'daily'
   );
   const [name, setName] = useState('');
   const [_startDate, _setStartDate] = useState(getTodayDate());
@@ -231,7 +231,7 @@ function ScheduleView({
       setScheduleType(
         settings.storage.snapshotFrequency === '12hours'
           ? '12h'
-          : (settings.storage.snapshotFrequency as ScheduleType),
+          : (settings.storage.snapshotFrequency as ScheduleType)
       );
     }
   }, [settings?.storage]);
@@ -384,7 +384,7 @@ function ScheduleView({
         type: string,
         timeStr: string,
         intervalStr: number,
-        days: number[],
+        days: number[]
       ) => {
         if (type === 'custom') {
           return customCron;
@@ -464,7 +464,7 @@ function ScheduleView({
         finalType,
         startTime,
         finalInterval,
-        daysOfWeek,
+        daysOfWeek
       );
 
       const config: any = {
@@ -619,7 +619,7 @@ function ScheduleView({
                                   >
                                     {day}
                                   </Button>
-                                ),
+                                )
                               )}
                             </div>
                           </div>
@@ -873,14 +873,14 @@ function ScheduleView({
                         </TableCell>
                         <TableCell className="py-2.5 text-right">
                           <span
-                            className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${h.status === 'success' ||
-                              h.status === 'completed'
-                              ? 'bg-background text-[#78C12A]'
-                              : h.status === 'running' ||
-                                h.status === 'pending'
-                                ? 'bg-background text-[#0797EA]'
-                                : 'bg-background text-[#F24318]'
-                              }`}
+                            className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${
+                              h.status === 'success' || h.status === 'completed'
+                                ? 'bg-background text-[#78C12A]'
+                                : h.status === 'running' ||
+                                    h.status === 'pending'
+                                  ? 'bg-background text-[#0797EA]'
+                                  : 'bg-background text-[#F24318]'
+                            }`}
                           >
                             {h.status}
                           </span>
@@ -893,20 +893,32 @@ function ScheduleView({
               <div className="p-4 bg-muted/20 border-t border-border text-xs text-muted-foreground">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="flex flex-col">
-                    <span className="text-[10px] uppercase font-bold text-muted-foreground/60">Generated</span>
+                    <span className="text-[10px] uppercase font-bold text-muted-foreground/60">
+                      Generated
+                    </span>
                     <strong className="text-sm">{totalRuns} Snapshots</strong>
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-[10px] uppercase font-bold text-muted-foreground/60">Successful</span>
-                    <strong className="text-sm text-[#78C12A]">{successCount} Runs</strong>
+                    <span className="text-[10px] uppercase font-bold text-muted-foreground/60">
+                      Successful
+                    </span>
+                    <strong className="text-sm text-[#78C12A]">
+                      {successCount} Runs
+                    </strong>
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-[10px] uppercase font-bold text-muted-foreground/60">Processing</span>
+                    <span className="text-[10px] uppercase font-bold text-muted-foreground/60">
+                      Processing
+                    </span>
                     <strong className="text-sm">{avgProcTime} Avg</strong>
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-[10px] uppercase font-bold text-muted-foreground/60">Failed</span>
-                    <strong className="text-sm text-[#F24318]">{failedCount} Total</strong>
+                    <span className="text-[10px] uppercase font-bold text-muted-foreground/60">
+                      Failed
+                    </span>
+                    <strong className="text-sm text-[#F24318]">
+                      {failedCount} Total
+                    </strong>
                   </div>
                 </div>
               </div>

@@ -12,7 +12,7 @@
  */
 export async function generateHtml(
   container: HTMLElement,
-  subredditName: string,
+  subredditName: string
 ): Promise<string | null> {
   try {
     // ── 1. Collect styles ────────────────────────────────────────────────
@@ -20,7 +20,7 @@ export async function generateHtml(
     // For <link rel="stylesheet"> tags: fetch the CSS text and wrap as <style>.
     // This ensures the saved file never depends on external URLs.
     const stylePromises = Array.from(
-      document.querySelectorAll('style, link[rel="stylesheet"]'),
+      document.querySelectorAll('style, link[rel="stylesheet"]')
     ).map(async (el): Promise<string> => {
       if (el.tagName.toLowerCase() === 'link') {
         const href = (el as HTMLLinkElement).getAttribute('href');
@@ -135,7 +135,7 @@ export async function generateHtml(
         } catch {
           return match;
         }
-      },
+      }
     );
 
     // ── 4. Assemble standalone document ──────────────────────────────────

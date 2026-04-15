@@ -42,11 +42,12 @@ const buttonVariants = cva(
       size: 'default',
       align: 'center',
     },
-  },
+  }
 );
 
 export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
+  extends
+    React.ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
   asChild?: boolean;
   icon?: string;
@@ -84,7 +85,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       children,
       ...props
     },
-    ref,
+    ref
   ) => {
     const Comp = asChild ? Slot : 'button';
 
@@ -124,7 +125,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         className={cn(
           buttonVariants({ variant, size, align, className }),
           squareClass,
-          insetClass,
+          insetClass
         )}
         ref={ref}
         disabled={loading || props.disabled}
@@ -167,7 +168,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
               <span
                 className={cn(
                   'flex items-center gap-1.5',
-                  icon || iconTrailing ? 'mx-1' : '',
+                  icon || iconTrailing ? 'mx-1' : ''
                 )}
               >
                 {children}
@@ -203,7 +204,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     }
 
     return buttonContent;
-  },
+  }
 );
 Button.displayName = 'Button';
 
@@ -223,7 +224,7 @@ const ButtonGroup = ({
       className={cn(
         'inline-flex',
         vertical ? 'flex-col -space-y-px' : '-space-x-px',
-        className,
+        className
       )}
     >
       {React.Children.map(children, (child, index) => {
@@ -239,7 +240,7 @@ const ButtonGroup = ({
             childElement.props.className,
             !vertical
               ? cn(!isFirst && 'rounded-l-none', !isLast && 'rounded-r-none')
-              : cn(!isFirst && 'rounded-t-none', !isLast && 'rounded-b-none'),
+              : cn(!isFirst && 'rounded-t-none', !isLast && 'rounded-b-none')
           ),
         });
       })}

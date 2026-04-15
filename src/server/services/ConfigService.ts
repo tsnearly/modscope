@@ -8,7 +8,7 @@ import {
 export class ConfigService {
   private readonly CONFIG_KEY = 'modscope:config';
 
-  constructor(private redis: RedisClient) { }
+  constructor(private redis: RedisClient) {}
 
   async getConfig(): Promise<ConfigSettings> {
     const configStr = await this.redis.get(this.CONFIG_KEY);
@@ -19,7 +19,7 @@ export class ConfigService {
   }
 
   async updateConfig(
-    newConfig: Partial<ConfigSettings>,
+    newConfig: Partial<ConfigSettings>
   ): Promise<ConfigSettings> {
     const currentConfig = await this.getConfig();
     const updatedConfig = { ...currentConfig, ...newConfig };
@@ -28,7 +28,7 @@ export class ConfigService {
   }
 
   async updateCalculationSettings(
-    newSettings: Partial<CalculationSettings>,
+    newSettings: Partial<CalculationSettings>
   ): Promise<ConfigSettings> {
     const currentConfig = await this.getConfig();
     const updatedConfig: ConfigSettings = {

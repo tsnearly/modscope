@@ -9,7 +9,9 @@ interface AboutViewProps {
 
 function AboutView({ appVersion }: AboutViewProps) {
   // PLAYTEST_BYPASS: Manual trend seed state
-  const [seedStatus, setSeedStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [seedStatus, setSeedStatus] = useState<
+    'idle' | 'loading' | 'success' | 'error'
+  >('idle');
   const [seedMessage, setSeedMessage] = useState('');
 
   const handleSeedTrends = async () => {
@@ -22,7 +24,9 @@ function AboutView({ appVersion }: AboutViewProps) {
       console.log('[PLAYTEST] Trigger response:', res.status, body);
       if (res.ok) {
         setSeedStatus('success');
-        setSeedMessage(`Seeded ${body.scansProcessed ?? '?'} scans. Trends locked to 2099.`);
+        setSeedMessage(
+          `Seeded ${body.scansProcessed ?? '?'} scans. Trends locked to 2099.`
+        );
       } else {
         setSeedStatus('error');
         setSeedMessage(body.message || `HTTP ${res.status}`);
@@ -68,11 +72,16 @@ function AboutView({ appVersion }: AboutViewProps) {
                     disabled={seedStatus === 'loading'}
                     className="text-xs px-3 py-1.5 rounded bg-primary text-primary-foreground hover:opacity-80 disabled:opacity-40 transition-opacity w-full text-left"
                   >
-                    {seedStatus === 'loading' ? 'Seeding trends…' : '⚡ Seed Trends (Playtest)'}
+                    {seedStatus === 'loading'
+                      ? 'Seeding trends…'
+                      : '⚡ Seed Trends (Playtest)'}
                   </button>
                   {seedMessage && (
-                    <p className={`text-xs mt-1 ${seedStatus === 'success' ? 'text-green-500' : 'text-red-500'}`}>
-                      {seedStatus === 'success' ? '✓ ' : '✗ '}{seedMessage}
+                    <p
+                      className={`text-xs mt-1 ${seedStatus === 'success' ? 'text-green-500' : 'text-red-500'}`}
+                    >
+                      {seedStatus === 'success' ? '✓ ' : '✗ '}
+                      {seedMessage}
                     </p>
                   )}
                 </div>

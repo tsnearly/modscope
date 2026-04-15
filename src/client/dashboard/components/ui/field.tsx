@@ -25,7 +25,7 @@ const Field = React.forwardRef<HTMLDivElement, FieldProps>(
         )}
       </div>
     );
-  },
+  }
 );
 Field.displayName = 'Field';
 

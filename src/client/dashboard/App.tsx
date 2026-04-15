@@ -14,7 +14,12 @@ import { Button } from './components/ui/button';
 import { Heading } from './components/ui/heading';
 import { Icon } from './components/ui/icon';
 import { Tooltip } from './components/ui/tooltip';
-import { AppConfig, JobDescriptor, JobHistoryEntry, AnalyticsSnapshot } from '../../shared/types/api';
+import {
+  AppConfig,
+  JobDescriptor,
+  JobHistoryEntry,
+  AnalyticsSnapshot,
+} from '../../shared/types/api';
 import './styles/main.css';
 import { cn } from './utils/cn';
 import { getIconPath } from './utils/iconMappings';
@@ -76,7 +81,9 @@ class ErrorBoundary extends React.Component<
 export const App = () => {
   useTheme(); // Initialize and apply theme on mount
   const [activeView, setActiveView] = useState<View>('report');
-  const [selectedSnapshotId, setSelectedSnapshotId] = useState<number | null>(null);
+  const [selectedSnapshotId, setSelectedSnapshotId] = useState<number | null>(
+    null
+  );
   const [reportLoading, setReportLoading] = useState(false);
   const [reportData, setReportData] = useState<AnalyticsSnapshot | null>(null);
   const [officialAccounts, setOfficialAccounts] = useState<string[]>([]);
@@ -86,7 +93,7 @@ export const App = () => {
   const [snapshots, setSnapshots] = useState<AnalyticsSnapshot[]>([]);
   const [snapshotsLoading, setSnapshotsLoading] = useState(false);
   const [appVersion, setAppVersion] = useState<string>(
-    devvitContext?.appVersion || '0.0.x',
+    devvitContext?.appVersion || '0.0.x'
   );
   const [isUnauthorized, setIsUnauthorized] = useState(false);
   const [isPrintMode, setIsPrintMode] = useState(false);
@@ -138,11 +145,11 @@ export const App = () => {
             // We can just set the data-theme attribute directly on document.documentElement
             document.documentElement.setAttribute(
               'data-theme',
-              data.display.theme,
+              data.display.theme
             );
             localStorage.setItem(
               'modscope_settings',
-              JSON.stringify(data.display),
+              JSON.stringify(data.display)
             );
           }
 
@@ -185,7 +192,7 @@ export const App = () => {
       const res = await fetch(`/api/snapshots/${scanId}`);
       if (!res.ok) {
         console.error(
-          `Failed to load snapshot ${scanId}: ${res.status} ${res.statusText}`,
+          `Failed to load snapshot ${scanId}: ${res.status} ${res.statusText}`
         );
         return false;
       }
@@ -221,7 +228,7 @@ export const App = () => {
 
       console.warn(
         `[TABS] Snapshot ${scanId} returned no meta; payload may be incomplete.`,
-        data,
+        data
       );
       return false;
     } catch (error) {
@@ -250,10 +257,10 @@ export const App = () => {
     setTimeout(async () => {
       try {
         // Wait a bit longer for trends data to load and all charts to render
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        await new Promise((resolve) => setTimeout(resolve, 1500));
 
         const container = document.querySelector(
-          '.print-report-container',
+          '.print-report-container'
         ) as HTMLElement;
         if (!container) {
           return;
@@ -535,8 +542,8 @@ export const App = () => {
               className="fullscreen-btn"
               aria-label="Open full screen"
               onClick={(e) => {
-              requestExpandedMode(e as unknown as PointerEvent, 'expanded');
-            }}
+                requestExpandedMode(e as unknown as PointerEvent, 'expanded');
+              }}
             >
               {/* Expand icon */}
               <svg

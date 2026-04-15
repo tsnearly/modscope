@@ -15,6 +15,12 @@ export interface ForecastPoint {
   upperBound: number;
 }
 
+interface TrendConfigSnapshot {
+  retentionDays: number;
+  analysisPoolSize: number;
+  trendAnalysisDays: number;
+}
+
 export class TrendingService {
   private redis: RedisClient;
   private startTime: number = 0;
@@ -23,29 +29,54 @@ export class TrendingService {
     this.redis = redis;
   }
 
-private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  private static readonly DAYNAMES = [
+    'Sun',
+    'Mon',
+    'Tue',
+    'Wed',
+    'Thu',
+    'Fri',
+    'Sat',
+  ];
 
-  private resolvePostUtcId(post: Partial<PostData> & { utcId?: string; url?: string; id?: string }): string {
-    return post.utcId || post.id || `post_${String(post.url || '').replace(/\//g, '_')}`;
+  private resolvePostUtcId(
+    post: Partial<PostData> & { utcId?: string; url?: string; id?: string }
+  ): string {
+    return (
+      post.utcId ||
+      post.id ||
+      `post_${String(post.url || '').replace(/\//g, '_')}`
+    );
   }
 
-  private resolvePostIdentityKey(post: Partial<PostData> & { utcId?: string; url?: string; id?: string }): string {
+  private resolvePostIdentityKey(
+    post: Partial<PostData> & { utcId?: string; url?: string; id?: string }
+  ): string {
     return post.id || post.url || this.resolvePostUtcId(post);
   }
 
   private async calculateAverageVelocityForPost(
     utcId: string,
     windowStart: number,
-    windowEnd: number,
-  ): Promise<{ avgVelocity: number; avgEngagement: number; pointCount: number } | null> {
-    const tsEntries = await this.redis.zRange(`post:${utcId}:ts:engagement`, 0, -1);
+    windowEnd: number
+  ): Promise<{
+    avgVelocity: number;
+    avgEngagement: number;
+    pointCount: number;
+  } | null> {
+    const tsEntries = await this.redis.zRange(
+      `post:${utcId}:ts:engagement`,
+      0,
+      -1
+    );
     if (!tsEntries || tsEntries.length === 0) {
       return null;
     }
 
     const points: Array<{ ts: number; value: number }> = [];
     for (const entry of tsEntries) {
-      const memberVal = typeof entry === 'string' ? entry : (entry as any)?.member;
+      const memberVal =
+        typeof entry === 'string' ? entry : (entry as any)?.member;
       if (!memberVal) continue;
 
       const colon = memberVal.lastIndexOf(':');
@@ -65,7 +96,8 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
 
     points.sort((a, b) => a.ts - b.ts);
 
-    const avgEngagement = points.reduce((sum, p) => sum + p.value, 0) / points.length;
+    const avgEngagement =
+      points.reduce((sum, p) => sum + p.value, 0) / points.length;
 
     const velocities: number[] = [];
     for (let i = 1; i < points.length; i++) {
@@ -77,13 +109,14 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
       velocities.push((curr.value - prev.value) / deltaHours);
     }
 
-    const avgVelocity = velocities.length > 0
-      ? velocities.reduce((sum, v) => sum + v, 0) / velocities.length
-      : 0;
+    const avgVelocity =
+      velocities.length > 0
+        ? velocities.reduce((sum, v) => sum + v, 0) / velocities.length
+        : 0;
 
     return { avgVelocity, avgEngagement, pointCount: points.length };
   }
- 
+
   /**
    * Check if we're approaching timeout threshold
    */
@@ -107,22 +140,22 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
     items: T[],
     batchSize: number,
     processor: (item: T) => Promise<R>,
-    stageName: string,
+    stageName: string
   ): Promise<R[]> {
     const results: R[] = [];
     const totalBatches = Math.ceil(items.length / batchSize);
 
     console.log(
-      `[TRENDS] ${stageName}: Processing ${items.length} items in ${totalBatches} batches of ${batchSize}`,
+      `[TRENDS] ${stageName}: Processing ${items.length} items in ${totalBatches} batches of ${batchSize}`
     );
 
     for (let i = 0; i < items.length; i += batchSize) {
       if (this.isApproachingTimeout()) {
         console.warn(
-          `[TRENDS] ${stageName}: Approaching timeout, processed ${i}/${items.length} items`,
+          `[TRENDS] ${stageName}: Approaching timeout, processed ${i}/${items.length} items`
         );
         throw new Error(
-          `Timeout approaching during ${stageName} - processed ${i}/${items.length} items`,
+          `Timeout approaching during ${stageName} - processed ${i}/${items.length} items`
         );
       }
 
@@ -135,7 +168,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
 
         const batchElapsed = Date.now() - batchStartTime;
         console.log(
-          `[TRENDS] ${stageName}: Batch ${Math.floor(i / batchSize) + 1}/${totalBatches} completed in ${batchElapsed}ms`,
+          `[TRENDS] ${stageName}: Batch ${Math.floor(i / batchSize) + 1}/${totalBatches} completed in ${batchElapsed}ms`
         );
 
         // Small delay between batches to respect rate limits
@@ -145,7 +178,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
       } catch (error) {
         console.error(
           `[TRENDS] ${stageName}: Batch ${Math.floor(i / batchSize) + 1} failed:`,
-          error,
+          error
         );
         throw error;
       }
@@ -160,34 +193,38 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
   async materializeTrends(subreddit: string, scanId: number): Promise<void> {
     this.startTime = Date.now();
     console.log(
-      `[TRENDS] Starting materialization for r/${subreddit} scan #${scanId} at ${new Date().toISOString()}`,
+      `[TRENDS] Starting materialization for r/${subreddit} scan #${scanId} at ${new Date().toISOString()}`
     );
 
     try {
       // Stage 1: Read scan metadata and settings
       const stage1Start = Date.now();
-      const [meta, settings] = await Promise.all([
+      const [meta, trendConfig] = await Promise.all([
         this.redis.hGetAll(`run:${scanId}:meta`),
-        this.getRetentionSettings(subreddit),
+        this.loadTrendConfigSnapshot(subreddit),
       ]);
       this.logStageTime('Metadata and settings read', stage1Start);
-      console.log(`[TRENDS] Metadata for scan #${scanId}:`, JSON.stringify(meta));
+      console.log(
+        `[TRENDS] Metadata for scan #${scanId}:`,
+        JSON.stringify(meta)
+      );
 
       if (!meta.scan_date) {
         throw new Error(`Missing scan_date for scan #${scanId}`);
       }
-      const retentionDays = settings.retentionDays || 180;
-      const analysisPoolSize = settings.analysisPoolSize || 30;
+      const { retentionDays, analysisPoolSize } =
+        await this.getRetentionSettings(subreddit, trendConfig);
+      const trendAnalysisDays = trendConfig.trendAnalysisDays;
 
       console.log(
-        `[TRENDS] Configuration: retentionDays=${retentionDays}, analysisPoolSize=${analysisPoolSize}`,
+        `[TRENDS] Configuration: retentionDays=${retentionDays}, analysisPoolSize=${analysisPoolSize}, trendAnalysisDays=${trendAnalysisDays}`
       );
 
       // Stage 2: Get retained scans within the retention window
       const stage2Start = Date.now();
       const retainedScans = await this.getRetainedScans(
         subreddit,
-        retentionDays,
+        retentionDays
       );
       this.logStageTime('Retained scans retrieval', stage2Start);
       console.log(`[TRENDS] Retained scans count: ${retainedScans.length}`);
@@ -202,7 +239,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
       // Check timeout before starting heavy computation
       if (this.isApproachingTimeout()) {
         throw new Error(
-          'Timeout approaching before materialization calculations',
+          'Timeout approaching before materialization calculations'
         );
       }
 
@@ -215,7 +252,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
 
       if (this.isApproachingTimeout()) {
         console.warn(
-          '[TRENDS] Timeout approaching, skipping remaining calculations',
+          '[TRENDS] Timeout approaching, skipping remaining calculations'
         );
         throw new Error('Timeout approaching during materialization');
       }
@@ -224,21 +261,34 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
         subreddit,
         retainedScans,
         analysisPoolSize,
+        trendAnalysisDays
       );
 
       if (this.isApproachingTimeout()) {
         console.warn(
-          '[TRENDS] Timeout approaching, skipping content mix and heatmap',
+          '[TRENDS] Timeout approaching, skipping content mix and heatmap'
         );
         throw new Error('Timeout approaching during engagement calculation');
       }
 
       // Less critical calculations
       await Promise.all([
-        this.materializeContentMix(subreddit, retainedScans),
-        this.materializePostingHeatmap(subreddit, retainedScans),
-        this.materializeBestPostingTimes(subreddit, retainedScans),
-        this.materializeGlobalAggregates(subreddit, retainedScans),
+        this.materializeContentMix(subreddit, retainedScans, trendAnalysisDays),
+        this.materializePostingHeatmap(
+          subreddit,
+          retainedScans,
+          trendAnalysisDays
+        ),
+        this.materializeBestPostingTimes(
+          subreddit,
+          retainedScans,
+          trendAnalysisDays
+        ),
+        this.materializeGlobalAggregates(
+          subreddit,
+          retainedScans,
+          trendAnalysisDays
+        ),
       ]);
 
       this.logStageTime('All materialization calculations', stage3Start);
@@ -247,20 +297,19 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
       const stage4Start = Date.now();
       await this.redis.set(
         `trends:${subreddit}:last_materialized`,
-        new Date().toISOString(),
+        new Date().toISOString()
       );
-      const trendAnalysisDays = await this.getTrendAnalysisDays(subreddit);
       await this.applyTrendKeyTtls(subreddit, trendAnalysisDays);
       this.logStageTime('Last materialized timestamp update', stage4Start);
 
       const totalElapsed = Date.now() - this.startTime;
       console.log(
-        `[TRENDS] ✓ Trend forecasting complete for r/${subreddit} scan #${scanId} in ${totalElapsed}ms`,
+        `[TRENDS] ✓ Trend forecasting complete for r/${subreddit} scan #${scanId} in ${totalElapsed}ms`
       );
 
       if (totalElapsed > 5000) {
         console.warn(
-          `[TRENDS] ⚠️ Trend forecasting exceeded 5-second target: ${totalElapsed}ms`,
+          `[TRENDS] ⚠️ Trend forecasting exceeded 5-second target: ${totalElapsed}ms`
         );
       }
     } catch (error) {
@@ -282,12 +331,12 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
           error:
             error instanceof Error
               ? {
-                name: error.name,
-                message: error.message,
-                stack: error.stack,
-              }
+                  name: error.name,
+                  message: error.message,
+                  stack: error.stack,
+                }
               : error,
-        },
+        }
       );
 
       // Log structured error for monitoring/alerting
@@ -297,7 +346,10 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
     }
   }
 
-  private async applyTrendKeyTtls(subreddit: string, analysisDays: number): Promise<void> {
+  private async applyTrendKeyTtls(
+    subreddit: string,
+    analysisDays: number
+  ): Promise<void> {
     const ttlSeconds = Math.max(1, (analysisDays + 2) * 24 * 60 * 60);
     const keys = [
       `trends:${subreddit}:last_materialized`,
@@ -323,7 +375,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
     }
 
     await Promise.all(
-      keys.map((key) => redisWithExpire.expire!(key, ttlSeconds).catch(() => 0)),
+      keys.map((key) => redisWithExpire.expire!(key, ttlSeconds).catch(() => 0))
     );
   }
 
@@ -365,11 +417,11 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
    */
   private async materializeSubscriberGrowth(
     subreddit: string,
-    retainedScans: Array<{ scanId: number; timestamp: number }>,
+    retainedScans: Array<{ scanId: number; timestamp: number }>
   ): Promise<void> {
     const stageStart = Date.now();
     console.log(
-      `[TRENDS] Starting subscriber growth calculation for ${retainedScans.length} scans`,
+      `[TRENDS] Starting subscriber growth calculation for ${retainedScans.length} scans`
     );
 
     try {
@@ -391,7 +443,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
         } catch (error) {
           console.warn(
             `[TRENDS] Failed to read subscriber data for r/${subreddit} scan ${scan.scanId}:`,
-            error,
+            error
           );
           return null;
         }
@@ -401,7 +453,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
         retainedScans,
         20, // Batch size for scan metadata reads
         scanProcessor,
-        'Subscriber data collection',
+        'Subscriber data collection'
       );
 
       // Filter out null results and add to subscriberData
@@ -412,7 +464,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
       }
 
       console.log(
-        `[TRENDS] Collected subscriber data for ${subscriberData.length} scans`,
+        `[TRENDS] Collected subscriber data for ${subscriberData.length} scans`
       );
 
       // Store subscriber growth data with idempotent semantics
@@ -423,10 +475,10 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
       const elapsed = Date.now() - stageStart;
       console.error(
         `[TRENDS] ❌ Subscriber growth calculation failed for r/${subreddit} after ${elapsed}ms:`,
-        error,
+        error
       );
       throw new Error(
-        `Subscriber growth calculation failed: ${error instanceof Error ? error.message : String(error)}`,
+        `Subscriber growth calculation failed: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   }
@@ -436,7 +488,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
    */
   private async writeSubscriberGrowthData(
     subreddit: string,
-    data: Array<{ timestamp: number; value: number }>,
+    data: Array<{ timestamp: number; value: number }>
   ): Promise<void> {
     const zsetKey = `trends:${subreddit}:subscriber_growth`;
 
@@ -450,7 +502,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
       (point) => ({
         score: point.timestamp,
         member: `${point.timestamp}:${point.value}`,
-      }),
+      })
     );
 
     // Batch write in chunks to avoid Redis command size limits
@@ -467,7 +519,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
    * Normalize Redis zRange return format to a plain member string array.
    */
   private normalizeZRangeMembers(
-    rawData: Array<string | { member: string; score: number }>,
+    rawData: Array<string | { member: string; score: number }>
   ): string[] {
     const members: string[] = [];
     for (const item of rawData) {
@@ -483,7 +535,10 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
   /**
    * Subtask 6.1.2: Implement forecast generation with confidence bands
    */
-  async generateGrowthForecast(subreddit: string): Promise<{
+  async generateGrowthForecast(
+    subreddit: string,
+    analysisDaysOverride?: number
+  ): Promise<{
     trendline: Array<{ timestamp: number; value: number }>;
     forecast: ForecastPoint[];
     horizonDays: number;
@@ -507,7 +562,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
     // Parse data points
     const dataPoints: Array<{ timestamp: number; value: number }> = [];
     const rawMembers = this.normalizeZRangeMembers(
-      rawData as Array<string | { member: string; score: number }>,
+      rawData as Array<string | { member: string; score: number }>
     );
     for (const member of rawMembers) {
       if (typeof member === 'string') {
@@ -537,8 +592,10 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
     // Calculate linear regression
     const regression = this.calculateLinearRegression(dataPoints);
 
-    // Calculate growth rate (30-day period-over-period)
-    const growthRate = this.calculateGrowthRate(dataPoints);
+    // Calculate growth rate using the configured trend analysis window.
+    const analysisDays =
+      analysisDaysOverride ?? (await this.getTrendAnalysisDays(subreddit));
+    const growthRate = this.calculateGrowthRate(dataPoints, analysisDays);
 
     // Generate trendline for historical data
     const trendline = dataPoints.map((point) => ({
@@ -598,7 +655,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
    * Calculate linear regression for time series data
    */
   private calculateLinearRegression(
-    dataPoints: Array<{ timestamp: number; value: number }>,
+    dataPoints: Array<{ timestamp: number; value: number }>
   ): LinearRegressionResult {
     const n = dataPoints.length;
     if (n < 2) {
@@ -639,7 +696,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
     const rSquared =
       totalSumSquares === 0 ? 0 : 1 - residualSumSquares / totalSumSquares;
     const residualStandardError = Math.sqrt(
-      residualSumSquares / Math.max(1, n - 2),
+      residualSumSquares / Math.max(1, n - 2)
     );
 
     return {
@@ -655,6 +712,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
    */
   private calculateGrowthRate(
     dataPoints: Array<{ timestamp: number; value: number }>,
+    analysisDays: number
   ): number {
     if (dataPoints.length < 2) {
       return 0;
@@ -671,8 +729,10 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
       return 0;
     }
 
-    // Find point closest to 30 days ago
-    const thirtyDaysAgo = latest.timestamp - 30 * 24 * 60 * 60 * 1000;
+    // Find point closest to the configured analysis lookback.
+    const lookbackDays = Math.max(1, Math.round(analysisDays));
+    const lookbackTimestamp =
+      latest.timestamp - lookbackDays * 24 * 60 * 60 * 1000;
     let baselinePoint = sorted[0];
     if (!baselinePoint) {
       return 0;
@@ -680,8 +740,8 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
 
     for (const point of sorted) {
       if (
-        Math.abs(point.timestamp - thirtyDaysAgo) <
-        Math.abs(baselinePoint.timestamp - thirtyDaysAgo)
+        Math.abs(point.timestamp - lookbackTimestamp) <
+        Math.abs(baselinePoint.timestamp - lookbackTimestamp)
       ) {
         baselinePoint = point;
       }
@@ -708,9 +768,12 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
     subreddit: string,
     retainedScans: Array<{ scanId: number; timestamp: number }>,
     _analysisPoolSize: number,
+    analysisDays: number
   ): Promise<void> {
     const stageStart = Date.now();
-    console.log(`[TRENDS] Starting 5-phase engagement materialization for ${retainedScans.length} scans`);
+    console.log(
+      `[TRENDS] Starting 5-phase engagement materialization for ${retainedScans.length} scans`
+    );
 
     try {
       if (retainedScans.length === 0) {
@@ -721,25 +784,34 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
       // Build daily buckets keyed by post creation date so each day in the
       // analysis window reflects average engagement and engagement velocity
       // of posts created that day.
-      const dailyBuckets = new Map<string, {
-        postCount: number;
-        engagementSum: number;
-        engagementSamples: number;
-        velocityPoints: number[];
-        commentsSum: number;
-      }>();
+      const dailyBuckets = new Map<
+        string,
+        {
+          postCount: number;
+          engagementSum: number;
+          engagementSamples: number;
+          velocityPoints: number[];
+          commentsSum: number;
+        }
+      >();
       const seenPostKeys = new Set<string>();
-      const uniquePosts = new Map<string, { utcId: string; dayKey: string; fallbackEngagement: number }>();
+      const uniquePosts = new Map<
+        string,
+        { utcId: string; dayKey: string; fallbackEngagement: number }
+      >();
 
       // Set window based on configured analysis period, not scan availability.
       // This ensures we capture all posts within the analysis window regardless of when scans were collected.
-      const analysisDays = await this.getTrendAnalysisDays(subreddit);
       const windowEnd = Date.now();
-      const windowStart = windowEnd - (analysisDays * 24 * 60 * 60 * 1000);
-      console.log(`[TRENDS] Using ${analysisDays}-day analysis window: ${new Date(windowStart).toISOString()} to ${new Date(windowEnd).toISOString()}`);
+      const windowStart = windowEnd - analysisDays * 24 * 60 * 60 * 1000;
+      console.log(
+        `[TRENDS] Using ${analysisDays}-day analysis window: ${new Date(windowStart).toISOString()} to ${new Date(windowEnd).toISOString()}`
+      );
 
       // PHASE 2: Pool decomposition - hydrate posts from scan pools
-      console.log(`[TRENDS] Phase 2: Pool decomposition for ${retainedScans.length} scans`);
+      console.log(
+        `[TRENDS] Phase 2: Pool decomposition for ${retainedScans.length} scans`
+      );
       for (const scan of retainedScans) {
         const analysisPool = await this.getAnalysisPool(scan.scanId);
         if (analysisPool.length === 0) continue;
@@ -758,11 +830,16 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
               seenPostKeys.add(postKey);
 
               const createdUtcMs = Number(post.created_utc) * 1000;
-              if (!Number.isFinite(createdUtcMs) || createdUtcMs < windowStart || createdUtcMs > windowEnd) {
+              if (
+                !Number.isFinite(createdUtcMs) ||
+                createdUtcMs < windowStart ||
+                createdUtcMs > windowEnd
+              ) {
                 continue;
               }
 
-              const dayKey = new Date(createdUtcMs).toISOString().split('T')[0] ?? '';
+              const dayKey =
+                new Date(createdUtcMs).toISOString().split('T')[0] ?? '';
               if (!dayKey) continue;
 
               if (!dailyBuckets.has(dayKey)) {
@@ -784,17 +861,21 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
               uniquePosts.set(postKey, {
                 utcId,
                 dayKey,
-                fallbackEngagement: Number(post.engagement_score ?? post.score ?? 0),
+                fallbackEngagement: Number(
+                  post.engagement_score ?? post.score ?? 0
+                ),
               });
             } catch (e) {
               console.warn(`[TRENDS] Failed to hydrate post: ${e}`);
             }
           }
-          await new Promise(r => setTimeout(r, 20));
+          await new Promise((r) => setTimeout(r, 20));
         }
       }
 
-      console.log(`[TRENDS] Phase 2 complete: ${dailyBuckets.size} daily buckets, ${uniquePosts.size} unique posts`);
+      console.log(
+        `[TRENDS] Phase 2 complete: ${dailyBuckets.size} daily buckets, ${uniquePosts.size} unique posts`
+      );
 
       // PHASE 3: Time-series velocity extraction
       console.log(`[TRENDS] Phase 3: Time-series velocity extraction`);
@@ -810,7 +891,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
             const velocityStats = await this.calculateAverageVelocityForPost(
               entry.utcId,
               windowStart,
-              windowEnd,
+              windowEnd
             );
 
             if (velocityStats) {
@@ -828,7 +909,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
             console.warn(`[TRENDS] Failed to extract velocity: ${e}`);
           }
         }
-        await new Promise(r => setTimeout(r, 20));
+        await new Promise((r) => setTimeout(r, 20));
       }
 
       console.log(`[TRENDS] Phase 3 complete`);
@@ -842,12 +923,15 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
       for (const date of sortedDates) {
         const bucket = dailyBuckets.get(date)!;
 
-        const avgEngagement = bucket.engagementSamples > 0
-          ? bucket.engagementSum / bucket.engagementSamples
-          : 0;
-        const avgVelocity = bucket.velocityPoints.length > 0
-          ? bucket.velocityPoints.reduce((sum, v) => sum + v, 0) / bucket.velocityPoints.length
-          : 0;
+        const avgEngagement =
+          bucket.engagementSamples > 0
+            ? bucket.engagementSum / bucket.engagementSamples
+            : 0;
+        const avgVelocity =
+          bucket.velocityPoints.length > 0
+            ? bucket.velocityPoints.reduce((sum, v) => sum + v, 0) /
+              bucket.velocityPoints.length
+            : 0;
 
         const timestamp = new Date(date).getTime();
         engagementData.push({
@@ -860,7 +944,9 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
         });
       }
 
-      console.log(`[TRENDS] Phase 4 complete: ${engagementData.length} daily aggregates`);
+      console.log(
+        `[TRENDS] Phase 4 complete: ${engagementData.length} daily aggregates`
+      );
 
       // PHASE 5: Write output
       console.log(`[TRENDS] Phase 5: Writing engagement trend output`);
@@ -876,10 +962,10 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
       const elapsed = Date.now() - stageStart;
       console.error(
         `[TRENDS] ❌ 5-phase engagement materialization failed for r/${subreddit} after ${elapsed}ms:`,
-        error,
+        error
       );
       throw new Error(
-        `5-phase engagement materialization failed: ${error instanceof Error ? error.message : String(error)}`,
+        `5-phase engagement materialization failed: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   }
@@ -889,7 +975,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
    */
   private async writeEngagementOverTimeData(
     subreddit: string,
-    data: Array<{ timestamp: number; value: number }>,
+    data: Array<{ timestamp: number; value: number }>
   ): Promise<void> {
     const zsetKey = `trends:${subreddit}:engagement_avg`;
 
@@ -903,7 +989,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
       (point) => ({
         score: point.timestamp,
         member: `${point.timestamp}:${point.value}`,
-      }),
+      })
     );
 
     // Batch write in chunks to avoid Redis command size limits
@@ -918,7 +1004,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
 
   private async writeEngagementVelocityData(
     subreddit: string,
-    data: Array<{ timestamp: number; value: number }>,
+    data: Array<{ timestamp: number; value: number }>
   ): Promise<void> {
     const zsetKey = `trends:${subreddit}:engagement_velocity`;
     if (data.length === 0) {
@@ -942,7 +1028,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
    */
   private async detectEngagementAnomalies(
     subreddit: string,
-    engagementData: Array<{ timestamp: number; value: number }>,
+    engagementData: Array<{ timestamp: number; value: number }>
   ): Promise<void> {
     if (engagementData.length < 3) {
       return;
@@ -983,7 +1069,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
    */
   private async writeEngagementAnomalies(
     subreddit: string,
-    anomalies: Record<string, string>,
+    anomalies: Record<string, string>
   ): Promise<void> {
     const hashKey = `trends:${subreddit}:engagement_anomalies`;
 
@@ -1001,15 +1087,21 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
   private async materializeContentMix(
     subreddit: string,
     retainedScans: Array<{ scanId: number; timestamp: number }>,
+    analysisDays: number
   ): Promise<void> {
     const stageStart = Date.now();
     console.log(
-      `[TRENDS] Starting content mix calculation for ${retainedScans.length} scans`,
+      `[TRENDS] Starting content mix calculation for ${retainedScans.length} scans`
     );
 
     try {
+      const dayMs = 24 * 60 * 60 * 1000;
+      const windowEnd = Date.now();
+      const windowStart = windowEnd - analysisDays * dayMs;
+
       const allFlairs = new Set<string>();
       const dailyFlairDistributions = new Map<number, Record<string, number>>();
+      const seenPostKeys = new Set<string>();
 
       const flairCollector = async (scan: {
         scanId: number;
@@ -1018,15 +1110,30 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
         try {
           const analysisPool = await this.getAnalysisPool(scan.scanId);
 
-          const uniquePosts = Array.from(new Map(
-            analysisPool.map((post) => [post.url, post]),
-          ).values());
+          const uniquePosts = Array.from(
+            new Map(analysisPool.map((post) => [post.url, post])).values()
+          );
 
           for (const post of uniquePosts) {
+            const postKey = this.resolvePostIdentityKey(post);
+            if (seenPostKeys.has(postKey)) {
+              continue;
+            }
+
+            const createdUtcMs = Number(post.created_utc) * 1000;
+            if (
+              !Number.isFinite(createdUtcMs) ||
+              createdUtcMs < windowStart ||
+              createdUtcMs > windowEnd
+            ) {
+              continue;
+            }
+
+            seenPostKeys.add(postKey);
             const flair = post.flair || 'No Flair';
             allFlairs.add(flair);
 
-            const dayTimestamp = this.getUtcDayTimestamp(post.created_utc * 1000);
+            const dayTimestamp = this.getUtcDayTimestamp(createdUtcMs);
             const dayFlairs = dailyFlairDistributions.get(dayTimestamp) || {};
             dayFlairs[flair] = (dayFlairs[flair] ?? 0) + 1;
             dailyFlairDistributions.set(dayTimestamp, dayFlairs);
@@ -1036,7 +1143,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
         } catch (error) {
           console.warn(
             `[TRENDS] Failed to read scan data for ${scan.scanId}:`,
-            error,
+            error
           );
           return 0;
         }
@@ -1046,27 +1153,31 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
         retainedScans,
         10, // Batch size for flair collection
         flairCollector,
-        'Flair collection',
+        'Flair collection'
       );
 
       console.log(`[TRENDS] Found ${allFlairs.size} unique flairs`);
 
       const flairDistributions = Array.from(dailyFlairDistributions.entries())
         .map(([timestamp, flairs]) => {
-          const totalForDay = Object.values(flairs).reduce((sum, count) => sum + count, 0);
+          const totalForDay = Object.values(flairs).reduce(
+            (sum, count) => sum + count,
+            0
+          );
           const normalizedFlairs: Record<string, number> = {};
           for (const flair of allFlairs) {
             const rawCount = flairs[flair] ?? 0;
-            normalizedFlairs[flair] = totalForDay > 0
-              ? Math.round((rawCount / totalForDay) * 10_000) / 10_000
-              : 0;
+            normalizedFlairs[flair] =
+              totalForDay > 0
+                ? Math.round((rawCount / totalForDay) * 10_000) / 10_000
+                : 0;
           }
           return { timestamp, flairs: normalizedFlairs };
         })
         .sort((a, b) => a.timestamp - b.timestamp);
 
       console.log(
-        `[TRENDS] Calculated flair distributions for ${flairDistributions.length} daily buckets`,
+        `[TRENDS] Calculated flair distributions for ${flairDistributions.length} daily buckets`
       );
 
       // Write daily flair distributions to Redis for API access
@@ -1081,10 +1192,10 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
       const elapsed = Date.now() - stageStart;
       console.error(
         `[TRENDS] ❌ Content mix calculation failed for r/${subreddit} after ${elapsed}ms:`,
-        error,
+        error
       );
       throw new Error(
-        `Content mix calculation failed: ${error instanceof Error ? error.message : String(error)}`,
+        `Content mix calculation failed: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   }
@@ -1094,7 +1205,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
    */
   private async writeContentMixData(
     subreddit: string,
-    data: Array<{ timestamp: number; flairs: Record<string, number> }>,
+    data: Array<{ timestamp: number; flairs: Record<string, number> }>
   ): Promise<void> {
     const zsetKey = `trends:${subreddit}:content_mix`;
 
@@ -1120,7 +1231,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
    */
   private async writeContentMixRecap(
     subreddit: string,
-    recap: string,
+    recap: string
   ): Promise<void> {
     // SET is idempotent - it overwrites existing value
     await this.redis.set(`trends:${subreddit}:content_mix_recap`, recap);
@@ -1130,7 +1241,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
    * Generate natural language recap for content mix changes
    */
   private generateContentMixRecap(
-    distributions: Array<{ timestamp: number; flairs: Record<string, number> }>,
+    distributions: Array<{ timestamp: number; flairs: Record<string, number> }>
   ): string {
     if (distributions.length < 2) {
       return 'Not enough data to analyze content mix changes.';
@@ -1151,7 +1262,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
     for (const dist of historical) {
       const totalPosts = Object.values(dist.flairs).reduce(
         (sum, count) => sum + count,
-        0,
+        0
       );
       historicalPostCount += totalPosts;
 
@@ -1164,7 +1275,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
     for (const dist of recent) {
       const totalPosts = Object.values(dist.flairs).reduce(
         (sum, count) => sum + count,
-        0,
+        0
       );
       recentPostCount += totalPosts;
 
@@ -1215,15 +1326,17 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
     }
   }
   /**
-   * Subtask 6.1.6: Implement posting activity heatmap calculation with rolling window bucketing (days 1-15 vs 16-30)
+   * Subtask 6.1.6: Implement posting activity heatmap calculation with dynamic
+   * rolling windows derived from configured trendAnalysisDays.
    */
   private async materializePostingHeatmap(
     subreddit: string,
     retainedScans: Array<{ scanId: number; timestamp: number }>,
+    analysisDays: number
   ): Promise<void> {
     const stageStart = Date.now();
     console.log(
-      `[TRENDS] Starting posting heatmap calculation for ${retainedScans.length} scans`,
+      `[TRENDS] Starting posting heatmap calculation for ${retainedScans.length} scans`
     );
 
     try {
@@ -1231,34 +1344,50 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
         return;
       }
 
-      // Sort scans by timestamp (newest first)
-      const sortedScans = [...retainedScans].sort(
-        (a, b) => b.timestamp - a.timestamp,
-      );
-      if (sortedScans.length === 0) {
-        return;
-      }
-
-      const latestScan = sortedScans[0];
-      if (!latestScan) {
-        return;
-      }
-
-      // Define rolling windows: days 1-15 (recent) vs days 16-30 (historical)
       const dayMs = 24 * 60 * 60 * 1000;
-      const recentCutoff = latestScan.timestamp - 15 * dayMs;
-      const historicalCutoff = latestScan.timestamp - 30 * dayMs;
+      const windowEnd = Date.now();
+      const windowStart = windowEnd - analysisDays * dayMs;
+      const recentWindowDays = Math.max(1, Math.ceil(analysisDays / 2));
+      const historicalWindowDays = Math.max(1, analysisDays - recentWindowDays);
+      const recentCutoff = windowEnd - recentWindowDays * dayMs;
 
-      const recentScans = sortedScans.filter(
-        (scan) => scan.timestamp >= recentCutoff,
+      // Build a unique post pool across retained scans and bucket by post date,
+      // not snapshot date.
+      const uniquePostsByKey = new Map<string, PostData>();
+      for (const scan of retainedScans) {
+        const analysisPool = await this.getAnalysisPool(scan.scanId);
+        if (analysisPool.length === 0) {
+          continue;
+        }
+
+        for (const post of analysisPool) {
+          const createdUtcMs = Number(post.created_utc) * 1000;
+          if (
+            !Number.isFinite(createdUtcMs) ||
+            createdUtcMs < windowStart ||
+            createdUtcMs > windowEnd
+          ) {
+            continue;
+          }
+
+          const postKey = this.resolvePostIdentityKey(post);
+          if (!uniquePostsByKey.has(postKey)) {
+            uniquePostsByKey.set(postKey, post);
+          }
+        }
+      }
+
+      const allWindowPosts = Array.from(uniquePostsByKey.values());
+      const recentPosts = allWindowPosts.filter(
+        (post) => Number(post.created_utc) * 1000 >= recentCutoff
       );
-      const historicalScans = sortedScans.filter(
-        (scan) =>
-          scan.timestamp >= historicalCutoff && scan.timestamp < recentCutoff,
-      );
+      const historicalPosts = allWindowPosts.filter((post) => {
+        const createdUtcMs = Number(post.created_utc) * 1000;
+        return createdUtcMs >= windowStart && createdUtcMs < recentCutoff;
+      });
 
       console.log(
-        `[TRENDS] Processing ${recentScans.length} recent scans and ${historicalScans.length} historical scans`,
+        `[TRENDS] Processing ${recentPosts.length} recent posts (${recentWindowDays}d) and ${historicalPosts.length} historical posts (${historicalWindowDays}d)`
       );
 
       // Initialize heatmap buckets (7 days × 24 hours = 168 buckets)
@@ -1274,25 +1403,28 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
       }
 
       // Process recent window
-      await this.bucketPostsByTime(recentScans, recentBuckets, 'Recent window');
+      await this.bucketPostsByTime(recentPosts, recentBuckets, 'Recent window');
 
       // Check timeout before processing historical window
       if (this.isApproachingTimeout()) {
         console.warn(
-          '[TRENDS] Timeout approaching, skipping historical window processing',
+          '[TRENDS] Timeout approaching, skipping historical window processing'
         );
         throw new Error('Timeout approaching during heatmap calculation');
       }
 
       // Process historical window
       await this.bucketPostsByTime(
-        historicalScans,
+        historicalPosts,
         historicalBuckets,
-        'Historical window',
+        'Historical window'
       );
 
       // Calculate per-bin structure (recent vs historical + delta + velocity)
-      const heatmapBins: Record<string, { countA: number; countB: number; delta: number; velocity: number }> = {};
+      const heatmapBins: Record<
+        string,
+        { countA: number; countB: number; delta: number; velocity: number }
+      > = {};
       for (const bucket of Object.keys(recentBuckets)) {
         const recentValue = recentBuckets[bucket] ?? 0;
         const historicalValue = historicalBuckets[bucket] ?? 0;
@@ -1301,12 +1433,12 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
           countA: recentValue,
           countB: historicalValue,
           delta,
-          velocity: Math.round((delta / 15) * 1000) / 1000,
+          velocity: Math.round((delta / recentWindowDays) * 1000) / 1000,
         };
       }
 
       console.log(
-        `[TRENDS] Calculated posting heatmap bins for ${Object.keys(heatmapBins).length} time buckets`,
+        `[TRENDS] Calculated posting heatmap bins for ${Object.keys(heatmapBins).length} time buckets`
       );
 
       // Store heatmap data with idempotent semantics
@@ -1315,7 +1447,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
       // Generate and store posting pattern recap with idempotent semantics
       const recap = this.generatePostingPatternRecap(
         recentBuckets,
-        historicalBuckets,
+        historicalBuckets
       );
       await this.writePostingPatternRecap(subreddit, recap);
 
@@ -1324,10 +1456,10 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
       const elapsed = Date.now() - stageStart;
       console.error(
         `[TRENDS] ❌ Posting heatmap calculation failed for r/${subreddit} after ${elapsed}ms:`,
-        error,
+        error
       );
       throw new Error(
-        `Posting heatmap calculation failed: ${error instanceof Error ? error.message : String(error)}`,
+        `Posting heatmap calculation failed: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   }
@@ -1337,7 +1469,10 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
    */
   private async writePostingHeatmap(
     subreddit: string,
-    heatmapBins: Record<string, { countA: number; countB: number; delta: number; velocity: number }>,
+    heatmapBins: Record<
+      string,
+      { countA: number; countB: number; delta: number; velocity: number }
+    >
   ): Promise<void> {
     const hashKey = `trends:${subreddit}:posting_heatmap`;
 
@@ -1355,7 +1490,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
    */
   private async writePostingPatternRecap(
     subreddit: string,
-    recap: string,
+    recap: string
   ): Promise<void> {
     // SET is idempotent - it overwrites existing value
     await this.redis.set(`trends:${subreddit}:posting_pattern_recap`, recap);
@@ -1365,61 +1500,28 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
    * Bucket posts by day-of-week and hour in UTC
    */
   private async bucketPostsByTime(
-    scans: Array<{ scanId: number; timestamp: number }>,
+    posts: PostData[],
     buckets: Record<string, number>,
-    windowName: string = 'Window',
+    windowName: string = 'Window'
   ): Promise<void> {
     console.log(
-      `[TRENDS] ${windowName}: Processing ${scans.length} scans for time bucketing`,
+      `[TRENDS] ${windowName}: Processing ${posts.length} posts for time bucketing`
     );
 
-    const scanProcessor = async (scan: {
-      scanId: number;
-      timestamp: number;
-    }) => {
-      try {
-          const analysisPool = await this.getAnalysisPool(scan.scanId);
+    let totalPosts = 0;
+    for (const post of posts) {
+      const postDate = new Date(post.created_utc * 1000);
+      const dayOfWeek = postDate.getUTCDay(); // 0 = Sunday
+      const hour = postDate.getUTCHours();
+      const bucket = `${TrendingService.DAYNAMES[dayOfWeek]}-${hour.toString().padStart(2, '0')}`;
 
-          if (analysisPool.length === 0) {
-            return 0;
-          }
-
-        let postsProcessed = 0;
-        for (const post of analysisPool) {
-          const postDate = new Date(post.created_utc * 1000);
-          const dayOfWeek = postDate.getUTCDay(); // 0 = Sunday
-          const hour = postDate.getUTCHours();
-
-          const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-          const bucket = `${dayNames[dayOfWeek]}-${hour.toString().padStart(2, '0')}`;
-
-          if (Object.prototype.hasOwnProperty.call(buckets, bucket)) {
-            buckets[bucket] = (buckets[bucket] ?? 0) + 1;
-            postsProcessed++;
-          }
-        }
-
-        return postsProcessed;
-      } catch (error) {
-        console.warn(
-          `[TRENDS] Failed to bucket posts for scan ${scan.scanId}:`,
-          error,
-        );
-        return 0;
+      if (Object.prototype.hasOwnProperty.call(buckets, bucket)) {
+        buckets[bucket] = (buckets[bucket] ?? 0) + 1;
+        totalPosts++;
       }
-    };
+    }
 
-    const results = await this.executeBatched(
-      scans,
-      8, // Batch size for scan processing
-      scanProcessor,
-      `${windowName} time bucketing`,
-    );
-
-    const totalPosts = results.reduce((sum, count) => sum + count, 0);
-    console.log(
-      `[TRENDS] ${windowName}: Processed ${totalPosts} posts across ${scans.length} scans`,
-    );
+    console.log(`[TRENDS] ${windowName}: Processed ${totalPosts} posts`);
   }
 
   /**
@@ -1427,7 +1529,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
    */
   private generatePostingPatternRecap(
     recentBuckets: Record<string, number>,
-    historicalBuckets: Record<string, number>,
+    historicalBuckets: Record<string, number>
   ): string {
     // Group buckets by weekday vs weekend
     let recentWeekday = 0,
@@ -1526,36 +1628,183 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
   private async materializeGlobalAggregates(
     subreddit: string,
     retainedScans: Array<{ scanId: number; timestamp: number }>,
+    trendAnalysisDays: number
   ): Promise<void> {
     const stageStart = Date.now();
-    console.log(`[TRENDS] Materializing global aggregates for ${retainedScans.length} scans`);
+    console.log(
+      `[TRENDS] Materializing global aggregates for ${retainedScans.length} scans`
+    );
     try {
       console.log(
-        `[TRENDS] Starting global aggregates calculation for ${retainedScans.length} scans`,
+        `[TRENDS] Starting global aggregates calculation for ${retainedScans.length} scans`
       );
 
       if (retainedScans.length === 0) return;
 
       const stopWords = new Set([
-        'an', 'at', 'as', 'a', 'and', 'for', 'with', 'got', 'here', 'from', 'about',
-        'quiz', 'trivia', 'knowledge', 'games', 'game', 'questions', 'question',
-        'answers', 'answer', 'test', 'challenge', 'round', 'results', 'score',
-        'random', 'general', 'discussion', 'opinion', 'help', 'easy', 'medium',
-        'harder', 'easier', 'hardest', 'easiest', 'hard', 'advanced', 'beginner',
-        'levels', 'level', 'short', 'long', 'large', 'small', 'tiny', 'today',
-        'modern', 'classic', 'forgotten', 'popular', 'famous', 'edition', 'version',
-        'parts', 'part', 'series', 'episode', 'your', 'you', 'but', 'not', 'have',
-        'has', 'had', 'does', 'do', 'did', 'is', 'if', 'know', 'was', 'were',
-        'what', 'where', 'while', 'when', 'until', 'new', 'fun', 'lets', 'this',
-        'these', 'those', 'there', 'their', 'they', 'them', 'how', 'find', 'enjoy',
-        'let', 'been', 'being', 'be', 'are', 'all', 'guess', 'can', 'could',
-        'should', 'would', 'may', 'might', 'must', 'my', 'mine', 'me', 'we', 'us',
-        'ours', 'our', 'he', 'him', 'his', 'she', 'hers', 'her', 'its', 'it', 'into',
-        'in', 'by', 'to', 'off', 'of', 'or', 'so', 'that', 'one', 'on', 'will',
-        'shall', 'who', 'which', 'out', 'over', 'under', 'up', 'down', 'day', 'now',
-        'todays', 'name', 'play', 'start', 'top', 'old', 'quick', 'basic', 'lowest',
-        'weird', 'odd', 'pointless', 'some', 'than', 'then', 'get', 'because', 'the',
-        'gooo', 'go', 'dropped'
+        'an',
+        'at',
+        'as',
+        'a',
+        'and',
+        'for',
+        'with',
+        'got',
+        'here',
+        'from',
+        'about',
+        'quiz',
+        'trivia',
+        'knowledge',
+        'games',
+        'game',
+        'questions',
+        'question',
+        'answers',
+        'answer',
+        'test',
+        'challenge',
+        'round',
+        'results',
+        'score',
+        'random',
+        'general',
+        'discussion',
+        'opinion',
+        'help',
+        'easy',
+        'medium',
+        'harder',
+        'easier',
+        'hardest',
+        'easiest',
+        'hard',
+        'advanced',
+        'beginner',
+        'levels',
+        'level',
+        'short',
+        'long',
+        'large',
+        'small',
+        'tiny',
+        'today',
+        'modern',
+        'classic',
+        'forgotten',
+        'popular',
+        'famous',
+        'edition',
+        'version',
+        'parts',
+        'part',
+        'series',
+        'episode',
+        'your',
+        'you',
+        'but',
+        'not',
+        'have',
+        'has',
+        'had',
+        'does',
+        'do',
+        'did',
+        'is',
+        'if',
+        'know',
+        'was',
+        'were',
+        'what',
+        'where',
+        'while',
+        'when',
+        'until',
+        'new',
+        'fun',
+        'lets',
+        'this',
+        'these',
+        'those',
+        'there',
+        'their',
+        'they',
+        'them',
+        'how',
+        'find',
+        'enjoy',
+        'let',
+        'been',
+        'being',
+        'be',
+        'are',
+        'all',
+        'guess',
+        'can',
+        'could',
+        'should',
+        'would',
+        'may',
+        'might',
+        'must',
+        'my',
+        'mine',
+        'me',
+        'we',
+        'us',
+        'ours',
+        'our',
+        'he',
+        'him',
+        'his',
+        'she',
+        'hers',
+        'her',
+        'its',
+        'it',
+        'into',
+        'in',
+        'by',
+        'to',
+        'off',
+        'of',
+        'or',
+        'so',
+        'that',
+        'one',
+        'on',
+        'will',
+        'shall',
+        'who',
+        'which',
+        'out',
+        'over',
+        'under',
+        'up',
+        'down',
+        'day',
+        'now',
+        'todays',
+        'name',
+        'play',
+        'start',
+        'top',
+        'old',
+        'quick',
+        'basic',
+        'lowest',
+        'weird',
+        'odd',
+        'pointless',
+        'some',
+        'than',
+        'then',
+        'get',
+        'because',
+        'the',
+        'gooo',
+        'go',
+        'dropped',
       ]);
 
       const globalWordCloud: Record<string, number> = {};
@@ -1567,7 +1816,10 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
       let totalAvgScore = 0;
       let statsCount = 0;
 
-      const scanProcessor = async (scan: { scanId: number; timestamp: number }) => {
+      const scanProcessor = async (scan: {
+        scanId: number;
+        timestamp: number;
+      }) => {
         try {
           // Accumulate global stats
           const stats = await this.redis.hGetAll(`run:${scan.scanId}:stats`);
@@ -1578,7 +1830,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
               c: parseFloat(stats.comments_per_day),
               e: parseFloat(stats.avg_engagement || '0'),
               s: parseFloat(stats.avg_score || '0'),
-              scanId: scan.scanId
+              scanId: scan.scanId,
             };
           }
           return null;
@@ -1587,21 +1839,35 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
         }
       };
 
-      const scanPoolProcessor = async (scan: { scanId: number; timestamp: number }) => {
+      const scanPoolProcessor = async (scan: {
+        scanId: number;
+        timestamp: number;
+      }) => {
         try {
           const pool = await this.getAnalysisPool(scan.scanId);
-          console.log(`[TRENDS] Analysis pool for global aggregates scan #${scan.scanId}: ${pool.length} posts`);
+          console.log(
+            `[TRENDS] Analysis pool for global aggregates scan #${scan.scanId}: ${pool.length} posts`
+          );
 
           const scanWordCloud: Record<string, number> = {};
           // Unique posts by URL
-          const uniquePosts = Array.from(new Map(pool.map(p => [p.url, p])).values());
+          const uniquePosts = Array.from(
+            new Map(pool.map((p) => [p.url, p])).values()
+          );
 
           for (const post of uniquePosts) {
             // Word cloud
-            const text = (post.title || '').replace(/[^\w\s']/g, ' ').toLowerCase();
+            const text = (post.title || '')
+              .replace(/[^\w\s']/g, ' ')
+              .toLowerCase();
             const words = text.split(/\s+/);
             for (const word of words) {
-              if (word && word.length > 2 && !stopWords.has(word) && isNaN(Number(word))) {
+              if (
+                word &&
+                word.length > 2 &&
+                !stopWords.has(word) &&
+                isNaN(Number(word))
+              ) {
                 scanWordCloud[word] = (scanWordCloud[word] || 0) + 1;
               }
             }
@@ -1614,8 +1880,18 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
       };
 
       const [statsResults, poolResults] = await Promise.all([
-        this.executeBatched(retainedScans, 10, scanProcessor, 'Global Stats collection'),
-        this.executeBatched(retainedScans, 5, scanPoolProcessor, 'Global Post Pool collection')
+        this.executeBatched(
+          retainedScans,
+          10,
+          scanProcessor,
+          'Global Stats collection'
+        ),
+        this.executeBatched(
+          retainedScans,
+          5,
+          scanPoolProcessor,
+          'Global Post Pool collection'
+        ),
       ]);
 
       for (const res of statsResults) {
@@ -1641,10 +1917,10 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
 
       // Finalize Stats
       const finalStats = {
-        posts_per_day: statsCount > 0 ? (totalPostsPerDay / statsCount) : 0,
-        comments_per_day: statsCount > 0 ? (totalCommentsPerDay / statsCount) : 0,
-        avg_engagement: statsCount > 0 ? (totalAvgEngagement / statsCount) : 0,
-        avg_score: statsCount > 0 ? (totalAvgScore / statsCount) : 0,
+        posts_per_day: statsCount > 0 ? totalPostsPerDay / statsCount : 0,
+        comments_per_day: statsCount > 0 ? totalCommentsPerDay / statsCount : 0,
+        avg_engagement: statsCount > 0 ? totalAvgEngagement / statsCount : 0,
+        avg_score: statsCount > 0 ? totalAvgScore / statsCount : 0,
       };
 
       // Finalize Word Cloud
@@ -1657,21 +1933,36 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
 
       // Finalize velocity-driven best posting times from consolidated unique posts.
       const combinedPosts = Array.from(combinedPostsByKey.values());
+
+      const latestTimestamp = retainedScans.reduce(
+        (max, s) => Math.max(max, s.timestamp),
+        0
+      );
+      const globalWindowStart =
+        latestTimestamp - trendAnalysisDays * 24 * 60 * 60 * 1000;
+      const windowedCombinedPosts = combinedPosts.filter((post) => {
+        const createdUtcMs = Number(post.created_utc) * 1000;
+        return (
+          Number.isFinite(createdUtcMs) &&
+          createdUtcMs >= globalWindowStart &&
+          createdUtcMs <= latestTimestamp
+        );
+      });
       const slotCounts: Record<string, number> = {};
-      for (const post of combinedPosts) {
+      for (const post of windowedCombinedPosts) {
         const dt = new Date(post.created_utc * 1000);
         const slot = `${TrendingService.DAYNAMES[dt.getUTCDay()]}-${dt.getUTCHours().toString().padStart(2, '0')}`;
         slotCounts[slot] = (slotCounts[slot] || 0) + 1;
       }
-
-      const trendAnalysisDays = await this.getTrendAnalysisDays(subreddit);
-      const latestTimestamp = retainedScans.reduce((max, s) => Math.max(max, s.timestamp), 0);
       const velocityByPost = await this.buildVelocityMapForPosts(
-        combinedPosts,
-        latestTimestamp - trendAnalysisDays * 24 * 60 * 60 * 1000,
-        latestTimestamp,
+        windowedCombinedPosts,
+        globalWindowStart,
+        latestTimestamp
       );
-      const slotScores = this.calculateSlotScores(combinedPosts, velocityByPost);
+      const slotScores = this.calculateSlotScores(
+        windowedCombinedPosts,
+        velocityByPost
+      );
 
       const finalBestPostingTimes = Object.entries(slotScores)
         .map(([slot, score]) => {
@@ -1693,14 +1984,20 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
       const payload = {
         globalWordCloud: finalWordCloud,
         globalBestPostingTimes: finalBestPostingTimes,
-        globalStats: finalStats
+        globalStats: finalStats,
       };
 
-      await this.redis.set(`trends:${subreddit}:global_aggregates`, JSON.stringify(payload));
+      await this.redis.set(
+        `trends:${subreddit}:global_aggregates`,
+        JSON.stringify(payload)
+      );
 
       this.logStageTime('Global aggregates materialization', stageStart);
     } catch (error) {
-      console.error(`[TRENDS] ❌ Global aggregates calculation failed for r/${subreddit}:`, error);
+      console.error(
+        `[TRENDS] ❌ Global aggregates calculation failed for r/${subreddit}:`,
+        error
+      );
     }
   }
 
@@ -1710,13 +2007,16 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
   private async materializeBestPostingTimes(
     subreddit: string,
     retainedScans: Array<{ scanId: number; timestamp: number }>,
+    analysisDays: number
   ): Promise<void> {
     const stageStart = Date.now();
     console.log(
-      `[TRENDS] Starting best posting times calculation for ${retainedScans.length} scans`,
+      `[TRENDS] Starting best posting times calculation for ${retainedScans.length} scans`
     );
     if (retainedScans.length < 2) {
-      console.warn(`[TRENDS] Only ${retainedScans.length} scans found. Best posting times change analysis requires at least 2 for trend detection.`);
+      console.warn(
+        `[TRENDS] Only ${retainedScans.length} scans found. Best posting times change analysis requires at least 2 for trend detection.`
+      );
     }
 
     try {
@@ -1724,8 +2024,6 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
         timestamp: number;
         topSlots: Array<{ dayHour: string; score: number }>;
       }> = [];
-
-      const analysisDays = await this.getTrendAnalysisDays(subreddit);
 
       // Process each scan to calculate slot scores with batching
       const scanProcessor = async (scan: {
@@ -1742,12 +2040,28 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
           // Calculate slot scores for this scan using velocity-driven signal.
           const windowEnd = scan.timestamp;
           const windowStart = windowEnd - analysisDays * 24 * 60 * 60 * 1000;
+          const windowedAnalysisPool = analysisPool.filter((post) => {
+            const createdUtcMs = Number(post.created_utc) * 1000;
+            return (
+              Number.isFinite(createdUtcMs) &&
+              createdUtcMs >= windowStart &&
+              createdUtcMs <= windowEnd
+            );
+          });
+
+          if (windowedAnalysisPool.length === 0) {
+            return null;
+          }
+
           const velocityByPost = await this.buildVelocityMapForPosts(
-            analysisPool,
+            windowedAnalysisPool,
             windowStart,
-            windowEnd,
+            windowEnd
           );
-          const slotScores = this.calculateSlotScores(analysisPool, velocityByPost);
+          const slotScores = this.calculateSlotScores(
+            windowedAnalysisPool,
+            velocityByPost
+          );
 
           // Store per-scan slot scores
           const hashKey = `trends:${subreddit}:best_times:${scan.scanId}`;
@@ -1773,7 +2087,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
         } catch (error) {
           console.warn(
             `[TRENDS] Failed to calculate best times for scan ${scan.scanId}:`,
-            error,
+            error
           );
           return null;
         }
@@ -1783,7 +2097,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
         retainedScans,
         6, // Batch size for best times calculation
         scanProcessor,
-        'Best posting times calculation',
+        'Best posting times calculation'
       );
 
       // Filter out null results
@@ -1794,7 +2108,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
       }
 
       console.log(
-        `[TRENDS] Calculated best times for ${timelineData.length} scans`,
+        `[TRENDS] Calculated best times for ${timelineData.length} scans`
       );
 
       // Analyze changes over time
@@ -1805,11 +2119,11 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
       await Promise.all([
         this.redis.set(
           `trends:${subreddit}:best_times_timeline`,
-          JSON.stringify(timelineData),
+          JSON.stringify(timelineData)
         ),
         this.redis.set(
           `trends:${subreddit}:best_times_changes`,
-          JSON.stringify(changeSummary),
+          JSON.stringify(changeSummary)
         ),
       ]);
 
@@ -1818,10 +2132,10 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
       const elapsed = Date.now() - stageStart;
       console.error(
         `[TRENDS] ❌ Best posting times calculation failed for r/${subreddit} after ${elapsed}ms:`,
-        error,
+        error
       );
       throw new Error(
-        `Best posting times calculation failed: ${error instanceof Error ? error.message : String(error)}`,
+        `Best posting times calculation failed: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   }
@@ -1831,12 +2145,10 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
    */
   private calculateSlotScores(
     posts: PostData[],
-    velocityByPost: Record<string, number> = {},
+    velocityByPost: Record<string, number> = {}
   ): Record<string, number> {
-    const slotData: Record<
-      string,
-      { totalSignal: number; postCount: number }
-    > = {};
+    const slotData: Record<string, { totalSignal: number; postCount: number }> =
+      {};
 
     // Initialize all slots
     for (let day = 0; day < 7; day++) {
@@ -1859,9 +2171,10 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
       if (slotData[slot]) {
         const postKey = this.resolvePostIdentityKey(post);
         const velocitySignal = velocityByPost[postKey];
-        const signal = (typeof velocitySignal === 'number' && Number.isFinite(velocitySignal))
-          ? velocitySignal
-          : Number(post.engagement_score || post.score || 0);
+        const signal =
+          typeof velocitySignal === 'number' && Number.isFinite(velocitySignal)
+            ? velocitySignal
+            : Number(post.engagement_score || post.score || 0);
 
         slotData[slot].totalSignal += signal;
         slotData[slot].postCount++;
@@ -1886,7 +2199,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
   private async buildVelocityMapForPosts(
     posts: PostData[],
     windowStart: number,
-    windowEnd: number,
+    windowEnd: number
   ): Promise<Record<string, number>> {
     const velocityByPost: Record<string, number> = {};
     const chunkSize = 25;
@@ -1899,7 +2212,11 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
 
         try {
           const utcId = this.resolvePostUtcId(post);
-          const stats = await this.calculateAverageVelocityForPost(utcId, windowStart, windowEnd);
+          const stats = await this.calculateAverageVelocityForPost(
+            utcId,
+            windowStart,
+            windowEnd
+          );
           if (stats && Number.isFinite(stats.avgVelocity)) {
             velocityByPost[postKey] = stats.avgVelocity;
           }
@@ -1920,7 +2237,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
     timelineData: Array<{
       timestamp: number;
       topSlots: Array<{ dayHour: string; score: number }>;
-    }>,
+    }>
   ): {
     risingSlots: Array<{ dayHour: string; change: number }>;
     fallingSlots: Array<{ dayHour: string; change: number }>;
@@ -2013,10 +2330,13 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
    */
   private async getRetainedScans(
     subreddit: string,
-    retentionDays: number,
+    retentionDays: number
   ): Promise<Array<{ scanId: number; timestamp: number }>> {
     const cutoffTimestamp = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
-    const retainedScanMap = new Map<number, { scanId: number; timestamp: number }>();
+    const retainedScanMap = new Map<
+      number,
+      { scanId: number; timestamp: number }
+    >();
 
     // Preferred path: per-subreddit index walk (index:snapshots:{sub}:{date})
     const dayKeys: string[] = [];
@@ -2041,13 +2361,18 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
         const meta = await this.redis.hGetAll(`run:${scanId}:meta`);
         const scanTimestamp = meta.scan_date
           ? new Date(meta.scan_date).getTime()
-          : (meta.proc_date ? new Date(meta.proc_date).getTime() : 0);
-        if (!Number.isFinite(scanTimestamp) || scanTimestamp < cutoffTimestamp) {
+          : meta.proc_date
+            ? new Date(meta.proc_date).getTime()
+            : 0;
+        if (
+          !Number.isFinite(scanTimestamp) ||
+          scanTimestamp < cutoffTimestamp
+        ) {
           return null;
         }
         return { scanId, timestamp: scanTimestamp };
       },
-      'Per-subreddit index walk',
+      'Per-subreddit index walk'
     );
 
     for (const res of indexedScanIds) {
@@ -2062,7 +2387,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
       'global:snapshots:timeline',
       cutoffTimestamp,
       '+inf',
-      { by: 'score' },
+      { by: 'score' }
     );
 
     const timelineResults = await this.executeBatched(
@@ -2078,11 +2403,13 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
         if (meta.subreddit !== subreddit) return null;
 
         const entryScore = typeof entry === 'object' ? entry.score : undefined;
-        const metaTimestamp = meta.scan_date ? new Date(meta.scan_date).getTime() : Date.now();
+        const metaTimestamp = meta.scan_date
+          ? new Date(meta.scan_date).getTime()
+          : Date.now();
 
         return { scanId, timestamp: (entryScore ?? metaTimestamp) as number };
       },
-      'Timeline Verification',
+      'Timeline Verification'
     );
 
     for (const res of timelineResults) {
@@ -2095,8 +2422,8 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
     const earliestRetainedTimestamp =
       retainedScanMap.size > 0
         ? Math.min(
-          ...Array.from(retainedScanMap.values()).map((s) => s.timestamp),
-        )
+            ...Array.from(retainedScanMap.values()).map((s) => s.timestamp)
+          )
         : Number.POSITIVE_INFINITY;
 
     // Fallback/self-heal path:
@@ -2113,10 +2440,13 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
 
       if (scanCount > 0) {
         console.log(
-          `[TRENDS] Timeline returned ${retainedScanMap.size} retained scans for r/${subreddit} (earliest=${Number.isFinite(earliestRetainedTimestamp) ? new Date(earliestRetainedTimestamp).toISOString() : 'none'}); supplementing via metadata sweep up to #${scanCount}.`,
+          `[TRENDS] Timeline returned ${retainedScanMap.size} retained scans for r/${subreddit} (earliest=${Number.isFinite(earliestRetainedTimestamp) ? new Date(earliestRetainedTimestamp).toISOString() : 'none'}); supplementing via metadata sweep up to #${scanCount}.`
         );
 
-        const scanIds = Array.from({ length: scanCount }, (_, i) => i + 1).filter(id => !retainedScanMap.has(id));
+        const scanIds = Array.from(
+          { length: scanCount },
+          (_, i) => i + 1
+        ).filter((id) => !retainedScanMap.has(id));
         const supplementResults = await this.executeBatched(
           scanIds,
           30,
@@ -2128,11 +2458,12 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
             if (!scanDateStr) return null;
 
             const scanTimestamp = new Date(scanDateStr).getTime();
-            if (Number.isNaN(scanTimestamp) || scanTimestamp < cutoffTimestamp) return null;
+            if (Number.isNaN(scanTimestamp) || scanTimestamp < cutoffTimestamp)
+              return null;
 
             return { scanId, timestamp: scanTimestamp };
           },
-          'Metadata Supplement Sweep',
+          'Metadata Supplement Sweep'
         );
 
         for (const res of supplementResults) {
@@ -2140,7 +2471,12 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
             const r = res as { scanId: number; timestamp: number };
             retainedScanMap.set(r.scanId, r);
             // Non-blocking backfill
-            this.redis.zAdd('global:snapshots:timeline', { score: r.timestamp, member: r.scanId.toString() }).catch(() => {});
+            this.redis
+              .zAdd('global:snapshots:timeline', {
+                score: r.timestamp,
+                member: r.scanId.toString(),
+              })
+              .catch(() => {});
           }
         }
       }
@@ -2149,7 +2485,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
     const retainedScans = Array.from(retainedScanMap.values());
 
     console.log(
-      `[TRENDS] Retained scans selected for r/${subreddit}: ${retainedScans.length}`,
+      `[TRENDS] Retained scans selected for r/${subreddit}: ${retainedScans.length}`
     );
 
     return retainedScans.sort((a, b) => a.timestamp - b.timestamp);
@@ -2161,25 +2497,26 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
   private async getRetentionSettings(subreddit: string): Promise<{
     retentionDays: number;
     analysisPoolSize: number;
+  }>;
+  private async getRetentionSettings(
+    subreddit: string,
+    snapshot: TrendConfigSnapshot
+  ): Promise<{
+    retentionDays: number;
+    analysisPoolSize: number;
+  }>;
+  private async getRetentionSettings(
+    subreddit: string,
+    snapshot?: TrendConfigSnapshot
+  ): Promise<{
+    retentionDays: number;
+    analysisPoolSize: number;
   }> {
-    try {
-      // Try to get settings from Redis (this would be set by ConfigView)
-      const configData = await this.redis.get(`config:${subreddit}`);
-      if (configData) {
-        const config = JSON.parse(configData);
-        return {
-          retentionDays: config.storage?.retentionDays || 180,
-          analysisPoolSize: config.settings?.analysisPoolSize || 30,
-        };
-      }
-    } catch (error) {
-      console.warn(`[TRENDS] Failed to load settings for ${subreddit}:`, error);
-    }
-
-    // Default values
+    const resolvedSnapshot =
+      snapshot ?? (await this.loadTrendConfigSnapshot(subreddit));
     return {
-      retentionDays: 180,
-      analysisPoolSize: 30,
+      retentionDays: resolvedSnapshot.retentionDays,
+      analysisPoolSize: resolvedSnapshot.analysisPoolSize,
     };
   }
 
@@ -2187,20 +2524,71 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
    * Get report-specific trend analysis window for a subreddit.
    */
   private async getTrendAnalysisDays(subreddit: string): Promise<number> {
+    const snapshot = await this.loadTrendConfigSnapshot(subreddit);
+    return snapshot.trendAnalysisDays;
+  }
+
+  /**
+   * Load one coherent trend configuration snapshot for a subreddit.
+   * This prevents mixed-version reads across retention and analysis settings.
+   */
+  private async loadTrendConfigSnapshot(
+    subreddit: string
+  ): Promise<TrendConfigSnapshot> {
+    let retentionDays = 180;
+    let analysisPoolSize = 30;
+    let trendAnalysisDays = 90;
+
     try {
-      const reportStr = await this.redis.get(`subreddit:${subreddit}:report`);
+      const [configData, reportStr] = await Promise.all([
+        this.redis.get(`config:${subreddit}`),
+        this.redis.get(`subreddit:${subreddit}:report`),
+      ]);
+
+      if (configData) {
+        const config = JSON.parse(configData);
+        const parsedRetentionDays = Number(config?.storage?.retentionDays);
+        const parsedAnalysisPoolSize = Number(
+          config?.settings?.analysisPoolSize
+        );
+
+        if (Number.isFinite(parsedRetentionDays) && parsedRetentionDays > 0) {
+          retentionDays = Math.max(
+            7,
+            Math.min(365, Math.round(parsedRetentionDays))
+          );
+        }
+
+        if (
+          Number.isFinite(parsedAnalysisPoolSize) &&
+          parsedAnalysisPoolSize > 0
+        ) {
+          analysisPoolSize = Math.max(
+            1,
+            Math.min(1000, Math.round(parsedAnalysisPoolSize))
+          );
+        }
+      }
+
       if (reportStr) {
         const report = JSON.parse(reportStr);
         const days = Number(report?.trendAnalysisDays);
         if (Number.isFinite(days) && days > 0) {
-          return Math.max(7, Math.min(365, Math.round(days)));
+          trendAnalysisDays = Math.max(7, Math.min(365, Math.round(days)));
         }
       }
     } catch (error) {
-      console.warn(`[TRENDS] Failed to load trend analysis window for ${subreddit}:`, error);
+      console.warn(
+        `[TRENDS] Failed to load trend config snapshot for ${subreddit}:`,
+        error
+      );
     }
 
-    return 90;
+    return {
+      retentionDays,
+      analysisPoolSize,
+      trendAnalysisDays,
+    };
   }
 
   /**
@@ -2215,14 +2603,17 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
       12,
       0,
       0,
-      0,
+      0
     );
   }
 
   /**
    * Build a dense list of UTC-noon day timestamps for the requested window.
    */
-  private buildDayTimeline(days: number, endTimestamp: number = Date.now()): number[] {
+  private buildDayTimeline(
+    days: number,
+    endTimestamp: number = Date.now()
+  ): number[] {
     const now = new Date(endTimestamp);
     const endUtcNoon = Date.UTC(
       now.getUTCFullYear(),
@@ -2231,7 +2622,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
       12,
       0,
       0,
-      0,
+      0
     );
 
     return Array.from({ length: days }, (_, index) => {
@@ -2247,29 +2638,54 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
   private densifyDailySeries(
     series: Array<{ timestamp: number; value: number }>,
     days: number,
-    mode: 'zero' | 'carry-forward' = 'zero',
+    mode: 'zero' | 'carry-forward' = 'zero'
   ): Array<{ timestamp: number; value: number }> {
+    if (series.length === 0 || days <= 0) {
+      return [];
+    }
+
     const latestByDay = new Map<number, number>();
+    const timeline = this.buildDayTimeline(days);
+    const timelineStart = timeline[0];
+    const timelineEnd = timeline[timeline.length - 1];
+    if (timelineStart === undefined || timelineEnd === undefined) {
+      return [];
+    }
+
     for (const point of series) {
       const dayKey = this.getUtcDayTimestamp(point.timestamp);
+      if (dayKey < timelineStart || dayKey > timelineEnd) {
+        continue;
+      }
       const existing = latestByDay.get(dayKey);
       if (existing === undefined || point.timestamp >= dayKey) {
         latestByDay.set(dayKey, point.value);
       }
     }
 
-    const timeline = this.buildDayTimeline(days);
+    if (latestByDay.size === 0) {
+      return [];
+    }
+
+    const firstObservedDay = Math.min(...Array.from(latestByDay.keys()));
     const dense: Array<{ timestamp: number; value: number }> = [];
     let lastValue = 0;
 
     for (const dayTimestamp of timeline) {
+      if (dayTimestamp < firstObservedDay) {
+        continue;
+      }
+
       if (latestByDay.has(dayTimestamp)) {
         lastValue = latestByDay.get(dayTimestamp) ?? lastValue;
       }
 
       dense.push({
         timestamp: dayTimestamp,
-        value: mode === 'carry-forward' ? lastValue : latestByDay.get(dayTimestamp) ?? 0,
+        value:
+          mode === 'carry-forward'
+            ? lastValue
+            : (latestByDay.get(dayTimestamp) ?? 0),
       });
     }
 
@@ -2281,13 +2697,26 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
    */
   private densifyContentMixSeries(
     series: Array<{ timestamp: number; flairs: Record<string, number> }>,
-    days: number,
+    days: number
   ): Array<{ timestamp: number; flairs: Record<string, number> }> {
+    if (series.length === 0 || days <= 0) {
+      return [];
+    }
+
     const allFlairs = new Set<string>();
     const latestByDay = new Map<number, Record<string, number>>();
+    const timeline = this.buildDayTimeline(days);
+    const timelineStart = timeline[0];
+    const timelineEnd = timeline[timeline.length - 1];
+    if (timelineStart === undefined || timelineEnd === undefined) {
+      return [];
+    }
 
     for (const point of series) {
       const dayKey = this.getUtcDayTimestamp(point.timestamp);
+      if (dayKey < timelineStart || dayKey > timelineEnd) {
+        continue;
+      }
       for (const flair of Object.keys(point.flairs || {})) {
         allFlairs.add(flair);
       }
@@ -2299,19 +2728,25 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
       latestByDay.set(dayKey, existing);
     }
 
+    if (latestByDay.size === 0) {
+      return [];
+    }
+
     const flairKeys = Array.from(allFlairs).sort();
-    const timeline = this.buildDayTimeline(days);
+    const firstObservedDay = Math.min(...Array.from(latestByDay.keys()));
 
-    return timeline.map((timestamp) => {
-      const dayValues = latestByDay.get(timestamp) || {};
-      const flairs: Record<string, number> = {};
+    return timeline
+      .filter((timestamp) => timestamp >= firstObservedDay)
+      .map((timestamp) => {
+        const dayValues = latestByDay.get(timestamp) || {};
+        const flairs: Record<string, number> = {};
 
-      for (const flair of flairKeys) {
-        flairs[flair] = dayValues[flair] || 0;
-      }
+        for (const flair of flairKeys) {
+          flairs[flair] = dayValues[flair] || 0;
+        }
 
-      return { timestamp, flairs };
-    });
+        return { timestamp, flairs };
+      });
   }
 
   /**
@@ -2322,7 +2757,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
     try {
       // Check if materialized data exists
       const lastMaterialized = await this.redis.get(
-        `trends:${subreddit}:last_materialized`,
+        `trends:${subreddit}:last_materialized`
       );
       if (!lastMaterialized) {
         return null;
@@ -2330,24 +2765,29 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
 
       const lastMaterializedDate = new Date(lastMaterialized);
       const isFutureDate = lastMaterializedDate.getTime() > Date.now();
-      const stale = !isFutureDate && (Date.now() - lastMaterializedDate.getTime() > 24 * 60 * 60 * 1000);
+      const stale =
+        !isFutureDate &&
+        Date.now() - lastMaterializedDate.getTime() > 24 * 60 * 60 * 1000;
       const trendAnalysisDays = await this.getTrendAnalysisDays(subreddit);
 
       // Parse subscriber growth data
       const subscriberGrowth = this.densifyDailySeries(
         await this.parseSubscriberGrowth(subreddit),
         trendAnalysisDays,
-        'carry-forward',
+        'carry-forward'
       );
 
       // Generate growth forecast
-      const growthForecast = await this.generateGrowthForecast(subreddit);
+      const growthForecast = await this.generateGrowthForecast(
+        subreddit,
+        trendAnalysisDays
+      );
 
       // Parse engagement data
       const engagementOverTime = this.densifyDailySeries(
         await this.parseEngagementOverTime(subreddit),
         trendAnalysisDays,
-        'zero',
+        'zero'
       );
       const engagementAnomalies =
         await this.parseEngagementAnomalies(subreddit);
@@ -2355,7 +2795,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
       // Parse content mix data
       const contentMix = this.densifyContentMixSeries(
         await this.parseContentMix(subreddit),
-        trendAnalysisDays,
+        trendAnalysisDays
       );
       const contentMixRecap =
         (await this.redis.get(`trends:${subreddit}:content_mix_recap`)) || '';
@@ -2371,17 +2811,21 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
         await this.parseBestPostingTimesChange(subreddit);
 
       // Parse global aggregates
-      const globalAggregatesStr = await this.redis.get(`trends:${subreddit}:global_aggregates`);
-      const globalAggregates = globalAggregatesStr ? JSON.parse(globalAggregatesStr) : {
-        globalWordCloud: {},
-        globalBestPostingTimes: [],
-        globalStats: {
-          posts_per_day: 0,
-          comments_per_day: 0,
-          avg_engagement: 0,
-          avg_score: 0,
-        }
-      };
+      const globalAggregatesStr = await this.redis.get(
+        `trends:${subreddit}:global_aggregates`
+      );
+      const globalAggregates = globalAggregatesStr
+        ? JSON.parse(globalAggregatesStr)
+        : {
+            globalWordCloud: {},
+            globalBestPostingTimes: [],
+            globalStats: {
+              posts_per_day: 0,
+              comments_per_day: 0,
+              avg_engagement: 0,
+              avg_score: 0,
+            },
+          };
 
       return {
         subreddit,
@@ -2402,7 +2846,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
     } catch (error) {
       console.error(
         `[TRENDS] Failed to get trend data for ${subreddit}:`,
-        error,
+        error
       );
       return null;
     }
@@ -2417,7 +2861,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
   private parseZSetMembers(
     members: string[],
     key: string,
-    valueParser: (value: string) => number = parseInt,
+    valueParser: (value: string) => number = parseInt
   ): Array<{ timestamp: number; value: number }> {
     const results: Array<{ timestamp: number; value: number }> = [];
 
@@ -2425,7 +2869,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
       try {
         if (typeof member !== 'string') {
           console.warn(
-            `[TRENDS] Skipping non-string ZSET member in ${key}: ${typeof member}`,
+            `[TRENDS] Skipping non-string ZSET member in ${key}: ${typeof member}`
           );
           continue;
         }
@@ -2433,7 +2877,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
         const parts = member.split(':');
         if (parts.length !== 2) {
           console.warn(
-            `[TRENDS] Skipping malformed ZSET member in ${key}: ${member} (expected format: timestamp:value)`,
+            `[TRENDS] Skipping malformed ZSET member in ${key}: ${member} (expected format: timestamp:value)`
           );
           continue;
         }
@@ -2442,7 +2886,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
 
         if (!timestampStr || !valueStr) {
           console.warn(
-            `[TRENDS] Skipping ZSET member with empty parts in ${key}: ${member}`,
+            `[TRENDS] Skipping ZSET member with empty parts in ${key}: ${member}`
           );
           continue;
         }
@@ -2452,14 +2896,14 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
 
         if (isNaN(timestamp)) {
           console.warn(
-            `[TRENDS] Skipping ZSET member with invalid timestamp in ${key}: ${member}`,
+            `[TRENDS] Skipping ZSET member with invalid timestamp in ${key}: ${member}`
           );
           continue;
         }
 
         if (isNaN(value)) {
           console.warn(
-            `[TRENDS] Skipping ZSET member with invalid value in ${key}: ${member}`,
+            `[TRENDS] Skipping ZSET member with invalid value in ${key}: ${member}`
           );
           continue;
         }
@@ -2468,7 +2912,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
         const now = Date.now();
         if (timestamp < 0 || timestamp > now + 365 * 24 * 60 * 60 * 1000) {
           console.warn(
-            `[TRENDS] Skipping ZSET member with unreasonable timestamp in ${key}: ${member}`,
+            `[TRENDS] Skipping ZSET member with unreasonable timestamp in ${key}: ${member}`
           );
           continue;
         }
@@ -2477,7 +2921,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
       } catch (error) {
         console.warn(
           `[TRENDS] Error parsing ZSET member in ${key}: ${member}`,
-          error,
+          error
         );
       }
     }
@@ -2493,7 +2937,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
     hashData: Record<string, string>,
     key: string,
     valueParser: (value: string) => T,
-    keyValidator?: (field: string) => boolean,
+    keyValidator?: (field: string) => boolean
   ): Record<string, T> {
     const result: Record<string, T> = {};
 
@@ -2501,21 +2945,21 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
       try {
         if (!field) {
           console.warn(
-            `[TRENDS] Skipping hash entry with empty field in ${key}`,
+            `[TRENDS] Skipping hash entry with empty field in ${key}`
           );
           continue;
         }
 
         if (keyValidator && !keyValidator(field)) {
           console.warn(
-            `[TRENDS] Skipping hash entry with invalid field in ${key}: ${field}`,
+            `[TRENDS] Skipping hash entry with invalid field in ${key}: ${field}`
           );
           continue;
         }
 
         if (typeof rawValue !== 'string' || rawValue.length === 0) {
           console.warn(
-            `[TRENDS] Skipping hash entry with empty value in ${key}: ${field}`,
+            `[TRENDS] Skipping hash entry with empty value in ${key}: ${field}`
           );
           continue;
         }
@@ -2527,7 +2971,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
           (!Number.isFinite(parsedValue) || Number.isNaN(parsedValue))
         ) {
           console.warn(
-            `[TRENDS] Skipping hash entry with invalid value in ${key}: ${field}=${rawValue}`,
+            `[TRENDS] Skipping hash entry with invalid value in ${key}: ${field}=${rawValue}`
           );
           continue;
         }
@@ -2538,7 +2982,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
           key.includes(':flair_distribution:')
         ) {
           console.warn(
-            `[TRENDS] Skipping hash entry with negative value in ${key}: ${field}=${rawValue}`,
+            `[TRENDS] Skipping hash entry with negative value in ${key}: ${field}=${rawValue}`
           );
           continue;
         }
@@ -2547,7 +2991,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
       } catch (error) {
         console.warn(
           `[TRENDS] Skipping hash entry with invalid value in ${key}: ${field}=${rawValue}`,
-          error,
+          error
         );
       }
     }
@@ -2556,21 +3000,21 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
   }
 
   private async parseSubscriberGrowth(
-    subreddit: string,
+    subreddit: string
   ): Promise<Array<{ timestamp: number; value: number }>> {
     const zsetKey = `trends:${subreddit}:subscriber_growth`;
 
     try {
       const rawData = await this.redis.zRange(zsetKey, 0, -1);
       const rawMembers = this.normalizeZRangeMembers(
-        rawData as Array<string | { member: string; score: number }>,
+        rawData as Array<string | { member: string; score: number }>
       );
 
       return this.parseZSetMembers(rawMembers, zsetKey, parseInt);
     } catch (error) {
       console.warn(
         `[TRENDS] Failed to parse subscriber growth data for ${subreddit}:`,
-        error,
+        error
       );
       return [];
     }
@@ -2580,21 +3024,21 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
    * Parse engagement over time ZSET data
    */
   private async parseEngagementOverTime(
-    subreddit: string,
+    subreddit: string
   ): Promise<Array<{ timestamp: number; value: number }>> {
     const zsetKey = `trends:${subreddit}:engagement_avg`;
 
     try {
       const rawData = await this.redis.zRange(zsetKey, 0, -1);
       const rawMembers = this.normalizeZRangeMembers(
-        rawData as Array<string | { member: string; score: number }>,
+        rawData as Array<string | { member: string; score: number }>
       );
 
       return this.parseZSetMembers(rawMembers, zsetKey, parseFloat);
     } catch (error) {
       console.warn(
         `[TRENDS] Failed to parse engagement over time data for ${subreddit}:`,
-        error,
+        error
       );
       return [];
     }
@@ -2626,7 +3070,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
         try {
           if (typeof timestampStr !== 'string' || typeof jsonStr !== 'string') {
             console.warn(
-              `[TRENDS] Skipping non-string anomaly entry in ${hashKey}: ${timestampStr}=${jsonStr}`,
+              `[TRENDS] Skipping non-string anomaly entry in ${hashKey}: ${timestampStr}=${jsonStr}`
             );
             continue;
           }
@@ -2634,7 +3078,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
           const timestamp = parseInt(timestampStr);
           if (isNaN(timestamp)) {
             console.warn(
-              `[TRENDS] Skipping anomaly entry with invalid timestamp in ${hashKey}: ${timestampStr}`,
+              `[TRENDS] Skipping anomaly entry with invalid timestamp in ${hashKey}: ${timestampStr}`
             );
             continue;
           }
@@ -2643,7 +3087,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
           const now = Date.now();
           if (timestamp < 0 || timestamp > now + 365 * 24 * 60 * 60 * 1000) {
             console.warn(
-              `[TRENDS] Skipping anomaly entry with unreasonable timestamp in ${hashKey}: ${timestampStr}`,
+              `[TRENDS] Skipping anomaly entry with unreasonable timestamp in ${hashKey}: ${timestampStr}`
             );
             continue;
           }
@@ -2654,14 +3098,14 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
           } catch (parseError) {
             console.warn(
               `[TRENDS] Skipping anomaly entry with invalid JSON in ${hashKey}: ${timestampStr}=${jsonStr}`,
-              parseError,
+              parseError
             );
             continue;
           }
 
           if (!anomalyData || typeof anomalyData !== 'object') {
             console.warn(
-              `[TRENDS] Skipping anomaly entry with invalid data structure in ${hashKey}: ${timestampStr}=${jsonStr}`,
+              `[TRENDS] Skipping anomaly entry with invalid data structure in ${hashKey}: ${timestampStr}=${jsonStr}`
             );
             continue;
           }
@@ -2671,7 +3115,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
             !['spike', 'dip'].includes(anomalyData.type)
           ) {
             console.warn(
-              `[TRENDS] Skipping anomaly entry with invalid type in ${hashKey}: ${timestampStr}=${jsonStr}`,
+              `[TRENDS] Skipping anomaly entry with invalid type in ${hashKey}: ${timestampStr}=${jsonStr}`
             );
             continue;
           }
@@ -2681,7 +3125,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
             isNaN(anomalyData.value)
           ) {
             console.warn(
-              `[TRENDS] Skipping anomaly entry with invalid value in ${hashKey}: ${timestampStr}=${jsonStr}`,
+              `[TRENDS] Skipping anomaly entry with invalid value in ${hashKey}: ${timestampStr}=${jsonStr}`
             );
             continue;
           }
@@ -2700,7 +3144,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
         } catch (error) {
           console.warn(
             `[TRENDS] Error parsing anomaly entry in ${hashKey}: ${timestampStr}=${jsonStr}`,
-            error,
+            error
           );
         }
       }
@@ -2709,7 +3153,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
     } catch (error) {
       console.warn(
         `[TRENDS] Failed to parse engagement anomalies for ${subreddit}:`,
-        error,
+        error
       );
       return [];
     }
@@ -2734,7 +3178,8 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
 
       for (const member of rawData) {
         try {
-          const memberStr = typeof member === 'string' ? member : (member as any)?.member;
+          const memberStr =
+            typeof member === 'string' ? member : (member as any)?.member;
           if (!memberStr) continue;
 
           const colon = memberStr.indexOf(':');
@@ -2755,7 +3200,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
         } catch (error) {
           console.warn(
             `[TRENDS] Failed to parse content mix entry from ${zsetKey}:`,
-            error,
+            error
           );
         }
       }
@@ -2764,7 +3209,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
     } catch (error) {
       console.warn(
         `[TRENDS] Failed to parse content mix data for ${subreddit}:`,
-        error,
+        error
       );
       return [];
     }
@@ -2819,7 +3264,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
         rawData as Record<string, string>,
         hashKey,
         (v: string) => Number(v),
-        dayHourValidator,
+        dayHourValidator
       );
 
       for (const [dayHour, value] of Object.entries(rawData)) {
@@ -2848,9 +3293,15 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
             heatmap.push({
               dayHour,
               delta,
-              countA: Number.isFinite(Number(parsed.countA)) ? Number(parsed.countA) : undefined,
-              countB: Number.isFinite(Number(parsed.countB)) ? Number(parsed.countB) : undefined,
-              velocity: Number.isFinite(Number(parsed.velocity)) ? Number(parsed.velocity) : undefined,
+              countA: Number.isFinite(Number(parsed.countA))
+                ? Number(parsed.countA)
+                : undefined,
+              countB: Number.isFinite(Number(parsed.countB))
+                ? Number(parsed.countB)
+                : undefined,
+              velocity: Number.isFinite(Number(parsed.velocity))
+                ? Number(parsed.velocity)
+                : undefined,
             });
             continue;
           } catch {
@@ -2877,7 +3328,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
     } catch (error) {
       console.warn(
         `[TRENDS] Failed to parse posting heatmap for ${subreddit}:`,
-        error,
+        error
       );
       return [];
     }
@@ -2907,10 +3358,10 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
       const changeSummary = changesStr
         ? JSON.parse(changesStr)
         : {
-          risingSlots: [],
-          fallingSlots: [],
-          stableSlots: [],
-        };
+            risingSlots: [],
+            fallingSlots: [],
+            stableSlots: [],
+          };
 
       return { timeline, changeSummary };
     } catch (error) {
@@ -2928,10 +3379,10 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
   async cleanupTrendArtifacts(
     subreddit: string,
     deletedScanIds: number[],
-    deletedTimestamps: number[],
+    deletedTimestamps: number[]
   ): Promise<void> {
     console.log(
-      `[TRENDS] Cleaning up trend artifacts for ${deletedScanIds.length} deleted scans`,
+      `[TRENDS] Cleaning up trend artifacts for ${deletedScanIds.length} deleted scans`
     );
 
     try {
@@ -2941,17 +3392,17 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
           this.redis.zRemRangeByScore(
             `trends:${subreddit}:subscriber_growth`,
             timestamp,
-            timestamp,
+            timestamp
           ),
           this.redis.zRemRangeByScore(
             `trends:${subreddit}:engagement_avg`,
             timestamp,
-            timestamp,
+            timestamp
           ),
           this.redis.zRemRangeByScore(
             `trends:${subreddit}:engagement_velocity`,
             timestamp,
-            timestamp,
+            timestamp
           ),
           this.redis.hDel(`trends:${subreddit}:engagement_anomalies`, [
             timestamp.toString(),
@@ -2964,11 +3415,9 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
         const flairKey = `trends:${subreddit}:flair_distribution:${scanId}`;
         const bestTimesKey = `trends:${subreddit}:best_times:${scanId}`;
         const anomaliesKey = `trends:${subreddit}:engagement_anomalies`;
-        
+
         await Promise.all([
-          this.redis.hDel(anomaliesKey, [
-            scanId.toString(),
-          ]),
+          this.redis.hDel(anomaliesKey, [scanId.toString()]),
           this.redis.del(flairKey),
           this.redis.del(bestTimesKey),
         ]);
@@ -3009,19 +3458,32 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
    */
   private async recomputeAggregates(
     subreddit: string,
-    remainingScans: Array<{ scanId: number; timestamp: number }>,
+    remainingScans: Array<{ scanId: number; timestamp: number }>
   ): Promise<void> {
     try {
+      const trendConfig = await this.loadTrendConfigSnapshot(subreddit);
       // Recompute posting heatmap, content mix recap, and posting pattern recap
       await Promise.all([
-        this.materializePostingHeatmap(subreddit, remainingScans),
-        this.materializeContentMix(subreddit, remainingScans),
-        this.materializeBestPostingTimes(subreddit, remainingScans),
+        this.materializePostingHeatmap(
+          subreddit,
+          remainingScans,
+          trendConfig.trendAnalysisDays
+        ),
+        this.materializeContentMix(
+          subreddit,
+          remainingScans,
+          trendConfig.trendAnalysisDays
+        ),
+        this.materializeBestPostingTimes(
+          subreddit,
+          remainingScans,
+          trendConfig.trendAnalysisDays
+        ),
       ]);
     } catch (error) {
       console.error(
         `[TRENDS] Failed to recompute aggregates for r/${subreddit}:`,
-        error,
+        error
       );
     }
   }
@@ -3139,7 +3601,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
       const meta = await this.redis.hGetAll(`run:${scanId}:meta`);
       if (!meta.subreddit || !meta.scan_date) {
         console.warn(
-          `[TRENDS] Cannot cleanup scan ${scanId}: missing metadata`,
+          `[TRENDS] Cannot cleanup scan ${scanId}: missing metadata`
         );
         return;
       }
@@ -3148,7 +3610,7 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
       const timestamp = new Date(meta.scan_date).getTime();
 
       console.log(
-        `[TRENDS] Cleaning up trend artifacts for scan ${scanId} (r/${subreddit})`,
+        `[TRENDS] Cleaning up trend artifacts for scan ${scanId} (r/${subreddit})`
       );
 
       // Clean up trend artifacts for this single scan
@@ -3165,7 +3627,9 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
    */
   private async getAnalysisPool(scanId: number): Promise<PostData[]> {
     try {
-      const parsePoolFromZset = async (zsetKey: string): Promise<PostData[]> => {
+      const parsePoolFromZset = async (
+        zsetKey: string
+      ): Promise<PostData[]> => {
         const count = await this.redis.zCard(zsetKey);
         if (count <= 0) return [];
 
@@ -3173,7 +3637,11 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
         const pool: PostData[] = [];
         const batchSize = 100;
         for (let i = 0; i < count; i += batchSize) {
-          const members = await this.redis.zRange(zsetKey, i, i + batchSize - 1);
+          const members = await this.redis.zRange(
+            zsetKey,
+            i,
+            i + batchSize - 1
+          );
           for (const member of members) {
             const memberStr =
               typeof member === 'string' ? member : (member as any)?.member;
@@ -3186,7 +3654,10 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
             try {
               pool.push(JSON.parse(memberStr));
             } catch (e) {
-              console.warn(`[TRENDS] Failed to parse pool member for scan #${scanId}`, e);
+              console.warn(
+                `[TRENDS] Failed to parse pool member for scan #${scanId}`,
+                e
+              );
             }
           }
         }
@@ -3207,20 +3678,28 @@ private static readonly DAYNAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'S
 
       // 3. Fallback to legacy JSON blob format
       const scanData = await this.redis.get(`scan:${scanId}:data`);
-      console.log(`[TRENDS] Legacy scan data for #${scanId}: ${scanData ? 'found' : 'not found'}`);
+      console.log(
+        `[TRENDS] Legacy scan data for #${scanId}: ${scanData ? 'found' : 'not found'}`
+      );
       if (scanData) {
         try {
           const parsedData = JSON.parse(scanData);
           return parsedData.analysis_pool || [];
         } catch (e) {
-          console.warn(`[TRENDS] Failed to parse legacy scan data for scan #${scanId}`, e);
+          console.warn(
+            `[TRENDS] Failed to parse legacy scan data for scan #${scanId}`,
+            e
+          );
           return [];
         }
       }
 
       return [];
     } catch (error) {
-      console.warn(`[TRENDS] Error retrieving analysis pool for scan #${scanId}:`, error);
+      console.warn(
+        `[TRENDS] Error retrieving analysis pool for scan #${scanId}:`,
+        error
+      );
       return [];
     }
   }

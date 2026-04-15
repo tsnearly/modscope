@@ -82,7 +82,7 @@ function GrowthTooltip({ active, payload, label }: any) {
       : undefined;
 
   const visibleSeries = payload.filter((item: any) =>
-    ['Actual', 'Forecast'].includes(item.name),
+    ['Actual', 'Forecast'].includes(item.name)
   );
 
   return (
@@ -119,7 +119,7 @@ export function CommunityGrowthChart({
   isPrintMode = false,
 }: CommunityGrowthChartProps) {
   const [highlightedPoint, setHighlightedPoint] = useState<GrowthDatum | null>(
-    null,
+    null
   );
   const [hiddenSeries, setHiddenSeries] = useState<Record<string, boolean>>({});
 
@@ -131,7 +131,15 @@ export function CommunityGrowthChart({
     const dayMs = 24 * 60 * 60 * 1000;
     const toUtcDayNoon = (ts: number): number => {
       const d = new Date(ts);
-      return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12, 0, 0, 0);
+      return Date.UTC(
+        d.getUTCFullYear(),
+        d.getUTCMonth(),
+        d.getUTCDate(),
+        12,
+        0,
+        0,
+        0
+      );
     };
 
     const actualByDay = new Map<number, number>();
@@ -139,7 +147,10 @@ export function CommunityGrowthChart({
       actualByDay.set(toUtcDayNoon(point.timestamp), point.value);
     }
 
-    const forecastByDay = new Map<number, { forecast?: number; lowerBand?: number; bandWidth?: number }>();
+    const forecastByDay = new Map<
+      number,
+      { forecast?: number; lowerBand?: number; bandWidth?: number }
+    >();
     for (const point of trendsData.growthForecast?.forecast || []) {
       forecastByDay.set(toUtcDayNoon(point.timestamp), {
         forecast: point.value,
@@ -149,10 +160,20 @@ export function CommunityGrowthChart({
     }
 
     const now = new Date();
-    const todayUtcNoon = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12, 0, 0, 0);
+    const todayUtcNoon = Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate(),
+      12,
+      0,
+      0,
+      0
+    );
 
     let lastActual: number | undefined;
-    let lastForecast: { forecast?: number; lowerBand?: number; bandWidth?: number } | undefined;
+    let lastForecast:
+      | { forecast?: number; lowerBand?: number; bandWidth?: number }
+      | undefined;
 
     return Array.from({ length: trendAnalysisDays }, (_, idx) => {
       const offset = trendAnalysisDays - 1 - idx;
@@ -340,7 +361,7 @@ export function CommunityGrowthChart({
                 onMouseMove={(state: any) => {
                   if (state?.activePayload?.[0]?.payload) {
                     setHighlightedPoint(
-                      state.activePayload[0].payload as GrowthDatum,
+                      state.activePayload[0].payload as GrowthDatum
                     );
                   }
                 }}
@@ -382,7 +403,11 @@ export function CommunityGrowthChart({
                   >
                     <stop offset="0%" stopColor="#ef4444" stopOpacity={0.34} />
                     <stop offset="45%" stopColor="#facc15" stopOpacity={0.26} />
-                    <stop offset="100%" stopColor="#22c55e" stopOpacity={0.34} />
+                    <stop
+                      offset="100%"
+                      stopColor="#22c55e"
+                      stopOpacity={0.34}
+                    />
                   </linearGradient>
                 </defs>
 

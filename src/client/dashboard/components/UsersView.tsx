@@ -26,7 +26,8 @@ export function UsersView({
 
   allPostsForUsers.forEach((post: PostData) => {
     if (post.author !== '[deleted]' && post.author !== 'None') {
-      contributorCounts[post.author] = (contributorCounts[post.author] || 0) + 1;
+      contributorCounts[post.author] =
+        (contributorCounts[post.author] || 0) + 1;
       influencerScores[post.author] =
         (influencerScores[post.author] || 0) + post.score + post.comments * 2;
     }
@@ -46,7 +47,7 @@ export function UsersView({
           (c) =>
             !effectiveOfficials.includes(c.name) &&
             c.name !== officialAccount &&
-            c.name !== 'None',
+            c.name !== 'None'
         )
       : topContributors
   ).slice(0, 5);
@@ -57,7 +58,7 @@ export function UsersView({
           (i) =>
             !effectiveOfficials.includes(i.name) &&
             i.name !== officialAccount &&
-            i.name !== 'None',
+            i.name !== 'None'
         )
       : topInfluencers
   ).slice(0, 5);

@@ -10,7 +10,7 @@ Here's how I'd think through the organization:
 
 **The Good News: The Time-Series Data Already Exists**
 
-The schema already has exactly what trend analysis needs — it's just not being queried that way. The `post:{utc}:ts:score`, `post:{utc}:ts:comments`, and `post:{utc}:ts:engagement` ZSETs are timestamped data points that span *across* snapshots. The `index:snapshots:{sub}:{date}` keys give you a chronological map of every scan. The data isn't missing — the query strategy is wrong.
+The schema already has exactly what trend analysis needs — it's just not being queried that way. The `post:{utc}:ts:score`, `post:{utc}:ts:comments`, and `post:{utc}:ts:engagement` ZSETs are timestamped data points that span _across_ snapshots. The `index:snapshots:{sub}:{date}` keys give you a chronological map of every scan. The data isn't missing — the query strategy is wrong.
 
 ---
 
@@ -18,7 +18,7 @@ The schema already has exactly what trend analysis needs — it's just not being
 
 This is the most important decision. My strong recommendation is **server-side, as a dedicated background job**, for several reasons:
 
-The trend queries need to fan out across potentially dozens of `scanId` pools and hundreds of post time-series keys. On the client, that's potentially hundreds of sequential Redis reads hitting Devvit's rate limits — exactly the problem the Trickle-Write Strategy was designed to solve on *writes*. The same problem exists on reads at scale.
+The trend queries need to fan out across potentially dozens of `scanId` pools and hundreds of post time-series keys. On the client, that's potentially hundreds of sequential Redis reads hitting Devvit's rate limits — exactly the problem the Trickle-Write Strategy was designed to solve on _writes_. The same problem exists on reads at scale.
 
 More practically: trend data doesn't need to be real-time. It describes the past. That makes it a perfect candidate for pre-computation.
 
@@ -26,7 +26,7 @@ More practically: trend data doesn't need to be real-time. It describes the past
 
 **How I'd Organize It**
 
-Rather than computing trends inside the Report view at read-time, I'd introduce a **Trend Materialization Layer** — a separate job (or an extension of the existing snapshot job) that runs *after* a snapshot completes and writes pre-aggregated trend summaries back into Redis under their own key namespace. Something like:
+Rather than computing trends inside the Report view at read-time, I'd introduce a **Trend Materialization Layer** — a separate job (or an extension of the existing snapshot job) that runs _after_ a snapshot completes and writes pre-aggregated trend summaries back into Redis under their own key namespace. Something like:
 
 ```
 trends:{sub}:subscriber_growth    → ZSET (scanTimestamp → subscriberCount)
@@ -41,13 +41,13 @@ The Report view then just reads these pre-cooked keys rather than doing cross-sn
 
 **How Each of the Four Reports Maps to This**
 
-**Subscriber Growth** — this one actually *needs* a new data capture point. Subscriber count isn't currently stored per-scan (the schema tracks posts, not sub metadata). You'd add a `sub:{sub}:subscriber_count` write inside the existing snapshot job, then the trend materializer rolls those up into the growth ZSET.
+**Subscriber Growth** — this one actually _needs_ a new data capture point. Subscriber count isn't currently stored per-scan (the schema tracks posts, not sub metadata). You'd add a `sub:{sub}:subscriber_count` write inside the existing snapshot job, then the trend materializer rolls those up into the growth ZSET.
 
 **Engagement Trends** — almost free. The `post:{utc}:ts:engagement` ZSETs already have this. The materializer just averages engagement across each scan's pool and writes one data point per scan into `trends:{sub}:engagement_avg`.
 
 **Content Type Evolution (flair distribution)** — the static shard (`post:{utc}:static`) stores enough to reconstruct this. The materializer walks each scan's pool, tallies flair counts, and writes them. The 30-day stacked area chart mentioned in the changelog suggests this was at least partially anticipated.
 
-**Posting Pattern Heatmap** — this one is the trickiest because it needs the *comparison* between two time windows, not just a single snapshot's data. The materializer would need to bucket `created_utc` values by day-of-week + hour across two rolling windows (e.g., days 1–15 vs. 16–30), then diff them. That's pure server logic — definitely not client work.
+**Posting Pattern Heatmap** — this one is the trickiest because it needs the _comparison_ between two time windows, not just a single snapshot's data. The materializer would need to bucket `created_utc` values by day-of-week + hour across two rolling windows (e.g., days 1–15 vs. 16–30), then diff them. That's pure server logic — definitely not client work.
 
 ---
 
@@ -57,19 +57,15 @@ The cleanest seam is to trigger the trend materializer as a **continuation step*
 
 The client-side work then becomes trivial: read four flat ZSETs/Hashes, render four charts. No cross-snapshot querying, no rate limit exposure, no architectural conflict with the existing pool isolation model.
 
-You're absolutely right — that data is already being captured at snapshot time. It's just not being *persisted to a time-series key* after capture. It almost certainly lives in a snapshot-level summary hash (something like `scan:{scanId}:summary` or similar) and gets read once for the report header, then just... sits there, never aggregated across scans.
+You're absolutely right — that data is already being captured at snapshot time. It's just not being _persisted to a time-series key_ after capture. It almost certainly lives in a snapshot-level summary hash (something like `scan:{scanId}:summary` or similar) and gets read once for the report header, then just... sits there, never aggregated across scans.
 
-So the subscriber growth chart is actually the *easiest* of the four — the materializer just needs to walk the existing snapshot index (`index:snapshots:{sub}:{date}`), pull the subscriber count out of each scan's summary hash, and write it into `trends:{sub}:subscriber_growth`. No new data collection needed at all.
+So the subscriber growth chart is actually the _easiest_ of the four — the materializer just needs to walk the existing snapshot index (`index:snapshots:{sub}:{date}`), pull the subscriber count out of each scan's summary hash, and write it into `trends:{sub}:subscriber_growth`. No new data collection needed at all.
 
 The same likely applies to posts/day and comments/day — those could back the engagement trend chart almost immediately with the same approach.
 
 Do you have visibility into what that per-scan summary structure actually looks like in the code? That would confirm whether all four trend reports can be sourced from already-captured data, or if flair distribution is the one outlier that needs new capture logic added to the snapshot job itself.
 
-
-
 ---
-
-
 
 Based on the design in your document, **Antigravity AI will likely react in a mixed way** — partly positive (because the architecture is clean), but it will probably require **clarification and restructuring prompts** to implement everything correctly. Here’s a realistic breakdown of how it will likely behave and what you should expect.
 

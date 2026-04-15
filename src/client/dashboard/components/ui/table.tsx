@@ -10,7 +10,7 @@ interface TableProps {
 export const Table = React.forwardRef<HTMLDivElement, TableProps>(
   (
     { children, className = '', containerClassName = '', containerStyle },
-    ref,
+    ref
   ) => {
     return (
       <div
@@ -23,7 +23,7 @@ export const Table = React.forwardRef<HTMLDivElement, TableProps>(
         </table>
       </div>
     );
-  },
+  }
 );
 
 Table.displayName = 'Table';
@@ -60,8 +60,7 @@ export function TableRow({
 
 import { Icon } from './icon';
 
-export interface TableHeadProps
-  extends React.ThHTMLAttributes<HTMLTableCellElement> {
+export interface TableHeadProps extends React.ThHTMLAttributes<HTMLTableCellElement> {
   sortable?: boolean;
   sortDirection?: 'asc' | 'desc' | null;
   onSort?: () => void;

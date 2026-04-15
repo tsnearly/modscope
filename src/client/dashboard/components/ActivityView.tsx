@@ -1,11 +1,24 @@
-import { Area, AreaChart, CartesianGrid, Legend, Tooltip as RechartsTooltip, ResponsiveContainer, XAxis, YAxis } from 'recharts';
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  Legend,
+  Tooltip as RechartsTooltip,
+  ResponsiveContainer,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import { getDataGroupingIcon, type IconContext } from '../utils/iconMappings';
 import { Chart } from './ui/chart';
 import { Icon } from './ui/icon';
 
 interface ActivityViewProps {
   activityTrendData: Array<{ date: string; posts: number; comments: number }>;
-  engagementVsScoreData: Array<{ hour: string; score: number; engagement: number }>;
+  engagementVsScoreData: Array<{
+    hour: string;
+    score: number;
+    engagement: number;
+  }>;
   hiddenSeries: Record<string, boolean>;
   onToggleSeries: (dataKey: string) => void;
   iconContext: IconContext;
@@ -302,7 +315,10 @@ export function ActivityView({
       <Chart
         title="Engagement vs Votes (24h)"
         icon={
-          <Icon src={getDataGroupingIcon('engagement', iconContext)} size={16} />
+          <Icon
+            src={getDataGroupingIcon('engagement', iconContext)}
+            size={16}
+          />
         }
         height={340}
       >
@@ -314,7 +330,11 @@ export function ActivityView({
             position: 'relative',
           }}
         >
-          <ResponsiveContainer key={`${tabKey}-engagement-multi`} width="100%" height="100%">
+          <ResponsiveContainer
+            key={`${tabKey}-engagement-multi`}
+            width="100%"
+            height="100%"
+          >
             <AreaChart
               data={engagementVsScoreData}
               margin={{ top: 10, right: 10, left: 5, bottom: 5 }}

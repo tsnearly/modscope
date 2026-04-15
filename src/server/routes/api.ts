@@ -1,4 +1,11 @@
-import { context, reddit, redis, scheduler, type RedditClient, type RedisClient } from '@devvit/web/server';
+import {
+  context,
+  reddit,
+  redis,
+  scheduler,
+  type RedditClient,
+  type RedisClient,
+} from '@devvit/web/server';
 import { Hono } from 'hono';
 import {
   DEFAULT_CALCULATION_SETTINGS,
@@ -11,7 +18,10 @@ import { DataRetrievalService } from '../services/DataRetrievalService';
 import { HistoryService } from '../services/HistoryService';
 import { NormalizationService } from '../services/NormalizationService';
 import { getOfficialAccounts } from '../services/OfficialAccountsService';
-import { SnapshotService, type TrendMaterializer } from '../services/SnapshotService';
+import {
+  SnapshotService,
+  type TrendMaterializer,
+} from '../services/SnapshotService';
 import { TrendingService } from '../services/TrendingService';
 
 export const api = new Hono();
@@ -39,7 +49,9 @@ if (!Object.prototype.hasOwnProperty.call(globalThis, 'DATA_SUBREDDIT')) {
     get() {
       const name = context.subredditName;
       if (!name) {
-        throw new Error('[DATA_SUBREDDIT] Subreddit name unavailable in current context');
+        throw new Error(
+          '[DATA_SUBREDDIT] Subreddit name unavailable in current context'
+        );
       }
       return name;
     },
@@ -47,6 +59,11 @@ if (!Object.prototype.hasOwnProperty.call(globalThis, 'DATA_SUBREDDIT')) {
   });
 }
 declare let DATA_SUBREDDIT: string;
+
+// Helper to filter out internal system jobs from display
+const filterInternalJobs = (jobs: any[]) => {
+  return jobs.filter((job) => job.name !== 'check-for-updates');
+};
 
 let bootstrapComplete = false;
 let isBootstrapping = false;
@@ -74,11 +91,19 @@ async function ensureBootstrap(username?: string) {
 
 api.get('/init', async (c) => {
   const { postId } = context;
-  if (!postId) return c.json({ status: 'error', message: 'postId is required but missing from context' }, 400);
+  if (!postId)
+    return c.json(
+      {
+        status: 'error',
+        message: 'postId is required but missing from context',
+      },
+      400
+    );
 
   try {
     const username = await reddit.getCurrentUsername();
-    if (!username) return c.json({ status: 'error', message: 'Not authenticated' }, 401);
+    if (!username)
+      return c.json({ status: 'error', message: 'Not authenticated' }, 401);
 
     await ensureBootstrap(username || undefined);
 
@@ -90,23 +115,44 @@ api.get('/init', async (c) => {
     const analytics = await retriever.getLatestSnapshot(DATA_SUBREDDIT);
     let officialAccounts: string[] = [];
     try {
-      officialAccounts = await getOfficialAccounts(reddit as RedditClient, DATA_SUBREDDIT);
-    } catch (oaError) { console.warn('[INIT] getOfficialAccounts failed:', oaError); }
+      officialAccounts = await getOfficialAccounts(
+        reddit as RedditClient,
+        DATA_SUBREDDIT
+      );
+    } catch (oaError) {
+      console.warn('[INIT] getOfficialAccounts failed:', oaError);
+    }
 
     const jobsRaw = await (scheduler.listJobs() as any);
-    const enrichedJobs = await Promise.all((jobsRaw || []).map(async (job: any) => {
-      try {
-        const saved = await storage.hGetAll(`job:${job.id}`);
-        if (saved && saved.config) {
-          return { ...job, config: JSON.parse(saved.config), name: saved.name || job.name };
+    const enrichedJobs = await Promise.all(
+      (jobsRaw || []).map(async (job: any) => {
+        try {
+          const saved = await storage.hGetAll(`job:${job.id}`);
+          if (saved && saved.config) {
+            return {
+              ...job,
+              config: JSON.parse(saved.config),
+              name: saved.name || job.name,
+            };
+          }
+        } catch (e) {
+          /* skip */
         }
-      } catch (e) { /* skip */ }
-      return job;
-    }));
+        return job;
+      })
+    );
+    const visibleJobs = filterInternalJobs(enrichedJobs);
 
     const jobHistory = await historyService.getJobHistory();
-    const settingsStr = await storage.get(`subreddit:${DATA_SUBREDDIT}:settings`);
-    const config = { settings: settingsStr ? JSON.parse(settingsStr) : DEFAULT_CALCULATION_SETTINGS, lastUpdated: Date.now() };
+    const settingsStr = await storage.get(
+      `subreddit:${DATA_SUBREDDIT}:settings`
+    );
+    const config = {
+      settings: settingsStr
+        ? JSON.parse(settingsStr)
+        : DEFAULT_CALCULATION_SETTINGS,
+      lastUpdated: Date.now(),
+    };
 
     return c.json({
       type: 'init',
@@ -115,7 +161,7 @@ api.get('/init', async (c) => {
       username: username ?? 'anonymous',
       analytics: analytics || undefined,
       officialAccounts,
-      jobs: enrichedJobs,
+      jobs: visibleJobs,
       jobHistory,
       config,
       display: displayStr ? JSON.parse(displayStr) : undefined,
@@ -128,20 +174,29 @@ api.get('/init', async (c) => {
 api.get('/jobs', async (c) => {
   try {
     const jobsRaw = await (scheduler.listJobs() as any);
-    const enrichedJobs = await Promise.all((jobsRaw || []).map(async (job: any) => {
-      try {
-        const saved = await storage.hGetAll(`job:${job.id}`);
-        if (saved && saved.config) {
-          return {
-            ...job,
-            config: JSON.parse(saved.config),
-            name: saved.name || job.name,
-          };
+    const enrichedJobs = await Promise.all(
+      (jobsRaw || []).map(async (job: any) => {
+        try {
+          const saved = await storage.hGetAll(`job:${job.id}`);
+          if (saved && saved.config) {
+            return {
+              ...job,
+              config: JSON.parse(saved.config),
+              name: saved.name || job.name,
+            };
+          }
+        } catch (e) {
+          /* skip */
         }
-      } catch (e) { /* skip */ }
-      return job;
-    }));
-    return c.json({ status: 'success', jobs: enrichedJobs, count: enrichedJobs.length });
+        return job;
+      })
+    );
+    const visibleJobs = filterInternalJobs(enrichedJobs);
+    return c.json({
+      status: 'success',
+      jobs: visibleJobs,
+      count: visibleJobs.length,
+    });
   } catch (error) {
     return c.json({ status: 'error', message: String(error) }, 500);
   }
@@ -164,7 +219,8 @@ api.post('/jobs', async (c) => {
       calculatedCron,
     } = body;
 
-    if (!scheduleType) return c.json({ status: 'error', message: 'Missing scheduleType' }, 400);
+    if (!scheduleType)
+      return c.json({ status: 'error', message: 'Missing scheduleType' }, 400);
 
     let name = customName || 'Snapshot Job';
     let cron = '';
@@ -172,7 +228,10 @@ api.post('/jobs', async (c) => {
 
     const isPM = (startTime || '').toLowerCase().includes('pm');
     const isAM = (startTime || '').toLowerCase().includes('am');
-    const timeParts = (startTime || '08:00').replace(/\s*[a-zA-Z]+/, '').split(':').map(Number);
+    const timeParts = (startTime || '08:00')
+      .replace(/\s*[a-zA-Z]+/, '')
+      .split(':')
+      .map(Number);
     let hour = timeParts[0] || 0;
     const minute = timeParts[1] || 0;
 
@@ -193,16 +252,26 @@ api.post('/jobs', async (c) => {
       case 'hourly':
         const hrInterval = Math.max(1, interval || 1);
         const hrStr = hrInterval === 1 ? '*' : `*/${hrInterval}`;
-        cron = (daysOfWeek && daysOfWeek.length > 0) ? `0 ${hrStr} * * ${daysOfWeek.join(',')}` : `0 ${hrStr} * * *`;
-        name = customName || (hrInterval === 1 ? 'Hourly Snapshot' : `Every ${hrInterval} Hour(s)`);
+        cron =
+          daysOfWeek && daysOfWeek.length > 0
+            ? `0 ${hrStr} * * ${daysOfWeek.join(',')}`
+            : `0 ${hrStr} * * *`;
+        name =
+          customName ||
+          (hrInterval === 1
+            ? 'Hourly Snapshot'
+            : `Every ${hrInterval} Hour(s)`);
         break;
       case 'daily':
         const dayInterval = interval || 1;
         cron = `${minute} ${hour} ${dayInterval === 1 ? '*' : `*/${dayInterval}`} * *`;
-        name = customName || (dayInterval === 1 ? 'Daily Snapshot' : `Every ${dayInterval} Days`);
+        name =
+          customName ||
+          (dayInterval === 1 ? 'Daily Snapshot' : `Every ${dayInterval} Days`);
         break;
       case 'weekly':
-        if (!daysOfWeek || daysOfWeek.length === 0) throw new Error('Weekly requires day selection');
+        if (!daysOfWeek || daysOfWeek.length === 0)
+          throw new Error('Weekly requires day selection');
         cron = `${minute} ${hour} * * ${daysOfWeek.join(',')}`;
         name = customName || 'Weekly Snapshot';
         break;
@@ -231,7 +300,8 @@ api.post('/jobs', async (c) => {
       name: 'snapshot-worker',
       data: { subreddit: DATA_SUBREDDIT, scheduleType },
     };
-    if (runAt) jobConfig.runAt = runAt; else jobConfig.cron = cron;
+    if (runAt) jobConfig.runAt = runAt;
+    else jobConfig.cron = cron;
 
     jobId = await scheduler.runJob(jobConfig as any);
     await redis.hSet(`job:${jobId}`, {
@@ -245,7 +315,10 @@ api.post('/jobs', async (c) => {
     });
     await redis.zAdd('jobs:active', { member: jobId!, score: Date.now() });
 
-    return c.json({ status: 'success', job: { id: jobId, name, cron: cron || 'once' } });
+    return c.json({
+      status: 'success',
+      job: { id: jobId, name, cron: cron || 'once' },
+    });
   } catch (error) {
     if (jobId) await scheduler.cancelJob(jobId);
     return c.json({ status: 'error', message: String(error) }, 500);
@@ -279,7 +352,9 @@ api.get('/snapshots', async (c) => {
         if (meta && (meta.scan_date || meta.proc_date)) {
           snapshots.push({
             scanId,
-            scanDate: meta.scan_date || new Date(meta.proc_date || Date.now()).toISOString(),
+            scanDate:
+              meta.scan_date ||
+              new Date(meta.proc_date || Date.now()).toISOString(),
             procDate: meta.proc_date || meta.scan_date,
             subreddit: meta.subreddit || 'unknown',
             subscribers: parseInt(stats?.subscribers || '0'),
@@ -290,25 +365,33 @@ api.get('/snapshots', async (c) => {
             poolSize: parseInt(stats?.pool_size || '0'),
           });
         }
-      } catch (err) { /* skip */ }
+      } catch (err) {
+        /* skip */
+      }
     }
     return c.json(snapshots.reverse());
-  } catch (error) { return c.json([]); }
+  } catch (error) {
+    return c.json([]);
+  }
 });
 
 api.get('/snapshots/:scanId', async (c) => {
   try {
     const scanId = parseInt(c.req.param('scanId'));
     const snapshot = await retriever.getSnapshotById(scanId);
-    return snapshot ? c.json(snapshot) : c.json({ status: 'error', message: 'Not found' }, 404);
-  } catch (error) { return c.json({ status: 'error', message: 'Failed' }, 500); }
+    return snapshot
+      ? c.json(snapshot)
+      : c.json({ status: 'error', message: 'Not found' }, 404);
+  } catch (error) {
+    return c.json({ status: 'error', message: 'Failed' }, 500);
+  }
 });
 
 api.delete('/snapshots/:scanId', async (c) => {
   try {
     const scanId = parseInt(c.req.param('scanId'));
     const subreddit = context.subredditName || 'unknown';
-    
+
     // 1. Log job to history as running
     const entry = {
       id: `delete-${scanId}`,
@@ -317,10 +400,13 @@ api.delete('/snapshots/:scanId', async (c) => {
       status: 'running',
       startTime: Date.now(),
       details: `Started background deletion for snapshot #${scanId}`,
-      subreddit
+      subreddit,
     };
-    await redis.zAdd('jobs:history', { member: JSON.stringify(entry), score: entry.startTime });
-    
+    await redis.zAdd('jobs:history', {
+      member: JSON.stringify(entry),
+      score: entry.startTime,
+    });
+
     // 2. Trigger the job
     await scheduler.runJob({
       name: 'delete-snapshot',
@@ -328,10 +414,13 @@ api.delete('/snapshots/:scanId', async (c) => {
       runAt: new Date(),
     });
 
-    return c.json({ status: 'accepted', message: 'Deletion started in background' }, 202);
-  } catch (error) { 
+    return c.json(
+      { status: 'accepted', message: 'Deletion started in background' },
+      202
+    );
+  } catch (error) {
     console.error('[API] Failed to trigger background deletion:', error);
-    return c.json({ status: 'error', message: String(error) }, 500); 
+    return c.json({ status: 'error', message: String(error) }, 500);
   }
 });
 
@@ -344,8 +433,12 @@ api.post('/ui/register', async (c) => {
     const subreddit = context.subredditName || 'unknown';
     if (webViewId) {
       // Store the active webViewId for this subreddit in Redis (expires in 1 hour)
-      await redis.set(`webview:active:${subreddit}`, webViewId, { expiration: new Date(Date.now() + 3600000) });
-      console.log(`[API] Registered WebView ID: ${webViewId} for r/${subreddit}`);
+      await redis.set(`webview:active:${subreddit}`, webViewId, {
+        expiration: new Date(Date.now() + 3600000),
+      });
+      console.log(
+        `[API] Registered WebView ID: ${webViewId} for r/${subreddit}`
+      );
     }
     return c.json({ status: 'success' });
   } catch (error) {
@@ -359,7 +452,7 @@ api.post('/ui/register', async (c) => {
 api.post('/ui/toast', async (c) => {
   try {
     const { message } = await c.req.json();
-    // context from @devvit/web/server provides generic access, 
+    // context from @devvit/web/server provides generic access,
     // but ui is usually on the request context in Hono relay.
     // However, if the modular server doesn't expose ui here, we fallback.
     const devContext: any = context;
@@ -376,7 +469,9 @@ api.get('/trends', async (c) => {
   try {
     const trends = await readTrendData(DATA_SUBREDDIT);
     return c.json(trends || { subreddit: DATA_SUBREDDIT, stale: true });
-  } catch (error) { return c.json({ subreddit: DATA_SUBREDDIT, stale: true }); }
+  } catch (error) {
+    return c.json({ subreddit: DATA_SUBREDDIT, stale: true });
+  }
 });
 
 api.get('/history', async (c) => {
@@ -385,24 +480,34 @@ api.get('/history', async (c) => {
     const now = Date.now();
     const expiration = 45 * 60 * 1000; // 45 minutes
 
-    const history = await Promise.all(historyRaw.map(async (e: any) => {
-      const entry = JSON.parse(e.member);
-      if (entry.status === 'running' && (now - entry.startTime) > expiration) {
-        try {
-          const oldEntryStr = JSON.stringify(entry);
-          entry.status = 'interrupted';
-          entry.details = (entry.details || '') + ' (Job timed out/interrupted)';
-          entry.endTime = entry.startTime + expiration;
-          
-          await redis.zRem('jobs:history', [oldEntryStr]);
-          await redis.zAdd('jobs:history', { member: JSON.stringify(entry), score: entry.startTime });
-        } catch (err) { /* ignore cleanup error */ }
-      }
-      return entry;
-    }));
+    const history = await Promise.all(
+      historyRaw.map(async (e: any) => {
+        const entry = JSON.parse(e.member);
+        if (entry.status === 'running' && now - entry.startTime > expiration) {
+          try {
+            const oldEntryStr = JSON.stringify(entry);
+            entry.status = 'interrupted';
+            entry.details =
+              (entry.details || '') + ' (Job timed out/interrupted)';
+            entry.endTime = entry.startTime + expiration;
+
+            await redis.zRem('jobs:history', [oldEntryStr]);
+            await redis.zAdd('jobs:history', {
+              member: JSON.stringify(entry),
+              score: entry.startTime,
+            });
+          } catch (err) {
+            /* ignore cleanup error */
+          }
+        }
+        return entry;
+      })
+    );
 
     return c.json(history.reverse());
-  } catch (error) { return c.json([]); }
+  } catch (error) {
+    return c.json([]);
+  }
 });
 
 api.get('/settings', async (c) => {
@@ -416,49 +521,93 @@ api.get('/settings', async (c) => {
       storage.get(`subreddit:${DATA_SUBREDDIT}:report`),
     ]);
     return c.json({
-      settings: settingsStr ? JSON.parse(settingsStr) : DEFAULT_CALCULATION_SETTINGS,
+      settings: settingsStr
+        ? JSON.parse(settingsStr)
+        : DEFAULT_CALCULATION_SETTINGS,
       display: displayStr ? JSON.parse(displayStr) : DEFAULT_USER_SETTINGS,
       storage: storageStr ? JSON.parse(storageStr) : DEFAULT_STORAGE_SETTINGS,
       report: reportStr ? JSON.parse(reportStr) : DEFAULT_REPORT_SETTINGS,
     });
-  } catch (error) { return c.json({ status: 'error' }, 500); }
+  } catch (error) {
+    return c.json({ status: 'error' }, 500);
+  }
 });
 
 api.post('/settings', async (c) => {
   try {
     const username = await reddit.getCurrentUsername();
     if (!username) return c.json({ status: 'error' }, 401);
-    const { settings, display, storage: storageSettings, report } = await c.req.json();
+    const {
+      settings,
+      display,
+      storage: storageSettings,
+      report,
+    } = await c.req.json();
     const promises = [];
-    if (settings) promises.push(storage.set(`subreddit:${DATA_SUBREDDIT}:settings`, JSON.stringify(settings)));
-    if (display) promises.push(storage.set(`user:${username}:display`, JSON.stringify(display)));
-    if (storageSettings) promises.push(storage.set(`subreddit:${DATA_SUBREDDIT}:storage`, JSON.stringify(storageSettings)));
-    if (report) promises.push(storage.set(`subreddit:${DATA_SUBREDDIT}:report`, JSON.stringify(report)));
+    if (settings)
+      promises.push(
+        storage.set(
+          `subreddit:${DATA_SUBREDDIT}:settings`,
+          JSON.stringify(settings)
+        )
+      );
+    if (display)
+      promises.push(
+        storage.set(`user:${username}:display`, JSON.stringify(display))
+      );
+    if (storageSettings)
+      promises.push(
+        storage.set(
+          `subreddit:${DATA_SUBREDDIT}:storage`,
+          JSON.stringify(storageSettings)
+        )
+      );
+    if (report)
+      promises.push(
+        storage.set(
+          `subreddit:${DATA_SUBREDDIT}:report`,
+          JSON.stringify(report)
+        )
+      );
     await Promise.all(promises);
     return c.json({ status: 'success' });
-  } catch (error) { return c.json({ status: 'error' }, 500); }
+  } catch (error) {
+    return c.json({ status: 'error' }, 500);
+  }
 });
 
 api.post('/snapshot/take-now', async (c) => {
   try {
-    const isContinuation = (await c.req.json().catch(() => ({}))).continuation === true;
-    const settingsStr = await storage.get(`subreddit:${DATA_SUBREDDIT}:settings`);
-    const calcSettings = settingsStr ? JSON.parse(settingsStr) : DEFAULT_CALCULATION_SETTINGS;
+    const isContinuation =
+      (await c.req.json().catch(() => ({}))).continuation === true;
+    const settingsStr = await storage.get(
+      `subreddit:${DATA_SUBREDDIT}:settings`
+    );
+    const calcSettings = settingsStr
+      ? JSON.parse(settingsStr)
+      : DEFAULT_CALCULATION_SETTINGS;
 
-    const scanId = await snapshotter.runLifecycle(DATA_SUBREDDIT, calcSettings, {
-      isManual: true,
-      isContinuation,
-      trendingService: noopTrendService,
-      redis,
-      scheduler,
-    });
+    const scanId = await snapshotter.runLifecycle(
+      DATA_SUBREDDIT,
+      calcSettings,
+      {
+        isManual: true,
+        isContinuation,
+        trendingService: noopTrendService,
+        redis,
+        scheduler,
+      }
+    );
 
     // Keep the HTTP request responsive; run full trend materialization in background.
     void (async () => {
       try {
         await trendDataService.materializeForScan(DATA_SUBREDDIT, scanId);
       } catch (error) {
-        console.warn('[API] Full trend materialization failed after snapshot, falling back to manual seed:', error);
+        console.warn(
+          '[API] Full trend materialization failed after snapshot, falling back to manual seed:',
+          error
+        );
         await runManualMaterialization(DATA_SUBREDDIT);
       }
     })();
@@ -476,20 +625,37 @@ api.post('/trigger-trends', async (c) => {
     const latestScanId = parseInt(latestScanRaw || '0', 10);
 
     if (!Number.isFinite(latestScanId) || latestScanId <= 0) {
-      return c.json({ status: 'error', message: `No scan available for r/${subreddit}. Take a snapshot first.` }, 400);
+      return c.json(
+        {
+          status: 'error',
+          message: `No scan available for r/${subreddit}. Take a snapshot first.`,
+        },
+        400
+      );
     }
 
     void (async () => {
       try {
         await trendDataService.materializeTrends(subreddit, latestScanId);
       } catch (error) {
-        console.warn('[API] Full trend materialization failed from trigger, falling back to manual seed:', error);
+        console.warn(
+          '[API] Full trend materialization failed from trigger, falling back to manual seed:',
+          error
+        );
         await runManualMaterialization(subreddit);
       }
     })();
 
-    return c.json({ status: 'accepted', message: `Trend materialization started for r/${subreddit}` }, 202);
-  } catch (e) { return c.json({ status: 'error', message: String(e) }, 500); }
+    return c.json(
+      {
+        status: 'accepted',
+        message: `Trend materialization started for r/${subreddit}`,
+      },
+      202
+    );
+  } catch (e) {
+    return c.json({ status: 'error', message: String(e) }, 500);
+  }
 });
 
 api.post('/migrate-subreddits', async (c) => {
@@ -499,11 +665,15 @@ api.post('/migrate-subreddits', async (c) => {
     for (let id = 1; id <= maxId; id++) {
       const meta = await redis.hGetAll(`run:${id}:meta`);
       if (meta?.subreddit?.includes('QuizPlanetGame')) {
-        await redis.hSet(`run:${id}:meta`, { subreddit: meta.subreddit.replace('QuizPlanetGame', 'modscope_dev') });
+        await redis.hSet(`run:${id}:meta`, {
+          subreddit: meta.subreddit.replace('QuizPlanetGame', 'modscope_dev'),
+        });
       }
     }
     return c.json({ status: 'success' });
-  } catch (e) { return c.json({ status: 'error' }, 500); }
+  } catch (e) {
+    return c.json({ status: 'error' }, 500);
+  }
 });
 
 api.get('/debug-error', async (c) => {
@@ -515,7 +685,10 @@ api.get('/debug-error', async (c) => {
 api.get('/diagnostics/retry-clustering', async (c) => {
   try {
     const subreddit = c.req.query('subreddit') || DATA_SUBREDDIT;
-    const diagnostics = await SnapshotService.getRetryDiagnostics(subreddit, redis);
+    const diagnostics = await SnapshotService.getRetryDiagnostics(
+      subreddit,
+      redis
+    );
     return c.json(diagnostics);
   } catch (error) {
     return c.json({ error: String(error) }, 500);

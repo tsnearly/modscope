@@ -70,8 +70,10 @@ const lucideIconMap = {
   x: X,
 } as const;
 
-export interface IconProps
-  extends Omit<React.ImgHTMLAttributes<HTMLImageElement>, 'size'> {
+export interface IconProps extends Omit<
+  React.ImgHTMLAttributes<HTMLImageElement>,
+  'size'
+> {
   name?: string;
   src?: string;
   variant?: 'outline' | 'solid' | 'mini' | 'micro' | string;
@@ -98,12 +100,11 @@ export function Icon({
       : undefined;
   if (lucideRef) {
     const iconName = lucideRef.slice(7); // strip "lucide:"
-    const LucideIcon =
-      lucideIconMap[iconName as keyof typeof lucideIconMap];
+    const LucideIcon = lucideIconMap[iconName as keyof typeof lucideIconMap];
 
     if (!LucideIcon) {
       console.warn(
-        `[Icon] Lucide icon not found: "${iconName}" (from "${name}")`,
+        `[Icon] Lucide icon not found: "${iconName}" (from "${name}")`
       );
       return null;
     }
@@ -167,7 +168,14 @@ export function Icon({
     }
     return (
       <div
-        className={cn(iconVariants({ size: (typeof size === "string" &&  (size as any) === "default" ? "sm" : size) as any }), className)}
+        className={cn(
+          iconVariants({
+            size: (typeof size === 'string' && (size as any) === 'default'
+              ? 'sm'
+              : size) as any,
+          }),
+          className
+        )}
         style={maskedStyle}
       />
     );
@@ -189,7 +197,14 @@ export function Icon({
     <img
       src={resolvedSrc}
       alt={alt}
-      className={cn(iconVariants({ size: (typeof size === "string" &&  (size as any) === "default" ? "sm" : size) as any }), className)}
+      className={cn(
+        iconVariants({
+          size: (typeof size === 'string' && (size as any) === 'default'
+            ? 'sm'
+            : size) as any,
+        }),
+        className
+      )}
       style={iconStyle}
       {...props}
     />

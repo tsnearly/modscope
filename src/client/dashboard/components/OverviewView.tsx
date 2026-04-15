@@ -4,13 +4,13 @@ import { getDataGroupingIcon, type IconContext } from '../utils/iconMappings';
 import { Chart } from './ui/chart';
 import { Icon } from './ui/icon';
 import {
-    TooltipArrow,
-    TooltipContent,
-    TooltipPortal,
-    TooltipProvider,
-    TooltipRoot,
-    TooltipTrigger,
-    tooltipContentClass,
+  TooltipArrow,
+  TooltipContent,
+  TooltipPortal,
+  TooltipProvider,
+  TooltipRoot,
+  TooltipTrigger,
+  tooltipContentClass,
 } from './ui/tooltip';
 
 interface OverviewMetric {
@@ -59,13 +59,13 @@ export function OverviewView({
         timeStats[key] = { engagement_scores: [], day: day || 'Unknown', hour };
       }
       timeStats[key]!.engagement_scores.push(
-        post.engagement_score !== undefined ? post.engagement_score : post.score,
+        post.engagement_score !== undefined ? post.engagement_score : post.score
       );
     });
 
     const maxPostsInSlot = Math.max(
       ...Object.values(timeStats).map((s) => s.engagement_scores.length),
-      1,
+      1
     );
     const targetMinPosts = Math.max(2, Math.floor(maxPostsInSlot * 0.15));
 
@@ -98,22 +98,107 @@ export function OverviewView({
     }
 
     const uniquePosts = Array.from(
-      new Map(pool.map((p: PostData) => [p.url, p])).values(),
+      new Map(pool.map((p: PostData) => [p.url, p])).values()
     );
 
     const stopWords = new Set([
-      'an', 'a', 'the', 'and', 'for', 'with', 'got', 'here', 'from', 'about',
-      'quiz', 'trivia', 'knowledge', 'games', 'game', 'questions', 'question',
-      'answers', 'answer', 'test', 'challenge', 'round', 'results', 'score',
-      'random', 'general', 'discussion', 'opinion', 'help', 'easy', 'medium',
-      'harder', 'easier', 'hardest', 'easiest', 'hard', 'advanced', 'beginner',
-      'levels', 'level', 'short', 'long', 'large', 'small', 'tiny', 'today',
-      'modern', 'classic', 'forgotten', 'popular', 'famous', 'edition', 'version',
-      'parts', 'part', 'series', 'episode', 'your', 'you', 'know', 'what', 'new',
-      'fun', 'lets', 'this', 'these', 'how', 'find', 'enjoy', 'let', 'its', 'are',
-      'all', 'guess', 'can', 'that', 'one', 'who', 'which', 'out', 'day', 'now',
-      'todays', 'name', 'play', 'start', 'top', 'old', 'quick', 'basic', 'lowest',
-      'weird', 'odd', 'pointless', 'some', 'than', 'get',
+      'an',
+      'a',
+      'the',
+      'and',
+      'for',
+      'with',
+      'got',
+      'here',
+      'from',
+      'about',
+      'quiz',
+      'trivia',
+      'knowledge',
+      'games',
+      'game',
+      'questions',
+      'question',
+      'answers',
+      'answer',
+      'test',
+      'challenge',
+      'round',
+      'results',
+      'score',
+      'random',
+      'general',
+      'discussion',
+      'opinion',
+      'help',
+      'easy',
+      'medium',
+      'harder',
+      'easier',
+      'hardest',
+      'easiest',
+      'hard',
+      'advanced',
+      'beginner',
+      'levels',
+      'level',
+      'short',
+      'long',
+      'large',
+      'small',
+      'tiny',
+      'today',
+      'modern',
+      'classic',
+      'forgotten',
+      'popular',
+      'famous',
+      'edition',
+      'version',
+      'parts',
+      'part',
+      'series',
+      'episode',
+      'your',
+      'you',
+      'know',
+      'what',
+      'new',
+      'fun',
+      'lets',
+      'this',
+      'these',
+      'how',
+      'find',
+      'enjoy',
+      'let',
+      'its',
+      'are',
+      'all',
+      'guess',
+      'can',
+      'that',
+      'one',
+      'who',
+      'which',
+      'out',
+      'day',
+      'now',
+      'todays',
+      'name',
+      'play',
+      'start',
+      'top',
+      'old',
+      'quick',
+      'basic',
+      'lowest',
+      'weird',
+      'odd',
+      'pointless',
+      'some',
+      'than',
+      'get',
     ]);
 
     const wordCounts: Record<string, number> = {};
@@ -124,7 +209,7 @@ export function OverviewView({
           .toLowerCase()
           .replace(/[^\w\s]/g, '')
           .split(/\s+/)
-          .filter((word: string) => word.length >= 3 && !stopWords.has(word)),
+          .filter((word: string) => word.length >= 3 && !stopWords.has(word))
       );
 
       words.forEach((word: string) => {
@@ -157,7 +242,7 @@ export function OverviewView({
           (p) =>
             !effectiveOfficials.includes(p.author) &&
             p.author !== officialAccount &&
-            p.author !== 'None',
+            p.author !== 'None'
         )
       : poolRaw
     : [];
@@ -180,11 +265,15 @@ export function OverviewView({
   const maxPosts = postCounts.length > 0 ? Math.max(...postCounts) : 0;
   const minComments = commentCounts.length > 0 ? Math.min(...commentCounts) : 0;
   const maxComments = commentCounts.length > 0 ? Math.max(...commentCounts) : 0;
-  const minScore = engagementScores.length > 0 ? Math.min(...engagementScores) : 0;
-  const maxScore = engagementScores.length > 0 ? Math.max(...engagementScores) : 0;
+  const minScore =
+    engagementScores.length > 0 ? Math.min(...engagementScores) : 0;
+  const maxScore =
+    engagementScores.length > 0 ? Math.max(...engagementScores) : 0;
   const avgScore =
     engagementScores.length > 0
-      ? Math.round(engagementScores.reduce((a, b) => a + b, 0) / engagementScores.length)
+      ? Math.round(
+          engagementScores.reduce((a, b) => a + b, 0) / engagementScores.length
+        )
       : 0;
 
   const voteCounts = pool.map((p: PostData) => p.score);

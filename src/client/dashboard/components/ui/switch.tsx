@@ -1,10 +1,9 @@
 import React, { InputHTMLAttributes, useId } from 'react';
 
-interface SwitchProps
-  extends Omit<
-    InputHTMLAttributes<HTMLInputElement>,
-    'type' | 'align' | 'onChange'
-  > {
+interface SwitchProps extends Omit<
+  InputHTMLAttributes<HTMLInputElement>,
+  'type' | 'align' | 'onChange'
+> {
   label?: string;
   description?: string;
   align?: 'right' | 'start' | 'end';

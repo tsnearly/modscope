@@ -11,12 +11,12 @@ export default defineConfig({
     teardownTimeout: 10000,
     reporter: ['verbose', 'json'],
     outputFile: {
-      json: './test-results.json'
-    }
+      json: './test-results.json',
+    },
   },
   resolve: {
     alias: {
-      '@': './src'
-    }
-  }
+      '@': './src',
+    },
+  },
 });

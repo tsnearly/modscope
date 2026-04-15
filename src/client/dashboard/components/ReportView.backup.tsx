@@ -240,8 +240,10 @@ function ReportView({
       (analytics?.trendData?.globalBestPostingTimes &&
         analytics.trendData.globalBestPostingTimes.length > 0) ||
       analytics?.trendData?.globalStats ||
-      (trendsData?.subscriberGrowth && trendsData.subscriberGrowth.length > 0) ||
-      (trendsData?.engagementOverTime && trendsData.engagementOverTime.length > 0) ||
+      (trendsData?.subscriberGrowth &&
+        trendsData.subscriberGrowth.length > 0) ||
+      (trendsData?.engagementOverTime &&
+        trendsData.engagementOverTime.length > 0) ||
       (trendsData?.contentMix && trendsData.contentMix.length > 0)
     );
   }, [analytics, trendsData]);
@@ -321,13 +323,12 @@ function ReportView({
     const shouldLoadTrends =
       activeTab === 'overview' ||
       activeTab === 'trends' ||
-      (isPrintMode && (
-        reportSettings.showTrendSubscribers ||
-        reportSettings.showTrendEngagement ||
-        reportSettings.showTrendContent ||
-        reportSettings.showTrendPosting ||
-        reportSettings.showTrendBestPostTime
-      ));
+      (isPrintMode &&
+        (reportSettings.showTrendSubscribers ||
+          reportSettings.showTrendEngagement ||
+          reportSettings.showTrendContent ||
+          reportSettings.showTrendPosting ||
+          reportSettings.showTrendBestPostTime));
 
     if (!shouldLoadTrends) {
       return;
@@ -355,7 +356,7 @@ function ReportView({
         if (mounted) {
           setTrendsLoadedKey(null);
           setTrendsError(
-            e instanceof Error ? e.message : 'Failed to load trends',
+            e instanceof Error ? e.message : 'Failed to load trends'
           );
         }
       } finally {
@@ -369,7 +370,18 @@ function ReportView({
     return () => {
       mounted = false;
     };
-  }, [activeTab, isPrintMode, trendsCacheKey, trendsData, trendsLoadedKey, reportSettings.showTrendSubscribers, reportSettings.showTrendEngagement, reportSettings.showTrendContent, reportSettings.showTrendPosting, reportSettings.showTrendBestPostTime]);
+  }, [
+    activeTab,
+    isPrintMode,
+    trendsCacheKey,
+    trendsData,
+    trendsLoadedKey,
+    reportSettings.showTrendSubscribers,
+    reportSettings.showTrendEngagement,
+    reportSettings.showTrendContent,
+    reportSettings.showTrendPosting,
+    reportSettings.showTrendBestPostTime,
+  ]);
 
   // Merge snapshot-stored official accounts with live-detected ones so that
   // bootstrapped snapshots (which have officialAccounts: []) still filter correctly.
@@ -418,7 +430,7 @@ function ReportView({
   ) {
     console.error(
       '[REPORT] Invalid or partial analytics data received:',
-      analytics,
+      analytics
     );
     return (
       <div className="flex flex-col items-center justify-center h-full p-8 text-center bg-white border-2 border-dashed border-gray-200 rounded-xl m-4 shadow-inner">
@@ -460,32 +472,33 @@ function ReportView({
   ].filter((t) => {
     // Filter tabs based on report settings
     if (t.tab === 'overview' && reportSettings.showOverview === false) {
-return false;
-}
+      return false;
+    }
     if (t.tab === 'timing' && reportSettings.showTiming === false) {
-return false;
-}
+      return false;
+    }
     if (t.tab === 'posts' && reportSettings.showPosts === false) {
-return false;
-}
+      return false;
+    }
     if (t.tab === 'users' && reportSettings.showUsers === false) {
-return false;
-}
+      return false;
+    }
     if (t.tab === 'content' && reportSettings.showContent === false) {
-return false;
-}
+      return false;
+    }
     if (t.tab === 'activity' && reportSettings.showActivity === false) {
-return false;
-}
-    if (t.tab === 'trends' && (
+      return false;
+    }
+    if (
+      t.tab === 'trends' &&
       reportSettings.showTrendSubscribers === false &&
       reportSettings.showTrendContent === false &&
       reportSettings.showTrendEngagement === false &&
       reportSettings.showTrendPosting === false &&
       reportSettings.showTrendBestPostTime === false
-    )) {
-return false;
-}
+    ) {
+      return false;
+    }
     return true;
   });
 
@@ -516,13 +529,13 @@ return false;
       }
       // Use engagement score if available since UI labels it "historical engagement scores"
       timeStats[key]!.engagement_scores.push(
-        post.engagement_score !== undefined ? post.engagement_score : post.score,
+        post.engagement_score !== undefined ? post.engagement_score : post.score
       );
     });
 
     const maxPostsInSlot = Math.max(
       ...Object.values(timeStats).map((s) => s.engagement_scores.length),
-      1,
+      1
     );
     // Require a reasonable sample size if the subreddit is highly active
     const targetMinPosts = Math.max(2, Math.floor(maxPostsInSlot * 0.15));
@@ -562,7 +575,7 @@ return false;
     }
 
     const uniquePosts = Array.from(
-      new Map(pool.map((p: PostData) => [p.url, p])).values(),
+      new Map(pool.map((p: PostData) => [p.url, p])).values()
     );
 
     const stopWords = new Set([
@@ -673,7 +686,7 @@ return false;
           .toLowerCase()
           .replace(/[^\w\s]/g, '')
           .split(/\s+/)
-          .filter((word: string) => word.length >= 3 && !stopWords.has(word)),
+          .filter((word: string) => word.length >= 3 && !stopWords.has(word))
       );
 
       words.forEach((word: string) => {
@@ -783,7 +796,7 @@ return false;
                 (p) =>
                   !effectiveOfficials.includes(p.author) &&
                   p.author !== officialAccount &&
-                  p.author !== 'None',
+                  p.author !== 'None'
               )
             : poolRaw
           : [];
@@ -816,7 +829,7 @@ return false;
           engagementScores.length > 0
             ? Math.round(
                 engagementScores.reduce((a, b) => a + b, 0) /
-                  engagementScores.length,
+                  engagementScores.length
               )
             : 0;
 
@@ -1112,7 +1125,8 @@ return false;
                           intensity: 0,
                           count: 0,
                         };
-                        const dayLabel = FULL_DAYS[d] || DAYS[d] || 'Unknown day';
+                        const dayLabel =
+                          FULL_DAYS[d] || DAYS[d] || 'Unknown day';
                         const hourLabel = formatHourLabel(h);
                         const colors = [
                           'var(--color-bg)',
@@ -1173,7 +1187,7 @@ return false;
                       },
                     ].filter(
                       ({ t }, idx, arr) =>
-                        idx === 0 || t[0] !== arr[idx - 1]!.t[0],
+                        idx === 0 || t[0] !== arr[idx - 1]!.t[0]
                     );
                     return (
                       <div className="mt-4 flex flex-wrap gap-x-3 gap-y-1 text-[9px] font-medium text-slate-500 justify-center">
@@ -1259,7 +1273,7 @@ return false;
                       (p: PostData) =>
                         !effectiveOfficials.includes(p.author) &&
                         p.author !== officialAccount &&
-                        p.author !== 'None',
+                        p.author !== 'None'
                     )
                   : list;
 
@@ -1367,7 +1381,7 @@ return false;
                                     <Icon
                                       src={getPostDetailIcon(
                                         'upvotes',
-                                        iconContext,
+                                        iconContext
                                       )}
                                       size={10}
                                     />
@@ -1387,7 +1401,7 @@ return false;
                                     <Icon
                                       src={getPostDetailIcon(
                                         'comments',
-                                        iconContext,
+                                        iconContext
                                       )}
                                       size={10}
                                     />
@@ -1411,7 +1425,7 @@ return false;
                                       <Icon
                                         src={getPostDetailIcon(
                                           'engagement',
-                                          iconContext,
+                                          iconContext
                                         )}
                                         size={10}
                                       />
@@ -1435,7 +1449,7 @@ return false;
                                       <Icon
                                         src={getPostDetailIcon(
                                           'depth',
-                                          iconContext,
+                                          iconContext
                                         )}
                                         size={10}
                                       />
@@ -1456,7 +1470,7 @@ return false;
                                       <Icon
                                         src={getPostDetailIcon(
                                           'creator',
-                                          iconContext,
+                                          iconContext
                                         )}
                                         size={10}
                                       />
@@ -1465,7 +1479,8 @@ return false;
                                   </Tooltip>
                                 )}
                                 <span>
-                                  • {post.author} • {formatPostListDateTime(post.created_utc)}
+                                  • {post.author} •{' '}
+                                  {formatPostListDateTime(post.created_utc)}
                                 </span>
                               </div>
                             </div>
@@ -1523,7 +1538,7 @@ return false;
                 (c) =>
                   !effectiveOfficials.includes(c.name) &&
                   c.name !== officialAccount &&
-                  c.name !== 'None',
+                  c.name !== 'None'
               )
             : topContributors
         ).slice(0, 5);
@@ -1534,7 +1549,7 @@ return false;
                 (i) =>
                   !effectiveOfficials.includes(i.name) &&
                   i.name !== officialAccount &&
-                  i.name !== 'None',
+                  i.name !== 'None'
               )
             : topInfluencers
         ).slice(0, 5);
@@ -1690,7 +1705,7 @@ return false;
           : [];
 
         const uniquePostsForContent = Array.from(
-          new Map(allPostsForContent.map((p: PostData) => [p.url, p])).values(),
+          new Map(allPostsForContent.map((p: PostData) => [p.url, p])).values()
         );
 
         const typeStats: Record<
@@ -1729,7 +1744,7 @@ return false;
             avg_score:
               data.scores.length > 0
                 ? Math.round(
-                    data.scores.reduce((a, b) => a + b, 0) / data.scores.length,
+                    data.scores.reduce((a, b) => a + b, 0) / data.scores.length
                   )
                 : 0,
           }))
@@ -1775,14 +1790,14 @@ return false;
             avg_score:
               data.scores.length > 0
                 ? Math.round(
-                    data.scores.reduce((a, b) => a + b, 0) / data.scores.length,
+                    data.scores.reduce((a, b) => a + b, 0) / data.scores.length
                   )
                 : 0,
             avg_len:
               data.lengths.length > 0
                 ? Math.round(
                     data.lengths.reduce((a, b) => a + b, 0) /
-                      data.lengths.length,
+                      data.lengths.length
                   )
                 : 0,
           }))
@@ -1794,7 +1809,7 @@ return false;
 
         const getRankedColor = (data: any[], value: number) => {
           const sortedValues = [...new Set(data.map((d) => d.count))].sort(
-            (a, b) => a - b,
+            (a, b) => a - b
           );
           const numUnique = sortedValues.length;
           const rank = sortedValues.indexOf(value);
@@ -1825,20 +1840,23 @@ return false;
         const uniquePoolCountForContent = uniquePostsForContent.length;
         const duplicateCountForContent = Math.max(
           0,
-          rawPoolCountForContent - uniquePoolCountForContent,
+          rawPoolCountForContent - uniquePoolCountForContent
         );
 
         return (
           <div className="flex flex-col gap-2 p-2 h-full overflow-y-auto">
             <div className="bg-card border border-border rounded-md px-3 py-2 text-[11px] text-slate-600 flex flex-wrap gap-x-4 gap-y-1">
               <span>
-                Raw pool posts: <strong>{rawPoolCountForContent.toLocaleString()}</strong>
+                Raw pool posts:{' '}
+                <strong>{rawPoolCountForContent.toLocaleString()}</strong>
               </span>
               <span>
-                Unique posts (URL dedupe): <strong>{uniquePoolCountForContent.toLocaleString()}</strong>
+                Unique posts (URL dedupe):{' '}
+                <strong>{uniquePoolCountForContent.toLocaleString()}</strong>
               </span>
               <span>
-                Duplicate entries removed: <strong>{duplicateCountForContent.toLocaleString()}</strong>
+                Duplicate entries removed:{' '}
+                <strong>{duplicateCountForContent.toLocaleString()}</strong>
               </span>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 shrink-0">
@@ -1886,7 +1904,7 @@ return false;
                                 width: `${type.percentage}%`,
                                 background: getRankedColor(
                                   postTypes,
-                                  type.count,
+                                  type.count
                                 ),
                                 height: '100%',
                                 transition: 'width 0.5s ease',
@@ -1957,7 +1975,7 @@ return false;
                               width: `${len.percentage}%`,
                               background: getRankedColor(
                                 titleLengthData,
-                                len.count,
+                                len.count
                               ),
                               height: '100%',
                               transition: 'width 0.5s ease',
@@ -2224,7 +2242,6 @@ return false;
           );
         };
 
-
         /*                // 1. Community Growth Data
 
                 // 2. Content Mix Data
@@ -2363,7 +2380,6 @@ return false;
                                 </div>
                             </Chart>
                         )} */}
-
 
             <Chart
               title="Activity Trend (30d)"
@@ -2647,7 +2663,6 @@ return false;
           </div>
         );
 
-
       case 'trends':
         if (trendsLoading) {
           return (
@@ -2752,11 +2767,11 @@ return false;
 
             {/* Best Posting Times Change Chart */}
             {reportSettings.showTrendBestPostTime && (
-            <BestPostingTimesChangeChart
-              trendsData={trendsData}
-              iconContext={iconContext}
-              isPrintMode={isPrintMode}
-            />
+              <BestPostingTimesChangeChart
+                trendsData={trendsData}
+                iconContext={iconContext}
+                isPrintMode={isPrintMode}
+              />
             )}
           </div>
         );
@@ -2880,14 +2895,14 @@ return false;
                 (p: any) =>
                   !effectiveOfficials.includes(p.author) &&
                   p.author !== officialAccount &&
-                  p.author !== 'None',
+                  p.author !== 'None'
               )
             : analytics.analysisPool;
           const engScores = printPool.map((p: any) => p.engagement_score || 0);
           const printAvgScore =
             engScores.length > 0
               ? Math.round(
-                  engScores.reduce((a, b) => a + b, 0) / engScores.length,
+                  engScores.reduce((a, b) => a + b, 0) / engScores.length
                 )
               : 0;
 
@@ -2925,7 +2940,7 @@ return false;
                     {
                       label: 'Subscribers',
                       value: Number(
-                        analytics.stats.subscribers,
+                        analytics.stats.subscribers
                       ).toLocaleString(),
                     },
                     { label: 'Active Users', value: analytics.stats.active },
@@ -2971,691 +2986,756 @@ return false;
 
                 {/* Heatmap & Cloud Section */}
                 {reportSettings.showTiming && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8 pdf-safe-block">
-                  <Chart
-                    title="Activity Heatmap"
-                    icon={
-                      <Icon
-                        src={getDataGroupingIcon('activity_heatmap', 'printed')}
-                        size={20}
-                      />
-                    }
-                    height="auto"
-                  >
-                    <div className="p-2">
-                      <div
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: '40px repeat(24, 1fr)',
-                          gap: '2px',
-                          fontSize: '9px',
-                          color: '#64748b',
-                        }}
-                      >
-                        <div></div>
-                        {Array.from({ length: 24 }).map((_, i) => (
-                          <div key={i} style={{ textAlign: 'center' }}>
-                            {i}
-                          </div>
-                        ))}
-                        {DAYS.map((day, d) => (
-                          <React.Fragment key={d}>
-                            <div
-                              style={{
-                                textAlign: 'right',
-                                paddingRight: '6px',
-                                fontWeight: 'bold',
-                              }}
-                            >
-                              {day}
-                            </div>
-                            {Array.from({ length: 24 }, (_, h) => {
-                              const data = heatmapResult.grid[`${d}-${h}`] || {
-                                intensity: 0,
-                                count: 0,
-                              };
-                              const colors = [
-                                'var(--heatmap-0)',
-                                'var(--heatmap-1)',
-                                'var(--heatmap-3)',
-                                'var(--heatmap-5)',
-                                'var(--heatmap-7)',
-                                'var(--heatmap-9)',
-                              ];
-                              return (
-                                <div
-                                  key={h}
-                                  style={{
-                                    aspectRatio: '1',
-                                    borderRadius: '2px',
-                                    background: colors[data.intensity],
-                                    border: '1px solid var(--color-border)',
-                                    opacity: 0.9,
-                                  }}
-                                />
-                              );
-                            })}
-                          </React.Fragment>
-                        ))}
-                      </div>
-                      {heatmapResult.thresholds &&
-                        (() => {
-                          const tiers = [
-                            {
-                              key: 'low',
-                              label: 'low',
-                              color: 'var(--heatmap-1)',
-                              t: heatmapResult.thresholds!.low,
-                            },
-                            {
-                              key: 'medium',
-                              label: 'medium',
-                              color: 'var(--heatmap-3)',
-                              t: heatmapResult.thresholds!.medium,
-                            },
-                            {
-                              key: 'high',
-                              label: 'high',
-                              color: 'var(--heatmap-5)',
-                              t: heatmapResult.thresholds!.high,
-                            },
-                            {
-                              key: 'extreme',
-                              label: 'extreme',
-                              color: 'var(--heatmap-7)',
-                              t: heatmapResult.thresholds!.extreme,
-                            },
-                            {
-                              key: 'superhigh',
-                              label: 'superhigh',
-                              color: 'var(--heatmap-9)',
-                              t: heatmapResult.thresholds!.superhigh,
-                            },
-                          ].filter(
-                            ({ t }, idx, arr) =>
-                              idx === 0 || t[0] !== arr[idx - 1]!.t[0],
-                          );
-                          return (
-                            <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-[8px] font-medium text-slate-500 justify-center">
-                              <div className="flex items-center gap-1">
-                                <div
-                                  className="w-3 h-3 rounded-sm"
-                                  style={{
-                                    background: 'var(--heatmap-0)',
-                                    border: '1px solid #e2e8f0',
-                                  }}
-                                />
-                                none: 0
-                              </div>
-                              {tiers.map(({ key, label, color, t }) => (
-                                <div
-                                  key={key}
-                                  className="flex items-center gap-1"
-                                >
-                                  <div
-                                    className="w-3 h-3 rounded-sm"
-                                    style={{ background: color }}
-                                  />
-                                  {label}: {t[0]}
-                                  {t[1] === Infinity ? '+' : `\u2013${t[1]}`}
-                                </div>
-                              ))}
-                            </div>
-                          );
-                        })()}
-                    </div>
-                  </Chart>
-
-                  <Chart
-                    title="Content Word Cloud"
-                    icon={
-                      <Icon
-                        src={getDataGroupingIcon('word_cloud', 'printed')}
-                        size={20}
-                      />
-                    }
-                    height="auto"
-                  >
-                    <div
-                      style={{
-                        display: 'flex',
-                        flexWrap: 'wrap',
-                        gap: '2px 6px',
-                        alignItems: 'baseline',
-                        justifyContent: 'center',
-                        padding: '12px',
-                        background: '#f8fafc',
-                        borderRadius: '4px',
-                      }}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8 pdf-safe-block">
+                    <Chart
+                      title="Activity Heatmap"
+                      icon={
+                        <Icon
+                          src={getDataGroupingIcon(
+                            'activity_heatmap',
+                            'printed'
+                          )}
+                          size={20}
+                        />
+                      }
+                      height="auto"
                     >
-                      {getWordCloudData().map((item, i) => (
-                        <span
-                          key={item.word}
+                      <div className="p-2">
+                        <div
                           style={{
-                            fontWeight: 'bold',
-                            color: [
-                              '#1e3a8a',
-                              '#1e40af',
-                              '#1d4ed8',
-                              '#2563eb',
-                              '#3b82f6',
-                            ][i % 5],
-                            lineHeight: 0.85,
-                            fontSize: `${item.size}em`,
-                            opacity: Math.max(0.6, item.opacity),
+                            display: 'grid',
+                            gridTemplateColumns: '40px repeat(24, 1fr)',
+                            gap: '2px',
+                            fontSize: '9px',
+                            color: '#64748b',
                           }}
                         >
-                          {item.word}
-                        </span>
-                      ))}
-                    </div>
-                  </Chart>
-                </div>
+                          <div></div>
+                          {Array.from({ length: 24 }).map((_, i) => (
+                            <div key={i} style={{ textAlign: 'center' }}>
+                              {i}
+                            </div>
+                          ))}
+                          {DAYS.map((day, d) => (
+                            <React.Fragment key={d}>
+                              <div
+                                style={{
+                                  textAlign: 'right',
+                                  paddingRight: '6px',
+                                  fontWeight: 'bold',
+                                }}
+                              >
+                                {day}
+                              </div>
+                              {Array.from({ length: 24 }, (_, h) => {
+                                const data = heatmapResult.grid[
+                                  `${d}-${h}`
+                                ] || {
+                                  intensity: 0,
+                                  count: 0,
+                                };
+                                const colors = [
+                                  'var(--heatmap-0)',
+                                  'var(--heatmap-1)',
+                                  'var(--heatmap-3)',
+                                  'var(--heatmap-5)',
+                                  'var(--heatmap-7)',
+                                  'var(--heatmap-9)',
+                                ];
+                                return (
+                                  <div
+                                    key={h}
+                                    style={{
+                                      aspectRatio: '1',
+                                      borderRadius: '2px',
+                                      background: colors[data.intensity],
+                                      border: '1px solid var(--color-border)',
+                                      opacity: 0.9,
+                                    }}
+                                  />
+                                );
+                              })}
+                            </React.Fragment>
+                          ))}
+                        </div>
+                        {heatmapResult.thresholds &&
+                          (() => {
+                            const tiers = [
+                              {
+                                key: 'low',
+                                label: 'low',
+                                color: 'var(--heatmap-1)',
+                                t: heatmapResult.thresholds!.low,
+                              },
+                              {
+                                key: 'medium',
+                                label: 'medium',
+                                color: 'var(--heatmap-3)',
+                                t: heatmapResult.thresholds!.medium,
+                              },
+                              {
+                                key: 'high',
+                                label: 'high',
+                                color: 'var(--heatmap-5)',
+                                t: heatmapResult.thresholds!.high,
+                              },
+                              {
+                                key: 'extreme',
+                                label: 'extreme',
+                                color: 'var(--heatmap-7)',
+                                t: heatmapResult.thresholds!.extreme,
+                              },
+                              {
+                                key: 'superhigh',
+                                label: 'superhigh',
+                                color: 'var(--heatmap-9)',
+                                t: heatmapResult.thresholds!.superhigh,
+                              },
+                            ].filter(
+                              ({ t }, idx, arr) =>
+                                idx === 0 || t[0] !== arr[idx - 1]!.t[0]
+                            );
+                            return (
+                              <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-[8px] font-medium text-slate-500 justify-center">
+                                <div className="flex items-center gap-1">
+                                  <div
+                                    className="w-3 h-3 rounded-sm"
+                                    style={{
+                                      background: 'var(--heatmap-0)',
+                                      border: '1px solid #e2e8f0',
+                                    }}
+                                  />
+                                  none: 0
+                                </div>
+                                {tiers.map(({ key, label, color, t }) => (
+                                  <div
+                                    key={key}
+                                    className="flex items-center gap-1"
+                                  >
+                                    <div
+                                      className="w-3 h-3 rounded-sm"
+                                      style={{ background: color }}
+                                    />
+                                    {label}: {t[0]}
+                                    {t[1] === Infinity ? '+' : `\u2013${t[1]}`}
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          })()}
+                      </div>
+                    </Chart>
+
+                    <Chart
+                      title="Content Word Cloud"
+                      icon={
+                        <Icon
+                          src={getDataGroupingIcon('word_cloud', 'printed')}
+                          size={20}
+                        />
+                      }
+                      height="auto"
+                    >
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexWrap: 'wrap',
+                          gap: '2px 6px',
+                          alignItems: 'baseline',
+                          justifyContent: 'center',
+                          padding: '12px',
+                          background: '#f8fafc',
+                          borderRadius: '4px',
+                        }}
+                      >
+                        {getWordCloudData().map((item, i) => (
+                          <span
+                            key={item.word}
+                            style={{
+                              fontWeight: 'bold',
+                              color: [
+                                '#1e3a8a',
+                                '#1e40af',
+                                '#1d4ed8',
+                                '#2563eb',
+                                '#3b82f6',
+                              ][i % 5],
+                              lineHeight: 0.85,
+                              fontSize: `${item.size}em`,
+                              opacity: Math.max(0.6, item.opacity),
+                            }}
+                          >
+                            {item.word}
+                          </span>
+                        ))}
+                      </div>
+                    </Chart>
+                  </div>
                 )}
 
                 {/* Best Times Section */}
                 {reportSettings.showTiming && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 pdf-safe-block">
-                  {getBestTimes().map((t, idx) => (
-                    <div
-                      key={idx}
-                      className="bg-white p-5 rounded-xl border-2 border-slate-100 flex justify-between items-center relative overflow-hidden shadow-sm"
-                    >
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 pdf-safe-block">
+                    {getBestTimes().map((t, idx) => (
                       <div
-                        className={`absolute left-0 top-0 bottom-0 w-3 ${idx === 0 ? 'bg-blue-600' : 'bg-slate-200'}`}
-                      />
-                      <div className="pl-2">
-                        <div className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">
-                          {idx === 0
-                            ? 'Best Posting Option'
-                            : 'Alternative Time'}
+                        key={idx}
+                        className="bg-white p-5 rounded-xl border-2 border-slate-100 flex justify-between items-center relative overflow-hidden shadow-sm"
+                      >
+                        <div
+                          className={`absolute left-0 top-0 bottom-0 w-3 ${idx === 0 ? 'bg-blue-600' : 'bg-slate-200'}`}
+                        />
+                        <div className="pl-2">
+                          <div className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">
+                            {idx === 0
+                              ? 'Best Posting Option'
+                              : 'Alternative Time'}
+                          </div>
+                          <div className="text-2xl font-black text-slate-800">
+                            {t.day}{' '}
+                            <span className="text-blue-600">{t.hour_fmt}</span>
+                          </div>
                         </div>
-                        <div className="text-2xl font-black text-slate-800">
-                          {t.day}{' '}
-                          <span className="text-blue-600">{t.hour_fmt}</span>
+                        <div className="text-right">
+                          <div className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">
+                            Score
+                          </div>
+                          <div className="text-2xl font-black text-slate-400">
+                            {t.score}
+                          </div>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <div className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">
-                          Score
-                        </div>
-                        <div className="text-2xl font-black text-slate-400">
-                          {t.score}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
                 )}
 
                 {/* Content Stats Section via renderTabContent */}
                 {reportSettings.showContent && (
-                <div className="mb-8 pdf-safe-block">
-                  <div className="flex items-center gap-2 mb-4 border-b-2 border-slate-200 pb-2">
-                    <Icon name="color-microscope.png" size={20} />
-                    <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">
-                      Content Analysis
-                    </h3>
+                  <div className="mb-8 pdf-safe-block">
+                    <div className="flex items-center gap-2 mb-4 border-b-2 border-slate-200 pb-2">
+                      <Icon name="color-microscope.png" size={20} />
+                      <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">
+                        Content Analysis
+                      </h3>
+                    </div>
+                    <div className="bg-white border border-slate-200 rounded p-4 print-no-scroll">
+                      {renderTabContent('content')}
+                    </div>
                   </div>
-                  <div className="bg-white border border-slate-200 rounded p-4 print-no-scroll">
-                    {renderTabContent('content')}
-                  </div>
-                </div>
                 )}
 
                 {/* Users Stats Section via renderTabContent */}
                 {reportSettings.showUsers && (
-                <div className="mb-8 pdf-safe-block">
-                  <div className="flex items-center gap-2 mb-4 border-b-2 border-slate-200 pb-2">
-                    <Icon name="color-persons.png" size={20} />
-                    <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">
-                      Top Users
-                    </h3>
+                  <div className="mb-8 pdf-safe-block">
+                    <div className="flex items-center gap-2 mb-4 border-b-2 border-slate-200 pb-2">
+                      <Icon name="color-persons.png" size={20} />
+                      <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">
+                        Top Users
+                      </h3>
+                    </div>
+                    <div className="bg-white border border-slate-200 rounded p-4 print-no-scroll">
+                      {renderTabContent('users')}
+                    </div>
                   </div>
-                  <div className="bg-white border border-slate-200 rounded p-4 print-no-scroll">
-                    {renderTabContent('users')}
-                  </div>
-                </div>
                 )}
 
                 {/* Top Posts Lists Section - Consolidated to two columns per theme */}
                 {reportSettings.showPosts && (
-                <div className="grid grid-cols-2 gap-x-8 gap-y-12 mb-8 pdf-safe-block">
-                  {[
-                    {
-                      key: 'most_engaged',
-                      title: 'Most Engaged Posts',
-                      icon: 'color-guarantee.png',
-                      list: analytics.lists.most_engaged || [],
-                    },
-                    {
-                      key: 'top_posts',
-                      title: 'Top Score Posts',
-                      icon: 'color-thumb-up.png',
-                      list: analytics.lists.top_posts || [],
-                    },
-                    {
-                      key: 'most_discussed',
-                      title: 'Most Discussed',
-                      icon: 'emoji-loudspeaker.png',
-                      list: analytics.lists.most_discussed || [],
-                    },
-                    {
-                      key: 'rising',
-                      title: 'Rising Content',
-                      icon: 'color-increase.png',
-                      list: analytics.lists.rising || [],
-                    },
-                    {
-                      key: 'hot',
-                      title: 'Hot Content',
-                      icon: 'color-hot.png',
-                      list: analytics.lists.hot || [],
-                    },
-                    {
-                      key: 'controversial',
-                      title: 'Controversial',
-                      icon: 'color-turn-on-arrows.png',
-                      list: analytics.lists.controversial || [],
-                    },
-                  ].map(({ key, title, icon, list }) => {
-                    const filteredPosts = excludeOfficial
-                      ? list.filter(
-                          (p: PostData) =>
-                            !effectiveOfficials.includes(p.author) &&
-                            p.author !== officialAccount &&
-                            p.author !== 'None',
-                        )
-                      : list;
-                    return (
-                      <div key={key} className="pdf-safe-block">
-                        <div className="flex items-center gap-2 mb-4 border-b-2 border-slate-200 pb-2">
-                          <Icon name={icon} size={20} />
-                          <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">
-                            {title}
-                          </h3>
-                        </div>
-                        <div className="space-y-4">
-                          {filteredPosts
-                            .slice(0, 5)
-                            .map((post: PostData, idx: number) => (
-                              <div
-                                key={idx}
-                                className="border-b border-slate-100 pb-3"
-                              >
-                                <div className="text-slate-900 leading-snug mb-1 line-clamp-2">
-                                  {post.title}
-                                </div>
-                                <div className="flex items-center gap-4 text-[10px] font-black uppercase text-slate-400">
-                                  <span className="flex items-center gap-1 text-slate-700">
-                                    <Icon
-                                      src={getPostDetailIcon(
-                                        'upvotes',
-                                        iconContext,
-                                      )}
-                                      size={10}
-                                    />{' '}
-                                    {post.score}
-                                  </span>
-                                  <span className="flex items-center gap-1 text-slate-700">
-                                    <Icon
-                                      src={getPostDetailIcon(
-                                        'comments',
-                                        iconContext,
-                                      )}
-                                      size={10}
-                                    />{' '}
-                                    {post.comments}
-                                  </span>
-                                  {post.engagement_score !== undefined && (
-                                    <span className="flex items-center gap-1 text-blue-600">
-                                      <Icon
-                                        src={getPostDetailIcon(
-                                          'engagement',
-                                          iconContext,
-                                        )}
-                                        size={10}
-                                      />{' '}
-                                      {Math.round(post.engagement_score)}
-                                    </span>
-                                  )}
-                                  {post.max_depth !== undefined && (
+                  <div className="grid grid-cols-2 gap-x-8 gap-y-12 mb-8 pdf-safe-block">
+                    {[
+                      {
+                        key: 'most_engaged',
+                        title: 'Most Engaged Posts',
+                        icon: 'color-guarantee.png',
+                        list: analytics.lists.most_engaged || [],
+                      },
+                      {
+                        key: 'top_posts',
+                        title: 'Top Score Posts',
+                        icon: 'color-thumb-up.png',
+                        list: analytics.lists.top_posts || [],
+                      },
+                      {
+                        key: 'most_discussed',
+                        title: 'Most Discussed',
+                        icon: 'emoji-loudspeaker.png',
+                        list: analytics.lists.most_discussed || [],
+                      },
+                      {
+                        key: 'rising',
+                        title: 'Rising Content',
+                        icon: 'color-increase.png',
+                        list: analytics.lists.rising || [],
+                      },
+                      {
+                        key: 'hot',
+                        title: 'Hot Content',
+                        icon: 'color-hot.png',
+                        list: analytics.lists.hot || [],
+                      },
+                      {
+                        key: 'controversial',
+                        title: 'Controversial',
+                        icon: 'color-turn-on-arrows.png',
+                        list: analytics.lists.controversial || [],
+                      },
+                    ].map(({ key, title, icon, list }) => {
+                      const filteredPosts = excludeOfficial
+                        ? list.filter(
+                            (p: PostData) =>
+                              !effectiveOfficials.includes(p.author) &&
+                              p.author !== officialAccount &&
+                              p.author !== 'None'
+                          )
+                        : list;
+                      return (
+                        <div key={key} className="pdf-safe-block">
+                          <div className="flex items-center gap-2 mb-4 border-b-2 border-slate-200 pb-2">
+                            <Icon name={icon} size={20} />
+                            <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">
+                              {title}
+                            </h3>
+                          </div>
+                          <div className="space-y-4">
+                            {filteredPosts
+                              .slice(0, 5)
+                              .map((post: PostData, idx: number) => (
+                                <div
+                                  key={idx}
+                                  className="border-b border-slate-100 pb-3"
+                                >
+                                  <div className="text-slate-900 leading-snug mb-1 line-clamp-2">
+                                    {post.title}
+                                  </div>
+                                  <div className="flex items-center gap-4 text-[10px] font-black uppercase text-slate-400">
                                     <span className="flex items-center gap-1 text-slate-700">
                                       <Icon
                                         src={getPostDetailIcon(
-                                          'depth',
-                                          iconContext,
+                                          'upvotes',
+                                          iconContext
                                         )}
                                         size={10}
                                       />{' '}
-                                      {post.max_depth || 0}
+                                      {post.score}
                                     </span>
-                                  )}
-                                  {post.creator_replies !== undefined && (
                                     <span className="flex items-center gap-1 text-slate-700">
                                       <Icon
                                         src={getPostDetailIcon(
-                                          'creator',
-                                          iconContext,
+                                          'comments',
+                                          iconContext
                                         )}
                                         size={10}
                                       />{' '}
-                                      {post.creator_replies || 0}
+                                      {post.comments}
                                     </span>
-                                  )}
-                                  <span>
-                                    • {post.author} • {formatPostListDateTime(post.created_utc)}
-                                  </span>
+                                    {post.engagement_score !== undefined && (
+                                      <span className="flex items-center gap-1 text-blue-600">
+                                        <Icon
+                                          src={getPostDetailIcon(
+                                            'engagement',
+                                            iconContext
+                                          )}
+                                          size={10}
+                                        />{' '}
+                                        {Math.round(post.engagement_score)}
+                                      </span>
+                                    )}
+                                    {post.max_depth !== undefined && (
+                                      <span className="flex items-center gap-1 text-slate-700">
+                                        <Icon
+                                          src={getPostDetailIcon(
+                                            'depth',
+                                            iconContext
+                                          )}
+                                          size={10}
+                                        />{' '}
+                                        {post.max_depth || 0}
+                                      </span>
+                                    )}
+                                    {post.creator_replies !== undefined && (
+                                      <span className="flex items-center gap-1 text-slate-700">
+                                        <Icon
+                                          src={getPostDetailIcon(
+                                            'creator',
+                                            iconContext
+                                          )}
+                                          size={10}
+                                        />{' '}
+                                        {post.creator_replies || 0}
+                                      </span>
+                                    )}
+                                    <span>
+                                      • {post.author} •{' '}
+                                      {formatPostListDateTime(post.created_utc)}
+                                    </span>
+                                  </div>
                                 </div>
-                              </div>
-                            ))}
+                              ))}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
                 )}
 
                 {/* Activity Analysis Section */}
-                {(reportSettings.showActivity !== false) && (
-                <div className="mb-8 pdf-safe-block">
-                  <div className="flex items-center gap-2 mb-4 border-b-2 border-slate-200 pb-2">
-                    <Icon
-                      name={
-                        isPrintMode
-                          ? 'reshot-icon-seo-report.png'
-                          : 'reshot-icon-seo-report.svg'
-                      }
-                      size={20}
-                    />
-                    <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">
-                      Activity Analysis
-                    </h3>
-                  </div>
-                  <div className="bg-white border border-slate-200 rounded p-4 print-no-scroll space-y-5">
-                    <Chart
-                      title="Activity Trend (30d)"
-                      icon={
-                        <Icon
-                          src={getDataGroupingIcon('activity_trend', iconContext)}
-                          size={16}
-                        />
-                      }
-                      height={340}
-                    >
-                      <div style={{ width: '100%', height: '300px', minWidth: 0, position: 'relative' }}>
-                        <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart
-                            data={getActivityTrend()}
-                            margin={{ top: 10, right: 10, left: 5, bottom: 5 }}
-                          >
-                            <CartesianGrid
-                              strokeDasharray="3 3"
-                              vertical={true}
-                              stroke="rgba(8,10,12,.175)"
-                              opacity={1}
-                            />
-                            <XAxis
-                              dataKey="date"
-                              tickFormatter={(dateStr) => {
-                                try {
-                                  return new Intl.DateTimeFormat('en-US', {
-                                    month: 'short',
-                                    day: 'numeric',
-                                  }).format(new Date(`${dateStr}T12:00:00Z`));
-                                } catch (e) {
-                                  return dateStr;
-                                }
+                {reportSettings.showActivity !== false && (
+                  <div className="mb-8 pdf-safe-block">
+                    <div className="flex items-center gap-2 mb-4 border-b-2 border-slate-200 pb-2">
+                      <Icon
+                        name={
+                          isPrintMode
+                            ? 'reshot-icon-seo-report.png'
+                            : 'reshot-icon-seo-report.svg'
+                        }
+                        size={20}
+                      />
+                      <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">
+                        Activity Analysis
+                      </h3>
+                    </div>
+                    <div className="bg-white border border-slate-200 rounded p-4 print-no-scroll space-y-5">
+                      <Chart
+                        title="Activity Trend (30d)"
+                        icon={
+                          <Icon
+                            src={getDataGroupingIcon(
+                              'activity_trend',
+                              iconContext
+                            )}
+                            size={16}
+                          />
+                        }
+                        height={340}
+                      >
+                        <div
+                          style={{
+                            width: '100%',
+                            height: '300px',
+                            minWidth: 0,
+                            position: 'relative',
+                          }}
+                        >
+                          <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart
+                              data={getActivityTrend()}
+                              margin={{
+                                top: 10,
+                                right: 10,
+                                left: 5,
+                                bottom: 5,
                               }}
-                              interval={3}
-                              tick={{ fontSize: 8, fill: 'var(--text-primary)' }}
-                              height={42}
-                              angle={-45}
-                              textAnchor="end"
-                            />
-                            <YAxis
-                              yAxisId="left"
-                              orientation="left"
-                              tick={{ fontSize: 9 }}
-                              tickCount={6}
-                              stroke="var(--color-text)"
-                              width={40}
-                              label={{
-                                value: 'Posts',
-                                angle: -90,
-                                position: 'insideLeft',
-                                style: { fontSize: 9, fill: 'var(--text-primary)' },
-                              }}
-                            />
-                            <YAxis
-                              yAxisId="right"
-                              orientation="right"
-                              tick={{ fontSize: 9 }}
-                              tickCount={6}
-                              stroke="var(--color-text)"
-                              width={40}
-                              label={{
-                                value: 'Comments',
-                                angle: 90,
-                                position: 'insideRight',
-                                style: { fontSize: 9, fill: 'var(--text-primary)' },
-                              }}
-                            />
-                            <RechartsTooltip {...compactTooltipProps} />
-                            <Legend
-                              wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }}
-                            />
-                            <Area
-                              yAxisId="left"
-                              type="monotone"
-                              dataKey="posts"
-                              stroke="var(--chart-primary)"
-                              fill="var(--chart-primary)"
-                              opacity={0.15}
-                              strokeWidth={2.25}
-                              name="Avg Posts"
-                              isAnimationActive={false}
-                              dot={{
-                                r: 2,
-                                fill: 'var(--chart-primary)',
-                                stroke: '#fff',
-                                strokeWidth: 1,
-                              }}
-                            />
-                            <Area
-                              yAxisId="right"
-                              type="monotone"
-                              dataKey="comments"
-                              stroke="var(--chart-accent)"
-                              fill="var(--chart-accent)"
-                              opacity={0.5}
-                              strokeWidth={2.25}
-                              name="Avg Comments"
-                              isAnimationActive={false}
-                              dot={{
-                                r: 2,
-                                fill: 'var(--chart-accent)',
-                                stroke: '#fff',
-                                strokeWidth: 1,
-                              }}
-                            />
-                          </AreaChart>
-                        </ResponsiveContainer>
-                      </div>
-                    </Chart>
+                            >
+                              <CartesianGrid
+                                strokeDasharray="3 3"
+                                vertical={true}
+                                stroke="rgba(8,10,12,.175)"
+                                opacity={1}
+                              />
+                              <XAxis
+                                dataKey="date"
+                                tickFormatter={(dateStr) => {
+                                  try {
+                                    return new Intl.DateTimeFormat('en-US', {
+                                      month: 'short',
+                                      day: 'numeric',
+                                    }).format(new Date(`${dateStr}T12:00:00Z`));
+                                  } catch (e) {
+                                    return dateStr;
+                                  }
+                                }}
+                                interval={3}
+                                tick={{
+                                  fontSize: 8,
+                                  fill: 'var(--text-primary)',
+                                }}
+                                height={42}
+                                angle={-45}
+                                textAnchor="end"
+                              />
+                              <YAxis
+                                yAxisId="left"
+                                orientation="left"
+                                tick={{ fontSize: 9 }}
+                                tickCount={6}
+                                stroke="var(--color-text)"
+                                width={40}
+                                label={{
+                                  value: 'Posts',
+                                  angle: -90,
+                                  position: 'insideLeft',
+                                  style: {
+                                    fontSize: 9,
+                                    fill: 'var(--text-primary)',
+                                  },
+                                }}
+                              />
+                              <YAxis
+                                yAxisId="right"
+                                orientation="right"
+                                tick={{ fontSize: 9 }}
+                                tickCount={6}
+                                stroke="var(--color-text)"
+                                width={40}
+                                label={{
+                                  value: 'Comments',
+                                  angle: 90,
+                                  position: 'insideRight',
+                                  style: {
+                                    fontSize: 9,
+                                    fill: 'var(--text-primary)',
+                                  },
+                                }}
+                              />
+                              <RechartsTooltip {...compactTooltipProps} />
+                              <Legend
+                                wrapperStyle={{
+                                  fontSize: '10px',
+                                  paddingTop: '10px',
+                                }}
+                              />
+                              <Area
+                                yAxisId="left"
+                                type="monotone"
+                                dataKey="posts"
+                                stroke="var(--chart-primary)"
+                                fill="var(--chart-primary)"
+                                opacity={0.15}
+                                strokeWidth={2.25}
+                                name="Avg Posts"
+                                isAnimationActive={false}
+                                dot={{
+                                  r: 2,
+                                  fill: 'var(--chart-primary)',
+                                  stroke: '#fff',
+                                  strokeWidth: 1,
+                                }}
+                              />
+                              <Area
+                                yAxisId="right"
+                                type="monotone"
+                                dataKey="comments"
+                                stroke="var(--chart-accent)"
+                                fill="var(--chart-accent)"
+                                opacity={0.5}
+                                strokeWidth={2.25}
+                                name="Avg Comments"
+                                isAnimationActive={false}
+                                dot={{
+                                  r: 2,
+                                  fill: 'var(--chart-accent)',
+                                  stroke: '#fff',
+                                  strokeWidth: 1,
+                                }}
+                              />
+                            </AreaChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </Chart>
 
-                    <Chart
-                      title="Engagement vs Votes (24h)"
-                      icon={
-                        <Icon
-                          src={getDataGroupingIcon('engagement', iconContext)}
-                          size={16}
-                        />
-                      }
-                      height={340}
-                    >
-                      <div style={{ width: '100%', height: '300px', minWidth: 0, position: 'relative' }}>
-                        <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart
-                            data={getEngagementVsScore()}
-                            margin={{ top: 10, right: 10, left: 5, bottom: 5 }}
-                          >
-                            <CartesianGrid
-                              strokeDasharray="3 3"
-                              vertical={true}
-                              stroke="rgba(8,10,12,.175)"
-                              opacity={1}
-                            />
-                            <XAxis
-                              dataKey="hour"
-                              interval={2}
-                              tick={{ fontSize: 8, fill: 'var(--text-primary)' }}
-                              height={42}
-                              angle={-45}
-                              textAnchor="end"
-                            />
-                            <YAxis
-                              yAxisId="left"
-                              orientation="left"
-                              tick={{ fontSize: 9 }}
-                              tickCount={6}
-                              stroke="var(--color-text)"
-                              width={40}
-                              label={{
-                                value: 'Avg Posts',
-                                angle: -90,
-                                position: 'insideLeft',
-                                style: { fontSize: 9, fill: 'var(--text-primary)' },
+                      <Chart
+                        title="Engagement vs Votes (24h)"
+                        icon={
+                          <Icon
+                            src={getDataGroupingIcon('engagement', iconContext)}
+                            size={16}
+                          />
+                        }
+                        height={340}
+                      >
+                        <div
+                          style={{
+                            width: '100%',
+                            height: '300px',
+                            minWidth: 0,
+                            position: 'relative',
+                          }}
+                        >
+                          <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart
+                              data={getEngagementVsScore()}
+                              margin={{
+                                top: 10,
+                                right: 10,
+                                left: 5,
+                                bottom: 5,
                               }}
-                            />
-                            <YAxis
-                              yAxisId="right"
-                              orientation="right"
-                              tick={{ fontSize: 9 }}
-                              tickCount={6}
-                              stroke="var(--color-text)"
-                              width={40}
-                              label={{
-                                value: 'Avg Comments',
-                                angle: 90,
-                                position: 'insideRight',
-                                style: { fontSize: 9, fill: 'var(--text-primary)' },
-                              }}
-                            />
-                            <RechartsTooltip
-                              {...compactTooltipProps}
-                              labelFormatter={(label) => {
-                                if (typeof label === 'string' && label.includes(':')) {
-                                  const hour = parseInt(label.split(':')[0] || '0');
-                                  const ampm = hour >= 12 ? 'PM' : 'AM';
-                                  const hour12 = hour % 12 || 12;
-                                  return `${hour12}${ampm}`;
-                                }
-                                return label;
-                              }}
-                            />
-                            <Legend
-                              wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }}
-                            />
-                            <Area
-                              yAxisId="left"
-                              type="monotone"
-                              dataKey="score"
-                              stroke="var(--chart-primary)"
-                              fill="var(--chart-primary)"
-                              opacity={0.15}
-                              strokeWidth={2.25}
-                              name="Avg Score"
-                              isAnimationActive={false}
-                              dot={{
-                                r: 2,
-                                fill: 'var(--chart-primary)',
-                                stroke: '#fff',
-                                strokeWidth: 1,
-                              }}
-                            />
-                            <Area
-                              yAxisId="right"
-                              type="monotone"
-                              dataKey="engagement"
-                              stroke="var(--chart-accent)"
-                              fill="var(--chart-accent)"
-                              opacity={0.5}
-                              strokeWidth={2.25}
-                              name="Avg Engagement"
-                              isAnimationActive={false}
-                              dot={{
-                                r: 2,
-                                fill: 'var(--chart-accent)',
-                                stroke: '#fff',
-                                strokeWidth: 1,
-                              }}
-                            />
-                          </AreaChart>
-                        </ResponsiveContainer>
-                      </div>
-                    </Chart>
+                            >
+                              <CartesianGrid
+                                strokeDasharray="3 3"
+                                vertical={true}
+                                stroke="rgba(8,10,12,.175)"
+                                opacity={1}
+                              />
+                              <XAxis
+                                dataKey="hour"
+                                interval={2}
+                                tick={{
+                                  fontSize: 8,
+                                  fill: 'var(--text-primary)',
+                                }}
+                                height={42}
+                                angle={-45}
+                                textAnchor="end"
+                              />
+                              <YAxis
+                                yAxisId="left"
+                                orientation="left"
+                                tick={{ fontSize: 9 }}
+                                tickCount={6}
+                                stroke="var(--color-text)"
+                                width={40}
+                                label={{
+                                  value: 'Avg Posts',
+                                  angle: -90,
+                                  position: 'insideLeft',
+                                  style: {
+                                    fontSize: 9,
+                                    fill: 'var(--text-primary)',
+                                  },
+                                }}
+                              />
+                              <YAxis
+                                yAxisId="right"
+                                orientation="right"
+                                tick={{ fontSize: 9 }}
+                                tickCount={6}
+                                stroke="var(--color-text)"
+                                width={40}
+                                label={{
+                                  value: 'Avg Comments',
+                                  angle: 90,
+                                  position: 'insideRight',
+                                  style: {
+                                    fontSize: 9,
+                                    fill: 'var(--text-primary)',
+                                  },
+                                }}
+                              />
+                              <RechartsTooltip
+                                {...compactTooltipProps}
+                                labelFormatter={(label) => {
+                                  if (
+                                    typeof label === 'string' &&
+                                    label.includes(':')
+                                  ) {
+                                    const hour = parseInt(
+                                      label.split(':')[0] || '0'
+                                    );
+                                    const ampm = hour >= 12 ? 'PM' : 'AM';
+                                    const hour12 = hour % 12 || 12;
+                                    return `${hour12}${ampm}`;
+                                  }
+                                  return label;
+                                }}
+                              />
+                              <Legend
+                                wrapperStyle={{
+                                  fontSize: '10px',
+                                  paddingTop: '10px',
+                                }}
+                              />
+                              <Area
+                                yAxisId="left"
+                                type="monotone"
+                                dataKey="score"
+                                stroke="var(--chart-primary)"
+                                fill="var(--chart-primary)"
+                                opacity={0.15}
+                                strokeWidth={2.25}
+                                name="Avg Score"
+                                isAnimationActive={false}
+                                dot={{
+                                  r: 2,
+                                  fill: 'var(--chart-primary)',
+                                  stroke: '#fff',
+                                  strokeWidth: 1,
+                                }}
+                              />
+                              <Area
+                                yAxisId="right"
+                                type="monotone"
+                                dataKey="engagement"
+                                stroke="var(--chart-accent)"
+                                fill="var(--chart-accent)"
+                                opacity={0.5}
+                                strokeWidth={2.25}
+                                name="Avg Engagement"
+                                isAnimationActive={false}
+                                dot={{
+                                  r: 2,
+                                  fill: 'var(--chart-accent)',
+                                  stroke: '#fff',
+                                  strokeWidth: 1,
+                                }}
+                              />
+                            </AreaChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </Chart>
+                    </div>
                   </div>
-                </div>
                 )}
 
                 {/* Trends Section - Materialized Trend Charts */}
-                {(reportSettings.showTrendSubscribers || 
-                  reportSettings.showTrendEngagement || 
-                  reportSettings.showTrendContent || 
-                  reportSettings.showTrendPosting || 
-                  reportSettings.showTrendBestPostTime) && trendsData && (
-                <div className="mb-8 pdf-safe-block">
-                  <div className="flex items-center gap-2 mb-4 border-b-2 border-slate-200 pb-2">
-                    <Icon name="mono-trend.png" size={20} />
-                    <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">
-                      Trend Forecasts
-                    </h3>
-                  </div>
-                  <div className="bg-white border border-slate-200 rounded p-4 print-no-scroll space-y-5">
-                    {reportSettings.showTrendSubscribers && (
-                      <CommunityGrowthChart
-                        trendsData={trendsData}
-                        trendAnalysisDays={reportSettings.trendAnalysisDays || 90}
-                        iconContext={iconContext}
-                        isPrintMode={isPrintMode}
-                      />
-                    )}
+                {(reportSettings.showTrendSubscribers ||
+                  reportSettings.showTrendEngagement ||
+                  reportSettings.showTrendContent ||
+                  reportSettings.showTrendPosting ||
+                  reportSettings.showTrendBestPostTime) &&
+                  trendsData && (
+                    <div className="mb-8 pdf-safe-block">
+                      <div className="flex items-center gap-2 mb-4 border-b-2 border-slate-200 pb-2">
+                        <Icon name="mono-trend.png" size={20} />
+                        <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">
+                          Trend Forecasts
+                        </h3>
+                      </div>
+                      <div className="bg-white border border-slate-200 rounded p-4 print-no-scroll space-y-5">
+                        {reportSettings.showTrendSubscribers && (
+                          <CommunityGrowthChart
+                            trendsData={trendsData}
+                            trendAnalysisDays={
+                              reportSettings.trendAnalysisDays || 90
+                            }
+                            iconContext={iconContext}
+                            isPrintMode={isPrintMode}
+                          />
+                        )}
 
-                    {(reportSettings.showTrendEngagement ?? true) && (
-                      <EngagementOverTimeChart
-                        trendsData={trendsData}
-                        iconContext={iconContext}
-                        isPrintMode={isPrintMode}
-                      />
-                    )}
+                        {(reportSettings.showTrendEngagement ?? true) && (
+                          <EngagementOverTimeChart
+                            trendsData={trendsData}
+                            iconContext={iconContext}
+                            isPrintMode={isPrintMode}
+                          />
+                        )}
 
-                    {(reportSettings.showTrendContent ?? true) && (
-                      <ContentMixChart
-                        trendsData={trendsData}
-                        iconContext={iconContext}
-                        isPrintMode={isPrintMode}
-                      />
-                    )}
+                        {(reportSettings.showTrendContent ?? true) && (
+                          <ContentMixChart
+                            trendsData={trendsData}
+                            iconContext={iconContext}
+                            isPrintMode={isPrintMode}
+                          />
+                        )}
 
-                    {reportSettings.showTrendPosting && (
-                      <PostingActivityHeatmapChart
-                        trendsData={trendsData}
-                        iconContext={iconContext}
-                        isPrintMode={isPrintMode}
-                      />
-                    )}
+                        {reportSettings.showTrendPosting && (
+                          <PostingActivityHeatmapChart
+                            trendsData={trendsData}
+                            iconContext={iconContext}
+                            isPrintMode={isPrintMode}
+                          />
+                        )}
 
-                    {reportSettings.showTrendBestPostTime && (
-                      <BestPostingTimesChangeChart
-                        trendsData={trendsData}
-                        iconContext={iconContext}
-                        isPrintMode={isPrintMode}
-                      />
-                    )}
-                  </div>
-                </div>
-                )}
+                        {reportSettings.showTrendBestPostTime && (
+                          <BestPostingTimesChangeChart
+                            trendsData={trendsData}
+                            iconContext={iconContext}
+                            isPrintMode={isPrintMode}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                 {/* Footer */}
                 <div className="mt-8 pt-0.5 border-t-2 border-slate-200 flex justify-between items-center text-[9px] text-slate-400">

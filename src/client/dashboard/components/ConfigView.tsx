@@ -103,7 +103,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
 
   const handleCalcChange = <K extends keyof CalculationSettings>(
     key: K,
-    value: CalculationSettings[K],
+    value: CalculationSettings[K]
   ) => {
     setLocalSettings((prev) => {
       if (prev?.settings?.[key] === value) {
@@ -128,7 +128,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
 
   const handleReportChange = <K extends keyof ReportSettings>(
     key: K,
-    value: ReportSettings[K],
+    value: ReportSettings[K]
   ) => {
     setLocalSettings((prev) => {
       if (prev?.report?.[key] === value) {
@@ -144,7 +144,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
 
   const handleDisplayChange = <K extends keyof UserSettings>(
     key: K,
-    value: UserSettings[K],
+    value: UserSettings[K]
   ) => {
     setLocalSettings((prev) => {
       if (prev?.display?.[key] === value) {
@@ -160,7 +160,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
 
   const handleStorageChange = <K extends keyof StorageSettings>(
     key: K,
-    value: StorageSettings[K],
+    value: StorageSettings[K]
   ) => {
     setLocalSettings((prev) => {
       if (prev?.storage?.[key] === value) {
@@ -294,7 +294,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                       <p className="text-xs text-primary font-medium">
                         <span className="font-bold">Current Mode: </span>
                         {PRESETS.find(
-                          (p) => p.id === localSettings?.settings?.id,
+                          (p) => p.id === localSettings?.settings?.id
                         )?.desc || 'Custom settings'}
                       </p>
                     </div>
@@ -341,7 +341,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                           onChange={(e) =>
                             handleCalcChange(
                               'commentWeight',
-                              parseInt(e.target.value),
+                              parseInt(e.target.value)
                             )
                           }
                           className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600 mb-1"
@@ -372,7 +372,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                           onChange={(e) =>
                             handleCalcChange(
                               'upvoteWeight',
-                              parseInt(e.target.value),
+                              parseInt(e.target.value)
                             )
                           }
                           className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600 mb-1"
@@ -421,7 +421,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                               onChange={(e) =>
                                 handleCalcChange(
                                   'velocityHours',
-                                  parseInt(e.target.value),
+                                  parseInt(e.target.value)
                                 )
                               }
                               className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-400"
@@ -446,7 +446,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                               onChange={(e) =>
                                 handleCalcChange(
                                   'velocityWeight',
-                                  parseFloat(e.target.value),
+                                  parseFloat(e.target.value)
                                 )
                               }
                               className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-400"
@@ -474,7 +474,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                           onChange={(e) =>
                             handleCalcChange(
                               'creatorBonus',
-                              parseInt(e.target.value),
+                              parseInt(e.target.value)
                             )
                           }
                           className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600 mb-1"
@@ -499,7 +499,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                           onChange={(val) =>
                             handleCalcChange(
                               'depthScaling',
-                              val as ScalingMethod,
+                              val as ScalingMethod
                             )
                           }
                           disabled={!isCustom}
@@ -577,7 +577,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                                               : 'depthExponential',
                                           method === 'exponential'
                                             ? parseInt(e.target.value)
-                                            : parseFloat(e.target.value),
+                                            : parseFloat(e.target.value)
                                         )
                                       }
                                       className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary"
@@ -603,7 +603,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                                       onChange={(e) =>
                                         handleCalcChange(
                                           'depthMax',
-                                          parseInt(e.target.value),
+                                          parseInt(e.target.value)
                                         )
                                       }
                                       className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary"
@@ -665,7 +665,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                           onChange={(e) =>
                             handleCalcChange(
                               'fetchDepth',
-                              parseInt(e.target.value),
+                              parseInt(e.target.value)
                             )
                           }
                           className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-600"
@@ -700,7 +700,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                               const raw = parseInt(e.target.value, 10);
                               const clamped = Math.min(
                                 50,
-                                Math.max(10, Number.isNaN(raw) ? 25 : raw),
+                                Math.max(10, Number.isNaN(raw) ? 25 : raw)
                               );
                               const rounded = Math.round(clamped / 5) * 5;
                               handleCalcChange('analysisPoolSize', rounded);
@@ -766,7 +766,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                             onChange={(e) =>
                               handleCalcChange(
                                 'analysisDays',
-                                parseInt(e.target.value),
+                                parseInt(e.target.value)
                               )
                             }
                             className="w-20 px-3 py-1.5 border border-gray-300 rounded text-sm font-semibold"
@@ -805,11 +805,11 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                               localSettings?.settings?.excludeOfficial ?? false
                             }
                             onChange={(
-                              e: React.ChangeEvent<HTMLInputElement>,
+                              e: React.ChangeEvent<HTMLInputElement>
                             ) =>
                               handleCalcChange(
                                 'excludeOfficial',
-                                e.target.checked,
+                                e.target.checked
                               )
                             }
                           />
@@ -829,7 +829,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                               localSettings?.settings?.excludeBots ?? false
                             }
                             onChange={(
-                              e: React.ChangeEvent<HTMLInputElement>,
+                              e: React.ChangeEvent<HTMLInputElement>
                             ) =>
                               handleCalcChange('excludeBots', e.target.checked)
                             }
@@ -859,7 +859,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                                 const raw = parseInt(e.target.value, 10);
                                 const clamped = Math.min(
                                   730,
-                                  Math.max(30, Number.isNaN(raw) ? 180 : raw),
+                                  Math.max(30, Number.isNaN(raw) ? 180 : raw)
                                 );
                                 const rounded = Math.round(clamped / 30) * 30;
                                 handleStorageChange('retentionDays', rounded);
@@ -1089,7 +1089,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                     onCheckedChange={(checked) =>
                       handleReportChange(
                         'showTrendSubscribers',
-                        checked === true,
+                        checked === true
                       )
                     }
                   />
@@ -1100,7 +1100,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                     onCheckedChange={(checked) =>
                       handleReportChange(
                         'showTrendEngagement',
-                        checked === true,
+                        checked === true
                       )
                     }
                   />
@@ -1123,9 +1123,14 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                   <Switch
                     label="Trend: Best Posting Times Trend"
                     description="Optimal times for posting and changes over time.."
-                    checked={localSettings?.report?.showTrendBestPostTime ?? true}
+                    checked={
+                      localSettings?.report?.showTrendBestPostTime ?? true
+                    }
                     onCheckedChange={(checked) =>
-                      handleReportChange('showTrendBestPostTime', checked === true)
+                      handleReportChange(
+                        'showTrendBestPostTime',
+                        checked === true
+                      )
                     }
                   />
                 </form>

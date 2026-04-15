@@ -21,7 +21,8 @@ const separatorVariants = cva('shrink-0', {
 });
 
 export interface SeparatorProps
-  extends React.HTMLAttributes<HTMLDivElement>,
+  extends
+    React.HTMLAttributes<HTMLDivElement>,
     VariantProps<typeof separatorVariants> {
   vertical?: boolean;
   text?: string;
@@ -53,7 +54,7 @@ const Separator = React.forwardRef<HTMLDivElement, SeparatorProps>(
       style,
       ...props
     },
-    ref,
+    ref
   ) => {
     const finalOrientation = vertical ? 'vertical' : orientation;
 
@@ -82,7 +83,7 @@ const Separator = React.forwardRef<HTMLDivElement, SeparatorProps>(
             finalOrientation === 'horizontal'
               ? 'w-full flex-row'
               : 'h-full flex-col',
-            className,
+            className
           )}
           ref={ref}
           data-flux-separator=""
@@ -95,7 +96,7 @@ const Separator = React.forwardRef<HTMLDivElement, SeparatorProps>(
             className={cn(
               separatorVariants({ orientation: finalOrientation, variant }),
               'flex-grow shrink',
-              finalOrientation === 'horizontal' ? 'w-auto' : 'h-auto',
+              finalOrientation === 'horizontal' ? 'w-auto' : 'h-auto'
             )}
           />
           <span
@@ -107,7 +108,7 @@ const Separator = React.forwardRef<HTMLDivElement, SeparatorProps>(
             className={cn(
               separatorVariants({ orientation: finalOrientation, variant }),
               'flex-grow shrink',
-              finalOrientation === 'horizontal' ? 'w-auto' : 'h-auto',
+              finalOrientation === 'horizontal' ? 'w-auto' : 'h-auto'
             )}
           />
         </div>
@@ -125,13 +126,13 @@ const Separator = React.forwardRef<HTMLDivElement, SeparatorProps>(
             orientation: finalOrientation,
             variant,
             className,
-          }),
+          })
         )}
         style={mergedStyle}
         {...props}
       />
     );
-  },
+  }
 );
 Separator.displayName = 'Separator';
 

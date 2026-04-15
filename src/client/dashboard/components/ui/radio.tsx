@@ -13,7 +13,7 @@ interface RadioGroupContextType {
 }
 
 const RadioGroupContext = createContext<RadioGroupContextType | undefined>(
-  undefined,
+  undefined
 );
 
 export interface RadioGroupProps {
@@ -69,7 +69,7 @@ export function RadioGroup({
           variant === 'segmented'
             ? 'flex bg-muted p-1 rounded-lg self-start'
             : '',
-          className,
+          className
         )}
       >
         {children}
@@ -129,7 +129,7 @@ export function RadioItem({
             ? 'border-primary ring-1 ring-primary bg-primary/10'
             : 'border-gray-200 hover:border-gray-300',
           disabled && 'opacity-50 cursor-not-allowed',
-          className,
+          className
         )}
       >
         <div className="flex w-full items-start justify-between">
@@ -140,7 +140,7 @@ export function RadioItem({
                   'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border',
                   isChecked
                     ? 'bg-primary text-white border-primary'
-                    : 'bg-gray-50 border-gray-100 text-gray-400',
+                    : 'bg-gray-50 border-gray-100 text-gray-400'
                 )}
               >
                 <Icon name={icon} size={24} />
@@ -150,7 +150,7 @@ export function RadioItem({
               <span
                 className={cn(
                   'block text-sm font-bold',
-                  isChecked ? 'text-primary' : 'text-gray-900',
+                  isChecked ? 'text-primary' : 'text-gray-900'
                 )}
               >
                 {label}
@@ -167,7 +167,7 @@ export function RadioItem({
               'h-5 w-5 shrink-0 rounded-full border flex items-center justify-center transition-colors mt-0.5',
               isChecked
                 ? 'bg-primary border-primary'
-                : 'bg-white border-gray-300',
+                : 'bg-white border-gray-300'
             )}
           >
             {isChecked && <div className="h-2 w-2 rounded-full bg-white" />}
@@ -197,7 +197,7 @@ export function RadioItem({
             ? 'bg-white text-foreground shadow-sm'
             : 'text-muted-foreground hover:text-foreground',
           disabled && 'opacity-50 cursor-not-allowed',
-          className,
+          className
         )}
       >
         {label}
@@ -220,7 +220,7 @@ export function RadioItem({
       className={cn(
         'flex items-start gap-3 cursor-pointer group',
         disabled && 'opacity-50 cursor-not-allowed',
-        className,
+        className
       )}
     >
       <div className="flex h-5 items-center">
@@ -241,7 +241,7 @@ export function RadioItem({
             'font-medium transition-colors',
             isChecked
               ? 'text-foreground'
-              : 'text-gray-700 group-hover:text-foreground',
+              : 'text-gray-700 group-hover:text-foreground'
           )}
         >
           {label}

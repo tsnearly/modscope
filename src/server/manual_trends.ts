@@ -6,11 +6,15 @@ import { PostData } from '../shared/types/api';
  * PLAYTEST_BYPASS: Directly writes trend data from existing snapshot data into Redis.
  * Bypasses the full TrendingService completely — no timeouts, no scan filtering.
  */
-async function runManualMaterialization(subreddit: string = context.subredditName || 'unknown') {
+async function runManualMaterialization(
+  subreddit: string = context.subredditName || 'unknown'
+) {
   const SUBREDDIT = subreddit;
   const FUTURE_DATE = '2099-01-01T00:00:00.000Z';
 
-  console.log(`[MANUAL_TRENDS] Starting direct Redis seed for r/${SUBREDDIT}...`);
+  console.log(
+    `[MANUAL_TRENDS] Starting direct Redis seed for r/${SUBREDDIT}...`
+  );
 
   try {
     await Promise.all([
@@ -23,12 +27,19 @@ async function runManualMaterialization(subreddit: string = context.subredditNam
     // --- Step 1: Gather ALL scan IDs for this subreddit from the timeline ---
     const timelineRaw = await redis.zRange('global:snapshots:timeline', 0, -1);
 
-    interface ScanEntry { scanId: number; timestamp: number; }
+    interface ScanEntry {
+      scanId: number;
+      timestamp: number;
+    }
     const scans: ScanEntry[] = [];
 
     for (const entry of timelineRaw) {
-      const member = typeof entry === 'string' ? entry : (entry as { member: string }).member;
-      const score  = typeof entry === 'object' ? (entry as { score: number }).score : null;
+      const member =
+        typeof entry === 'string'
+          ? entry
+          : (entry as { member: string }).member;
+      const score =
+        typeof entry === 'object' ? (entry as { score: number }).score : null;
       if (!member) continue;
 
       const scanId = parseInt(member, 10);
@@ -37,16 +48,22 @@ async function runManualMaterialization(subreddit: string = context.subredditNam
       const meta = await redis.hGetAll(`run:${scanId}:meta`);
       if (meta?.subreddit !== SUBREDDIT) continue;
 
-      const ts = score ?? (meta.scan_date ? new Date(meta.scan_date).getTime() : Date.now());
+      const ts =
+        score ??
+        (meta.scan_date ? new Date(meta.scan_date).getTime() : Date.now());
       scans.push({ scanId, timestamp: ts });
     }
 
     if (scans.length === 0) {
-      console.error(`[MANUAL_TRENDS] No scans for r/${SUBREDDIT} found in global timeline. Aborting.`);
+      console.error(
+        `[MANUAL_TRENDS] No scans for r/${SUBREDDIT} found in global timeline. Aborting.`
+      );
       return;
     }
 
-    console.log(`[MANUAL_TRENDS] Found ${scans.length} scan(s) to seed trends from.`);
+    console.log(
+      `[MANUAL_TRENDS] Found ${scans.length} scan(s) to seed trends from.`
+    );
     scans.sort((a, b) => a.timestamp - b.timestamp);
 
     // --- Step 2: Write subscriber growth ZSET directly ---
@@ -84,7 +101,7 @@ async function runManualMaterialization(subreddit: string = context.subredditNam
       try {
         const parsed = JSON.parse(rawData);
         const pool: PostData[] = (parsed?.analysis_pool || []) as PostData[];
-        
+
         for (const post of pool) {
           const dt = new Date(post.created_utc * 1000);
           // Use UTC time to match TrendingService bucketing
@@ -92,10 +109,14 @@ async function runManualMaterialization(subreddit: string = context.subredditNam
           const day = dayNames[dt.getUTCDay()];
           const hour = dt.getUTCHours();
           const key = `${day}-${hour.toString().padStart(2, '0')}`;
-          heatmapCounts[key] = (heatmapCounts[key] || 0) + (post.engagement_score ?? 1);
+          heatmapCounts[key] =
+            (heatmapCounts[key] || 0) + (post.engagement_score ?? 1);
         }
       } catch (e) {
-        console.warn(`[MANUAL_TRENDS] Failed to parse scan ${scan.scanId} data:`, e);
+        console.warn(
+          `[MANUAL_TRENDS] Failed to parse scan ${scan.scanId} data:`,
+          e
+        );
       }
     }
 
@@ -104,7 +125,9 @@ async function runManualMaterialization(subreddit: string = context.subredditNam
     for (const [dayHour, delta] of Object.entries(heatmapCounts)) {
       await redis.hSet(heatmapKey, { [dayHour]: delta.toString() });
     }
-    console.log(`[MANUAL_TRENDS] ✓ Posting heatmap seeded (${Object.keys(heatmapCounts).length} cells).`);
+    console.log(
+      `[MANUAL_TRENDS] ✓ Posting heatmap seeded (${Object.keys(heatmapCounts).length} cells).`
+    );
 
     // --- Step 5: Calculate and seed best_posting_times ZSET ---
     const bestTimesKey = `trends:${SUBREDDIT}:best_posting_times`;
@@ -123,38 +146,40 @@ async function runManualMaterialization(subreddit: string = context.subredditNam
     }
     console.log(`[MANUAL_TRENDS] ✓ Best posting times seeded.`);
 
-      // --- Step 6: Seed best_times_timeline for charting ---
-      const bestTimesTimeline = [{
+    // --- Step 6: Seed best_times_timeline for charting ---
+    const bestTimesTimeline = [
+      {
         timestamp: scans[scans.length - 1]?.timestamp ?? Date.now(),
-        topSlots: bins.slice(0, 3).map(bin => ({
+        topSlots: bins.slice(0, 3).map((bin) => ({
           dayHour: bin.key,
           score: bin.velocity,
         })),
-      }];
-    
-      await redis.set(
-        `trends:${SUBREDDIT}:best_times_timeline`,
-        JSON.stringify(bestTimesTimeline)
-      );
-      console.log(`[MANUAL_TRENDS] ✓ Best times timeline seeded.`);
+      },
+    ];
 
-      // --- Step 7: Seed best_times_changes for trend analysis ---
-      const bestTimesChanges = {
-        risingSlots: [],
-        fallingSlots: [],
-        stableSlots: bins.slice(0, 5).map(bin => ({
-          dayHour: bin.key,
-          score: bin.velocity,
-        })),
-      };
-    
-      await redis.set(
-        `trends:${SUBREDDIT}:best_times_changes`,
-        JSON.stringify(bestTimesChanges)
-      );
-      console.log(`[MANUAL_TRENDS] ✓ Best times changes seeded.`);
+    await redis.set(
+      `trends:${SUBREDDIT}:best_times_timeline`,
+      JSON.stringify(bestTimesTimeline)
+    );
+    console.log(`[MANUAL_TRENDS] ✓ Best times timeline seeded.`);
 
-      // --- Step 8: Calculate and seed global_aggregates ---
+    // --- Step 7: Seed best_times_changes for trend analysis ---
+    const bestTimesChanges = {
+      risingSlots: [],
+      fallingSlots: [],
+      stableSlots: bins.slice(0, 5).map((bin) => ({
+        dayHour: bin.key,
+        score: bin.velocity,
+      })),
+    };
+
+    await redis.set(
+      `trends:${SUBREDDIT}:best_times_changes`,
+      JSON.stringify(bestTimesChanges)
+    );
+    console.log(`[MANUAL_TRENDS] ✓ Best times changes seeded.`);
+
+    // --- Step 8: Calculate and seed global_aggregates ---
     const globalStats = {
       postsTotal: 0,
       commentsTotal: 0,
@@ -166,7 +191,10 @@ async function runManualMaterialization(subreddit: string = context.subredditNam
       const stats = await redis.hGetAll(`run:${scan.scanId}:stats`);
       globalStats.postsTotal += parseInt(stats?.posts_found || '0', 10);
       globalStats.commentsTotal += parseInt(stats?.total_comments || '0', 10);
-      globalStats.engagementTotal += parseInt(stats?.total_engagement || '0', 10);
+      globalStats.engagementTotal += parseInt(
+        stats?.total_engagement || '0',
+        10
+      );
       globalStats.scoreTotal += parseInt(stats?.total_score || '0', 10);
     }
 
@@ -194,10 +222,14 @@ async function runManualMaterialization(subreddit: string = context.subredditNam
     // --- Step 9: Lock the last_materialized to far future ---
     await redis.set(`trends:${SUBREDDIT}:last_materialized`, FUTURE_DATE);
 
-    console.log(`[MANUAL_TRENDS] ✓ All done! Trends seeded for r/${SUBREDDIT}. Locked to ${FUTURE_DATE}.`);
-
+    console.log(
+      `[MANUAL_TRENDS] ✓ All done! Trends seeded for r/${SUBREDDIT}. Locked to ${FUTURE_DATE}.`
+    );
   } catch (error) {
-    console.error('[MANUAL_TRENDS] ❌ Failed:', error instanceof Error ? error.message : String(error));
+    console.error(
+      '[MANUAL_TRENDS] ❌ Failed:',
+      error instanceof Error ? error.message : String(error)
+    );
     throw error;
   }
 }

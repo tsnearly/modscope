@@ -61,7 +61,7 @@ export function TimePicker({
     }
 
     setTempTime(
-      `${finalHour.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`,
+      `${finalHour.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
     );
   };
 
@@ -78,7 +78,7 @@ export function TimePicker({
       newHour -= 12;
     }
     setTempTime(
-      `${newHour.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`,
+      `${newHour.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
     );
   };
 
@@ -90,7 +90,7 @@ export function TimePicker({
   // --- Analog Clock Logic ---
   const svgRef = React.useRef<SVGSVGElement>(null);
   const [isDragging, setIsDragging] = React.useState<'hour' | 'minute' | null>(
-    null,
+    null
   );
 
   const radius = 90;
@@ -200,7 +200,7 @@ export function TimePicker({
       }
 
       setTempTime(
-        `${newH24.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`,
+        `${newH24.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
       );
     } else if (isDragging === 'minute') {
       // Snap to 60 positions (6 degrees)
@@ -212,7 +212,7 @@ export function TimePicker({
       }
 
       setTempTime(
-        `${hours.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`,
+        `${hours.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`
       );
     }
   };
@@ -247,7 +247,7 @@ export function TimePicker({
           stroke="currentColor"
           strokeWidth={width}
           className={color}
-        />,
+        />
       );
     }
     return els;
@@ -264,7 +264,7 @@ export function TimePicker({
             variant={'outline'}
             className={cn(
               'w-full h-9 justify-start text-left font-normal pl-3 bg-background',
-              !value && 'text-muted-foreground',
+              !value && 'text-muted-foreground'
             )}
             onClick={() => setTempTime(value)}
           >

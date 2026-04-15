@@ -29,11 +29,12 @@ const inputVariants = cva(
       size: 'default',
       invalid: false,
     },
-  },
+  }
 );
 
 export interface InputProps
-  extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size'>,
+  extends
+    Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size'>,
     VariantProps<typeof inputVariants> {
   label?: React.ReactNode;
   description?: React.ReactNode;
@@ -75,11 +76,11 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
       onChange,
       ...props
     },
-    ref,
+    ref
   ) => {
     const [inputType, setInputType] = React.useState(type);
     const [internalValue, setInternalValue] = React.useState(
-      value !== undefined ? value : defaultValue || '',
+      value !== undefined ? value : defaultValue || ''
     );
     const [copied, setCopied] = React.useState(false);
     const inputRef = React.useRef<HTMLInputElement>(null);
@@ -198,7 +199,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
             inputVariants({ variant, size, invalid }),
             Icon && 'pl-9',
             hasTrailingElements && 'pr-24',
-            className,
+            className
           )}
           ref={inputRef}
           disabled={disabled}
@@ -309,7 +310,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
     }
 
     return inputElement;
-  },
+  }
 );
 Input.displayName = 'Input';
 

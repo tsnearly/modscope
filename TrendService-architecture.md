@@ -27,9 +27,9 @@ ts
 ```ts
 // Inside the snapshot job, after normalization completes
 await scheduler.runJob({
-  name:   'materialize_trends',
-  data:   { sub: context.subredditName },
-  runAt:  new Date(),
+  name: 'materialize_trends',
+  data: { sub: context.subredditName },
+  runAt: new Date(),
 });
 ```
 
@@ -41,10 +41,10 @@ ts
 
 ```ts
 export async function materialize(
-  sub:     string,
-  redis:   RedisClient,
-  config:  ModScopeConfig,
-): Promise<void>
+  sub: string,
+  redis: RedisClient,
+  config: ModScopeConfig
+): Promise<void>;
 ```
 
 `sub` is the subreddit name, already known from the job payload. `redis` and `config` are injected rather than instantiated inside the function — this keeps the service testable with mock clients and makes the config source explicit.
@@ -57,10 +57,10 @@ ts
 
 ```ts
 const {
-  analysisWindowDays,     // How far back to walk snapshots
+  analysisWindowDays, // How far back to walk snapshots
   excludeOfficialContent, // Whether to skip mod/admin posts during aggregation
-  botUsernames,           // Accounts to exclude from engagement calculations
-  engagementWeights,      // Needed to interpret ts:engagement scores consistently
+  botUsernames, // Accounts to exclude from engagement calculations
+  engagementWeights, // Needed to interpret ts:engagement scores consistently
 } = config;
 ```
 
@@ -69,8 +69,8 @@ const {
 ts
 
 ```ts
-const windowEnd   = Date.now();
-const windowStart = windowEnd - (analysisWindowDays * 86_400_000);
+const windowEnd = Date.now();
+const windowStart = windowEnd - analysisWindowDays * 86_400_000;
 ```
 
 These two timestamps are computed once at the top of the function and passed through to every phase. They must never be recomputed mid-run — if the job runs close to midnight and a phase boundary crosses a day rollover, recomputing would produce an asymmetric window that quietly skews the aggregation.
@@ -119,10 +119,10 @@ const ctx: TrendContext = {
   windowStart,
   windowEnd,
   excludedAuthors,
-  dailyBuckets:   {},
-  flairBuckets:   {},
-  heatmapBuckets: initHeatmapBuckets(),   // Pre-fills all 168 dayOfWeek+hour keys
-  velocityByBin:  {},
+  dailyBuckets: {},
+  flairBuckets: {},
+  heatmapBuckets: initHeatmapBuckets(), // Pre-fills all 168 dayOfWeek+hour keys
+  velocityByBin: {},
 };
 ```
 
@@ -144,7 +144,7 @@ Looking at the schema in `TECHNICAL.md`, the snapshot index key is:
 index:snapshots:{sub}:{date}   String (Int)
 ```
 
-This is a *string* storing a single `scanId` per date — not a ZSET of all scans. It's a deduplication pointer, meaning one canonical scan per ISO date string. That's an important constraint: TrendService can produce at most one data point per calendar date, which is exactly what you want for daily bucket aggregation but means you can't reconstruct intra-day resolution from this index alone.
+This is a _string_ storing a single `scanId` per date — not a ZSET of all scans. It's a deduplication pointer, meaning one canonical scan per ISO date string. That's an important constraint: TrendService can produce at most one data point per calendar date, which is exactly what you want for daily bucket aggregation but means you can't reconstruct intra-day resolution from this index alone.
 
 **Building the date range**
 
@@ -154,7 +154,7 @@ ts
 
 ```ts
 const dates: string[] = [];
-let   cursor = windowStart;
+let cursor = windowStart;
 
 while (cursor <= windowEnd) {
   dates.push(toISODate(cursor));
@@ -172,9 +172,7 @@ ts
 
 ```ts
 const scanIdStrings = await Promise.all(
-  dates.map(date =>
-    redis.get(`index:snapshots:${sub}:${date}`)
-  )
+  dates.map((date) => redis.get(`index:snapshots:${sub}:${date}`))
 );
 ```
 
@@ -195,7 +193,7 @@ for (let i = 0; i < dates.length; i++) {
 
   scanIds.push({
     scanId: Number(raw),
-    date:   dates[i],
+    date: dates[i],
   });
 }
 ```
@@ -231,8 +229,8 @@ At the end of Phase 1, `ctx` has everything Phase 2 needs to begin pool decompos
 ts
 
 ```ts
-ctx.scanIds         = scanIds;         // Ordered [{scanId, date}]
-ctx.scanTimestamps  = scanTimestamps;  // scanId → precise ms timestamp
+ctx.scanIds = scanIds; // Ordered [{scanId, date}]
+ctx.scanTimestamps = scanTimestamps; // scanId → precise ms timestamp
 ```
 
 And the daily bucket structure gets pre-initialized for every date that actually has a scan — not every date in the window, only confirmed ones:
@@ -242,10 +240,10 @@ ts
 ```ts
 for (const { date } of scanIds) {
   ctx.dailyBuckets[date] = {
-    postCount:        0,
+    postCount: 0,
     engagementPoints: [],
-    velocityPoints:   [],
-    commentsSum:      0,
+    velocityPoints: [],
+    commentsSum: 0,
   };
   ctx.flairBuckets[date] = {};
 }
@@ -262,7 +260,9 @@ The goal is to turn a single `scan:{scanId}:pool` ZSET into a fully-hydrated col
 ts
 
 ```ts
-const utcIds = await redis.zRange(`scan:${scanId}:pool`, 0, -1, { withScores: true });
+const utcIds = await redis.zRange(`scan:${scanId}:pool`, 0, -1, {
+  withScores: true,
+});
 ```
 
 `ZRANGE 0 -1 WITHSCORES` returns every member in the pool. The member is the `utcId`, the score is the pre-computed engagement value from when the snapshot was written. You keep the score because it becomes one of the data points feeding the engagement trend — you don't need to recompute it.
@@ -281,13 +281,13 @@ const [staticShard, metricsShard] = await Promise.all([
 await sleep(20);
 ```
 
-The `Promise.all` pairs the two hashes for a single post into one logical read unit. The `sleep(20)` fires *after* both resolve before moving to the next post — mirroring the exact trickle-write pacing used during ingestion. At 1,000 posts that's ~20 seconds of read time, which is why this must run in a background job with Devvit's continuation/handoff mechanism, not in a request handler.
+The `Promise.all` pairs the two hashes for a single post into one logical read unit. The `sleep(20)` fires _after_ both resolve before moving to the next post — mirroring the exact trickle-write pacing used during ingestion. At 1,000 posts that's ~20 seconds of read time, which is why this must run in a background job with Devvit's continuation/handoff mechanism, not in a request handler.
 
 **What each shard gives you**
 
 From `post:{utc}:static` you get the immutable fields — `flair`, `created_utc`, `author`, `is_self`, `title`. These are written once when the post is first seen and never change, so they're safe to read from any snapshot context.
 
-From `post:{utc}:metrics` you get the running lifetime aggregates — `score_sum`, `comments_sum`, `engagement_sum`, `samples`. These are *cumulative* across all scans, not scoped to this snapshot. That matters: if you're computing a daily average from `engagement_sum / samples` you're getting the post's lifetime average, not its engagement on the day of this specific scan. That's why Phase 3's time-series extraction is necessary — the `ts:*` ZSETs give you the per-scan point-in-time values that `metrics` deliberately doesn't preserve.
+From `post:{utc}:metrics` you get the running lifetime aggregates — `score_sum`, `comments_sum`, `engagement_sum`, `samples`. These are _cumulative_ across all scans, not scoped to this snapshot. That matters: if you're computing a daily average from `engagement_sum / samples` you're getting the post's lifetime average, not its engagement on the day of this specific scan. That's why Phase 3's time-series extraction is necessary — the `ts:*` ZSETs give you the per-scan point-in-time values that `metrics` deliberately doesn't preserve.
 
 **Step 3 — Accumulate into the working context**
 
@@ -298,13 +298,13 @@ ts
 ```ts
 const scanDate = toISODate(scanTimestamp);
 
-dailyBuckets[scanDate].engagementSum  += poolScore;
-dailyBuckets[scanDate].postCount      += 1;
-dailyBuckets[scanDate].commentsSum    += Number(metricsShard.comments_sum);
+dailyBuckets[scanDate].engagementSum += poolScore;
+dailyBuckets[scanDate].postCount += 1;
+dailyBuckets[scanDate].commentsSum += Number(metricsShard.comments_sum);
 
 flairBuckets[scanDate][staticShard.flair ?? 'none'] += 1;
 
-const dow  = getDayOfWeek(Number(staticShard.created_utc));
+const dow = getDayOfWeek(Number(staticShard.created_utc));
 const hour = getHour(Number(staticShard.created_utc));
 heatmapBuckets[`${dow}:${hour}`].count += 1;
 ```
@@ -313,11 +313,11 @@ Nothing gets written to Redis during this phase — it all accumulates in-memory
 
 **The key architectural point**
 
-Each `scan:{scanId}:pool` is normally read exactly once — by the Report view — to render a single snapshot. Phase 2 treats it instead as a *ledger entry* in a larger cross-scan aggregation. The pool isolation model stays intact; TrendService is just reading those pools in bulk rather than one at a time for display. Nothing about the existing schema needs to change.
+Each `scan:{scanId}:pool` is normally read exactly once — by the Report view — to render a single snapshot. Phase 2 treats it instead as a _ledger entry_ in a larger cross-scan aggregation. The pool isolation model stays intact; TrendService is just reading those pools in bulk rather than one at a time for display. Nothing about the existing schema needs to change.
 
 ## **Phase 3 in detail — per-post time-series extraction**
 
-This phase is what separates genuine trend data from snapshot averages. Instead of asking "what was this post's engagement score?", it asks "how did this post's engagement *move* over its lifetime within the analysis window?"
+This phase is what separates genuine trend data from snapshot averages. Instead of asking "what was this post's engagement score?", it asks "how did this post's engagement _move_ over its lifetime within the analysis window?"
 
 **The read pattern**
 
@@ -327,24 +327,15 @@ ts
 
 ```ts
 const [tsScore, tsComments, tsEngagement] = await Promise.all([
-  redis.zRangeByScore(
-    `post:${utcId}:ts:score`,
-    windowStart,
-    windowEnd,
-    { withScores: true }
-  ),
-  redis.zRangeByScore(
-    `post:${utcId}:ts:comments`,
-    windowStart,
-    windowEnd,
-    { withScores: true }
-  ),
-  redis.zRangeByScore(
-    `post:${utcId}:ts:engagement`,
-    windowStart,
-    windowEnd,
-    { withScores: true }
-  ),
+  redis.zRangeByScore(`post:${utcId}:ts:score`, windowStart, windowEnd, {
+    withScores: true,
+  }),
+  redis.zRangeByScore(`post:${utcId}:ts:comments`, windowStart, windowEnd, {
+    withScores: true,
+  }),
+  redis.zRangeByScore(`post:${utcId}:ts:engagement`, windowStart, windowEnd, {
+    withScores: true,
+  }),
 ]);
 await sleep(20);
 ```
@@ -361,7 +352,7 @@ ts
 function parseTSMember(member: string): { ts: number; value: number } {
   const colon = member.lastIndexOf(':');
   return {
-    ts:    Number(member.slice(0, colon)),
+    ts: Number(member.slice(0, colon)),
     value: Number(member.slice(colon + 1)),
   };
 }
@@ -377,7 +368,7 @@ ts
 
 ```ts
 const points = tsEngagement.map(({ member, score }) => ({
-  ts:    score,
+  ts: score,
   value: parseTSMember(member).value,
 }));
 
@@ -392,9 +383,7 @@ for (let i = 1; i < points.length; i++) {
   }
 }
 
-const avgVelocity = velocities.length
-  ? mean(velocities)
-  : 0;
+const avgVelocity = velocities.length ? mean(velocities) : 0;
 ```
 
 A positive velocity means the post was still gaining engagement between scans. A velocity near zero means it plateaued. A negative velocity — which can happen when engagement algorithm weights shift — flags a post that was artificially inflated and is now decaying. That trajectory information feeds directly into best posting times and the engagement trend chart in a way that daily averages simply cannot.
@@ -416,7 +405,7 @@ for (const point of points) {
 }
 ```
 
-Note that `avgVelocity` here is the post-level average — one number per post per day bucket. When Phase 4 later averages the `velocityPoints` array across all posts in a bucket, you get the *community-level* engagement velocity for that day, which is what the engagement trend chart actually wants to display.
+Note that `avgVelocity` here is the post-level average — one number per post per day bucket. When Phase 4 later averages the `velocityPoints` array across all posts in a bucket, you get the _community-level_ engagement velocity for that day, which is what the engagement trend chart actually wants to display.
 
 **Heatmap velocity contribution**
 
@@ -426,16 +415,16 @@ ts
 
 ```ts
 for (const point of points) {
-  const dow  = getDayOfWeek(point.ts);   // 0–6
-  const hour = getHour(point.ts);        // 0–23
-  const key  = `${dow}:${hour}`;
+  const dow = getDayOfWeek(point.ts); // 0–6
+  const hour = getHour(point.ts); // 0–23
+  const key = `${dow}:${hour}`;
 
-  heatmapBuckets[key].velocitySum   += avgVelocity;
+  heatmapBuckets[key].velocitySum += avgVelocity;
   heatmapBuckets[key].velocityCount += 1;
 }
 ```
 
-Previously, best posting times was derived from `created_utc` — when the post was *published*. That conflates "people post at this time" with "posts perform well at this time." Using velocity derived from `ts:engagement` observations instead means the heatmap reflects when engagement was actually *accelerating*, which is the signal a moderator actually wants.
+Previously, best posting times was derived from `created_utc` — when the post was _published_. That conflates "people post at this time" with "posts perform well at this time." Using velocity derived from `ts:engagement` observations instead means the heatmap reflects when engagement was actually _accelerating_, which is the signal a moderator actually wants.
 
 **Posts with only one observation**
 
@@ -516,8 +505,7 @@ for (const date of Object.keys(ctx.flairBuckets)) {
   const total = Object.values(counts).reduce((s, n) => s + n, 0);
 
   ctx.flairBuckets[date] = Object.fromEntries(
-    Object.entries(counts)
-      .map(([flair, count]) => [flair, count / total])
+    Object.entries(counts).map(([flair, count]) => [flair, count / total])
   );
 }
 ```
@@ -533,7 +521,7 @@ The heatmap bins were accumulated in Phase 3 but the window split — first half
 ts
 
 ```ts
-const windowMid = windowStart + ((windowEnd - windowStart) / 2);
+const windowMid = windowStart + (windowEnd - windowStart) / 2;
 ```
 
 This midpoint should actually have been passed into Phase 3 so posts could be bucketed into `firstHalfCount` vs `secondHalfCount` at accumulation time based on their `created_utc`. If that was done correctly in Phase 3, Phase 4 just verifies the split is consistent:
@@ -544,9 +532,8 @@ ts
 for (const key of Object.keys(ctx.heatmapBuckets)) {
   const bin = ctx.heatmapBuckets[key];
 
-  bin.avgVelocity = bin.velocityCount > 0
-    ? bin.velocitySum / bin.velocityCount
-    : 0;
+  bin.avgVelocity =
+    bin.velocityCount > 0 ? bin.velocitySum / bin.velocityCount : 0;
 
   bin.delta = bin.secondHalfCount - bin.firstHalfCount;
 }
@@ -566,7 +553,7 @@ ctx.rankedBins = Object.entries(ctx.heatmapBuckets)
   .map(([key, bin]) => ({
     key,
     avgVelocity: bin.avgVelocity,
-    totalCount:  bin.firstHalfCount + bin.secondHalfCount,
+    totalCount: bin.firstHalfCount + bin.secondHalfCount,
   }))
   .sort((a, b) => b.avgVelocity - a.avgVelocity);
 ```
@@ -585,10 +572,10 @@ ts
 const allDates = Object.keys(ctx.dailyBuckets).sort();
 
 ctx.summaryStats = {
-  avgPostsPerDay:    mean(allDates.map(d => ctx.dailyBuckets[d].postCount)),
-  avgCommentsPerDay: mean(allDates.map(d => ctx.dailyBuckets[d].commentsSum)),
-  avgEngagement:     mean(allDates.map(d => ctx.dailyBuckets[d].avgEngagement)),
-  avgVelocity:       mean(allDates.map(d => ctx.dailyBuckets[d].avgVelocity)),
+  avgPostsPerDay: mean(allDates.map((d) => ctx.dailyBuckets[d].postCount)),
+  avgCommentsPerDay: mean(allDates.map((d) => ctx.dailyBuckets[d].commentsSum)),
+  avgEngagement: mean(allDates.map((d) => ctx.dailyBuckets[d].avgEngagement)),
+  avgVelocity: mean(allDates.map((d) => ctx.dailyBuckets[d].avgVelocity)),
 };
 ```
 
@@ -617,15 +604,15 @@ The tempting implementation is:
 ts
 
 ```ts
-const totalPosts    = utcIds.length;
+const totalPosts = utcIds.length;
 const totalComments = sumOf(metricsShard.comments_sum);
-const days          = windowDays;
+const days = windowDays;
 
-postsPerDay    = totalPosts / days;
+postsPerDay = totalPosts / days;
 commentsPerDay = totalComments / days;
 ```
 
-This is what the current snapshot-isolated implementation almost certainly does, and it produces the instability you're seeing. It divides the *total pool size* by the *window length*, which means a single large scan that happened to catch a high-activity day drags the average up for the entire period. It also double-counts posts that appear in multiple snapshots across the window.
+This is what the current snapshot-isolated implementation almost certainly does, and it produces the instability you're seeing. It divides the _total pool size_ by the _window length_, which means a single large scan that happened to catch a high-activity day drags the average up for the entire period. It also double-counts posts that appear in multiple snapshots across the window.
 
 **The correct approach — count per scan date, then average**
 
@@ -635,9 +622,9 @@ ts
 
 ```ts
 for (const scanId of scanIds) {
-  const scanDate      = toISODate(scanTimestamps[scanId]);
-  const utcIds        = await redis.zRange(`scan:${scanId}:pool`, 0, -1);
-  let   commentsToday = 0;
+  const scanDate = toISODate(scanTimestamps[scanId]);
+  const utcIds = await redis.zRange(`scan:${scanId}:pool`, 0, -1);
+  let commentsToday = 0;
 
   for (const utcId of utcIds) {
     const metrics = await redis.hGetAll(`post:${utcId}:metrics`);
@@ -645,8 +632,8 @@ for (const scanId of scanIds) {
     await sleep(20);
   }
 
-  dailyBuckets[scanDate].postCount    = utcIds.length;
-  dailyBuckets[scanDate].commentsSum  = commentsToday;
+  dailyBuckets[scanDate].postCount = utcIds.length;
+  dailyBuckets[scanDate].commentsSum = commentsToday;
 }
 ```
 
@@ -655,31 +642,31 @@ After the full loop, averaging is just:
 ts
 
 ```ts
-const dates          = Object.keys(dailyBuckets);
-const avgPostsPerDay = mean(dates.map(d => dailyBuckets[d].postCount));
-const avgCommentsDay = mean(dates.map(d => dailyBuckets[d].commentsSum));
+const dates = Object.keys(dailyBuckets);
+const avgPostsPerDay = mean(dates.map((d) => dailyBuckets[d].postCount));
+const avgCommentsDay = mean(dates.map((d) => dailyBuckets[d].commentsSum));
 ```
 
 Each date contributes exactly one observation regardless of how many posts were in that day's pool.
 
 **The comments_sum subtlety**
 
-`post:{utc}:metrics` stores `comments_sum` as a *lifetime running aggregate* — it increments across every scan the post has ever appeared in. So if a post had 10 comments on day 1 and 15 on day 2, `comments_sum` on day 2 is 25, not 15.
+`post:{utc}:metrics` stores `comments_sum` as a _lifetime running aggregate_ — it increments across every scan the post has ever appeared in. So if a post had 10 comments on day 1 and 15 on day 2, `comments_sum` on day 2 is 25, not 15.
 
-For posts/day that doesn't matter — you're just counting how many posts exist in the pool. But for comments/day you want the *snapshot-day value*, not the lifetime accumulation. The correct field to use is actually the time-series ZSET from Phase 3:
+For posts/day that doesn't matter — you're just counting how many posts exist in the pool. But for comments/day you want the _snapshot-day value_, not the lifetime accumulation. The correct field to use is actually the time-series ZSET from Phase 3:
 
 ts
 
 ```ts
 const tsComments = await redis.zRangeByScore(
   `post:${utcId}:ts:comments`,
-  scanTimestamp - 60_000,   // small window around this scan
-  scanTimestamp + 60_000,
+  scanTimestamp - 60_000, // small window around this scan
+  scanTimestamp + 60_000
 );
 const commentCount = parseScoreFromMember(tsComments[0]);
 ```
 
-That pulls the comment count as it was recorded *at this specific scan*, not the running total. This is the same reason Phase 3 exists at all — `metrics` gives you lifetime context, `ts:*` gives you point-in-time truth.
+That pulls the comment count as it was recorded _at this specific scan_, not the running total. This is the same reason Phase 3 exists at all — `metrics` gives you lifetime context, `ts:*` gives you point-in-time truth.
 
 **What gets materialized**
 
@@ -707,12 +694,12 @@ ts
 ```ts
 for (const { date, scanId } of ctx.scanIds) {
   const bucket = ctx.dailyBuckets[date];
-  const avg    = bucket.engagementPoints.length
+  const avg = bucket.engagementPoints.length
     ? mean(bucket.engagementPoints)
     : 0;
 
   await redis.zAdd(`trends:${sub}:engagement_avg`, {
-    score:  ctx.scanTimestamps[scanId],
+    score: ctx.scanTimestamps[scanId],
     member: `${ctx.scanTimestamps[scanId]}:${avg}`,
   });
 }
@@ -726,16 +713,16 @@ ts
 
 ```ts
 for (const { date, scanId } of ctx.scanIds) {
-  const ts     = ctx.scanTimestamps[scanId];
+  const ts = ctx.scanTimestamps[scanId];
   const bucket = ctx.dailyBuckets[date];
 
   await redis.zAdd(`trends:${sub}:posts_per_day`, {
-    score:  ts,
+    score: ts,
     member: `${ts}:${bucket.postCount}`,
   });
 
   await redis.zAdd(`trends:${sub}:comments_per_day`, {
-    score:  ts,
+    score: ts,
     member: `${ts}:${bucket.commentsSum}`,
   });
 
@@ -754,11 +741,11 @@ ts
 ```ts
 for (const { scanId } of ctx.scanIds) {
   const summary = await redis.hGetAll(`scan:${scanId}:summary`);
-  const count   = Number(summary.subscriberCount ?? 0);
-  const ts      = ctx.scanTimestamps[scanId];
+  const count = Number(summary.subscriberCount ?? 0);
+  const ts = ctx.scanTimestamps[scanId];
 
   await redis.zAdd(`trends:${sub}:subscriber_growth`, {
-    score:  ts,
+    score: ts,
     member: `${ts}:${count}`,
   });
 
@@ -781,7 +768,7 @@ for (const { date } of ctx.scanIds) {
   await redis.hSet(
     `trends:${sub}:flair_distribution`,
     date,
-    JSON.stringify(flairCounts),
+    JSON.stringify(flairCounts)
   );
 }
 ```
@@ -799,11 +786,9 @@ for (const key of Object.keys(ctx.heatmapBuckets)) {
   const bin = ctx.heatmapBuckets[key];
 
   const payload = JSON.stringify({
-    countA:   bin.firstHalfCount,
-    countB:   bin.secondHalfCount,
-    velocity: bin.velocityCount > 0
-      ? bin.velocitySum / bin.velocityCount
-      : 0,
+    countA: bin.firstHalfCount,
+    countB: bin.secondHalfCount,
+    velocity: bin.velocityCount > 0 ? bin.velocitySum / bin.velocityCount : 0,
   });
 
   await redis.hSet(`trends:${sub}:posting_heatmap`, key, payload);
@@ -823,15 +808,13 @@ ts
 const bins = Object.entries(ctx.heatmapBuckets)
   .map(([key, bin]) => ({
     key,
-    velocity: bin.velocityCount > 0
-      ? bin.velocitySum / bin.velocityCount
-      : 0,
+    velocity: bin.velocityCount > 0 ? bin.velocitySum / bin.velocityCount : 0,
   }))
   .sort((a, b) => b.velocity - a.velocity);
 
 for (const { key, velocity } of bins) {
   await redis.zAdd(`trends:${sub}:best_posting_times`, {
-    score:  velocity,
+    score: velocity,
     member: key,
   });
 }
@@ -858,9 +841,7 @@ const trendKeys = [
   `trends:${sub}:best_posting_times`,
 ];
 
-await Promise.all(
-  trendKeys.map(key => redis.expire(key, ttlSeconds))
-);
+await Promise.all(trendKeys.map((key) => redis.expire(key, ttlSeconds)));
 ```
 
 The two-day buffer ensures the UI never reads a key that expired between the job completing and the next render. Each materialization run overwrites and resets the TTL, so active subs stay fresh and inactive subs eventually self-clean without manual intervention.

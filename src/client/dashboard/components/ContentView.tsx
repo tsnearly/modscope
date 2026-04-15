@@ -16,7 +16,7 @@ export function ContentView({ analytics, iconContext }: ContentViewProps) {
     : [];
 
   const uniquePostsForContent = Array.from(
-    new Map(allPostsForContent.map((p: PostData) => [p.url, p])).values(),
+    new Map(allPostsForContent.map((p: PostData) => [p.url, p])).values()
   );
 
   const typeStats: Record<
@@ -54,7 +54,9 @@ export function ContentView({ analytics, iconContext }: ContentViewProps) {
       percentage: Math.round((data.count / totalPostsForType) * 100),
       avg_score:
         data.scores.length > 0
-          ? Math.round(data.scores.reduce((a, b) => a + b, 0) / data.scores.length)
+          ? Math.round(
+              data.scores.reduce((a, b) => a + b, 0) / data.scores.length
+            )
           : 0,
     }))
     .sort((a, b) => b.percentage - a.percentage);
@@ -98,11 +100,15 @@ export function ContentView({ analytics, iconContext }: ContentViewProps) {
           : 0,
       avg_score:
         data.scores.length > 0
-          ? Math.round(data.scores.reduce((a, b) => a + b, 0) / data.scores.length)
+          ? Math.round(
+              data.scores.reduce((a, b) => a + b, 0) / data.scores.length
+            )
           : 0,
       avg_len:
         data.lengths.length > 0
-          ? Math.round(data.lengths.reduce((a, b) => a + b, 0) / data.lengths.length)
+          ? Math.round(
+              data.lengths.reduce((a, b) => a + b, 0) / data.lengths.length
+            )
           : 0,
     }))
     .filter((d) => d.count > 0)
@@ -112,7 +118,9 @@ export function ContentView({ analytics, iconContext }: ContentViewProps) {
     });
 
   const getRankedColor = (data: any[], value: number) => {
-    const sortedValues = [...new Set(data.map((d) => d.count))].sort((a, b) => a - b);
+    const sortedValues = [...new Set(data.map((d) => d.count))].sort(
+      (a, b) => a - b
+    );
     const numUnique = sortedValues.length;
     const rank = sortedValues.indexOf(value);
     if (numUnique <= 1) {
@@ -142,27 +150,33 @@ export function ContentView({ analytics, iconContext }: ContentViewProps) {
   const uniquePoolCountForContent = uniquePostsForContent.length;
   const duplicateCountForContent = Math.max(
     0,
-    rawPoolCountForContent - uniquePoolCountForContent,
+    rawPoolCountForContent - uniquePoolCountForContent
   );
 
   return (
     <div className="flex flex-col gap-2 p-2 h-full overflow-y-auto">
       <div className="bg-card border border-border rounded-md px-3 py-2 text-[11px] text-slate-600 flex flex-wrap gap-x-4 gap-y-1">
         <span>
-          Raw pool posts: <strong>{rawPoolCountForContent.toLocaleString()}</strong>
+          Raw pool posts:{' '}
+          <strong>{rawPoolCountForContent.toLocaleString()}</strong>
         </span>
         <span>
-          Unique posts (URL dedupe): <strong>{uniquePoolCountForContent.toLocaleString()}</strong>
+          Unique posts (URL dedupe):{' '}
+          <strong>{uniquePoolCountForContent.toLocaleString()}</strong>
         </span>
         <span>
-          Duplicate entries removed: <strong>{duplicateCountForContent.toLocaleString()}</strong>
+          Duplicate entries removed:{' '}
+          <strong>{duplicateCountForContent.toLocaleString()}</strong>
         </span>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2 shrink-0">
         <Chart
           title="Post Types"
           icon={
-            <Icon src={getDataGroupingIcon('post_type', iconContext)} size={16} />
+            <Icon
+              src={getDataGroupingIcon('post_type', iconContext)}
+              size={16}
+            />
           }
           height="auto"
         >
@@ -181,7 +195,10 @@ export function ContentView({ analytics, iconContext }: ContentViewProps) {
                   <span style={{ width: '80px', color: '#64748b' }}>
                     {type.category}
                   </span>
-                  <Tooltip content={`${type.count} ${type.category} posts (${type.percentage}%)`} side="top">
+                  <Tooltip
+                    content={`${type.count} ${type.category} posts (${type.percentage}%)`}
+                    side="top"
+                  >
                     <div
                       style={{
                         flex: 1,
@@ -220,7 +237,10 @@ export function ContentView({ analytics, iconContext }: ContentViewProps) {
         <Chart
           title="Title Length"
           icon={
-            <Icon src={getDataGroupingIcon('title_length', iconContext)} size={16} />
+            <Icon
+              src={getDataGroupingIcon('title_length', iconContext)}
+              size={16}
+            />
           }
           height="auto"
         >
@@ -243,7 +263,10 @@ export function ContentView({ analytics, iconContext }: ContentViewProps) {
                 >
                   {len.category}
                 </span>
-                <Tooltip content={`${len.count} posts [avg len ${len.avg_len}]`} side="right">
+                <Tooltip
+                  content={`${len.count} posts [avg len ${len.avg_len}]`}
+                  side="right"
+                >
                   <div
                     style={{
                       flex: 1,
@@ -283,7 +306,9 @@ export function ContentView({ analytics, iconContext }: ContentViewProps) {
 
       <Chart
         title="Flair Distribution"
-        icon={<Icon src={getDataGroupingIcon('flair', iconContext)} size={16} />}
+        icon={
+          <Icon src={getDataGroupingIcon('flair', iconContext)} size={16} />
+        }
         height="auto"
       >
         <div className="p-1 flex flex-col gap-1">
@@ -368,7 +393,9 @@ export function ContentView({ analytics, iconContext }: ContentViewProps) {
             <div className="text-xl font-bold text-foreground">
               {analytics.stats.comment_velocity.toFixed(2)}
             </div>
-            <div className="text-xs text-muted-foreground">Comment Velocity</div>
+            <div className="text-xs text-muted-foreground">
+              Comment Velocity
+            </div>
           </div>
           <div style={{ textAlign: 'center' }}>
             <div className="text-xl font-bold text-foreground">

@@ -28,9 +28,7 @@ export class DataRetrievalService {
         break;
       }
       const members = batch.map((m) =>
-        'member' in m
-          ? (m as { member: string }).member
-          : String(m),
+        'member' in m ? (m as { member: string }).member : String(m)
       );
       all.push(...members);
       if (batch.length < CHUNK) {
@@ -42,7 +40,7 @@ export class DataRetrievalService {
   }
 
   async getLatestSnapshot(
-    subreddit: string,
+    subreddit: string
   ): Promise<AnalyticsSnapshot | null> {
     const scanIdStr = await this.redis.get(`sub:${subreddit}:latest_scan`);
 
@@ -52,7 +50,7 @@ export class DataRetrievalService {
         return snapshot;
       }
       console.warn(
-        `[RETRIEVER] Stale latest_scan pointer (${scanIdStr}) for r/${subreddit}. Searching for actual latest...`,
+        `[RETRIEVER] Stale latest_scan pointer (${scanIdStr}) for r/${subreddit}. Searching for actual latest...`
       );
     }
 
@@ -68,7 +66,7 @@ export class DataRetrievalService {
         if (snapshot) {
           await this.redis.set(`sub:${subreddit}:latest_scan`, id.toString());
           console.log(
-            `[RETRIEVER] Recovered and repaired latest_scan pointer → scan #${id} for r/${subreddit}`,
+            `[RETRIEVER] Recovered and repaired latest_scan pointer → scan #${id} for r/${subreddit}`
           );
           return snapshot;
         }
@@ -87,7 +85,7 @@ export class DataRetrievalService {
 
     if (!meta.subreddit || !stats.subscribers) {
       console.warn(
-        `[RETRIEVER] Snapshot ${scanId} missing core components. Meta=${!!meta.subreddit}, Stats=${!!stats.subscribers}`,
+        `[RETRIEVER] Snapshot ${scanId} missing core components. Meta=${!!meta.subreddit}, Stats=${!!stats.subscribers}`
       );
       return null;
     }
@@ -128,7 +126,9 @@ export class DataRetrievalService {
       try {
         const analysisPool = poolRaw.map((p) => JSON.parse(p));
         const lists = listsJson ? JSON.parse(listsJson) : {};
-        console.log(`[RETRIEVER] ✓ Reassembled ${analysisPool.length} posts from ZSET for scan ${scanId}`);
+        console.log(
+          `[RETRIEVER] ✓ Reassembled ${analysisPool.length} posts from ZSET for scan ${scanId}`
+        );
         return {
           meta: baseMeta,
           stats: baseStats as SubredditStats,
@@ -136,7 +136,9 @@ export class DataRetrievalService {
           analysisPool,
         };
       } catch (e) {
-        console.warn(`[RETRIEVER] ZSET reassembly failed for scan ${scanId}, falling back...`);
+        console.warn(
+          `[RETRIEVER] ZSET reassembly failed for scan ${scanId}, falling back...`
+        );
       }
     }
 
@@ -146,7 +148,7 @@ export class DataRetrievalService {
       try {
         const parsed = JSON.parse(jsonData);
         console.log(
-          `[RETRIEVER] ✓ Loaded ${parsed.analysis_pool?.length || 0} posts from JSON blob for scan ${scanId}`,
+          `[RETRIEVER] ✓ Loaded ${parsed.analysis_pool?.length || 0} posts from JSON blob for scan ${scanId}`
         );
         return {
           meta: baseMeta,
@@ -156,7 +158,7 @@ export class DataRetrievalService {
         };
       } catch (e) {
         console.warn(
-          `[RETRIEVER] JSON parse failed for scan ${scanId}, falling back to legacy format`,
+          `[RETRIEVER] JSON parse failed for scan ${scanId}, falling back to legacy format`
         );
       }
     }
@@ -165,13 +167,13 @@ export class DataRetrievalService {
     const allKeys = await this.zRangeAll(`scan:${scanId}:pool`);
     if (allKeys.length === 0) {
       console.warn(
-        `[RETRIEVER] Snapshot ${scanId} has no pool entries in legacy format`,
+        `[RETRIEVER] Snapshot ${scanId} has no pool entries in legacy format`
       );
       return null;
     }
 
     console.log(
-      `[RETRIEVER] Hydrating ${allKeys.length} posts for scan ${scanId} (legacy)...`,
+      `[RETRIEVER] Hydrating ${allKeys.length} posts for scan ${scanId} (legacy)...`
     );
     const scanTimestamp = meta.scan_date
       ? new Date(meta.scan_date).getTime()
@@ -183,13 +185,13 @@ export class DataRetrievalService {
       const batch = await Promise.all(
         allKeys
           .slice(i, i + HYDRATE_BATCH)
-          .map((postKey) => this.hydratePost(postKey, scanTimestamp)),
+          .map((postKey) => this.hydratePost(postKey, scanTimestamp))
       );
       allPosts.push(...(batch.filter((p) => p !== null) as PostData[]));
     }
 
     console.log(
-      `[RETRIEVER] Hydrated ${allPosts.length} / ${allKeys.length} posts for scan ${scanId}`,
+      `[RETRIEVER] Hydrated ${allPosts.length} / ${allKeys.length} posts for scan ${scanId}`
     );
 
     const listTypes: Record<string, string> = {
@@ -212,7 +214,7 @@ export class DataRetrievalService {
           .map((postKey) => postMap.get(postKey))
           .filter((p): p is PostData => p !== undefined)
           .reverse();
-      }),
+      })
     );
 
     return {
@@ -225,7 +227,7 @@ export class DataRetrievalService {
 
   private async hydratePost(
     postKey: string,
-    scanTimestamp: number,
+    scanTimestamp: number
   ): Promise<PostData | null> {
     const [staticData, metricsData, scoreRet, commentsRet, engagementRet] =
       await Promise.all([
@@ -235,19 +237,19 @@ export class DataRetrievalService {
           `post:${postKey}:ts:score`,
           scanTimestamp,
           scanTimestamp,
-          { by: 'score' },
+          { by: 'score' }
         ),
         this.redis.zRange(
           `post:${postKey}:ts:comments`,
           scanTimestamp,
           scanTimestamp,
-          { by: 'score' },
+          { by: 'score' }
         ),
         this.redis.zRange(
           `post:${postKey}:ts:engagement`,
           scanTimestamp,
           scanTimestamp,
-          { by: 'score' },
+          { by: 'score' }
         ),
       ]);
     if (!staticData.title) {

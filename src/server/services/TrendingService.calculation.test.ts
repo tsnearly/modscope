@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { TrendingService } from './TrendingService';
 
 // Simple mock Redis client for calculation tests
@@ -17,11 +17,16 @@ class MockRedisClient {
     return zset.length;
   }
 
-  async zRangeByScore(key: string, min: number, max: number): Promise<string[]> {
+  async zRangeByScore(
+    key: string,
+    min: number,
+    max: number
+  ): Promise<string[]> {
     const zset = this.data.get(key) || [];
-    return zset.filter((item: any) => item.score >= min && item.score <= max)
-               .sort((a: any, b: any) => a.score - b.score)
-               .map((item: any) => item.member);
+    return zset
+      .filter((item: any) => item.score >= min && item.score <= max)
+      .sort((a: any, b: any) => a.score - b.score)
+      .map((item: any) => item.member);
   }
 
   async hGetAll(key: string): Promise<Record<string, string>> {
@@ -32,7 +37,11 @@ class MockRedisClient {
     return fn();
   }
 
-  async zAdd(key: string, scoreOrOptions: number | { score: number; member: string }, member?: string): Promise<number> {
+  async zAdd(
+    key: string,
+    scoreOrOptions: number | { score: number; member: string },
+    member?: string
+  ): Promise<number> {
     return this.trackOperation('zAdd', async () => {
       const zset = this.data.get(key) || [];
       let score: number;
@@ -44,7 +53,9 @@ class MockRedisClient {
         score = scoreOrOptions;
         memberValue = member!;
       }
-      const existingIndex = zset.findIndex((item: any) => item.member === memberValue);
+      const existingIndex = zset.findIndex(
+        (item: any) => item.member === memberValue
+      );
       if (existingIndex >= 0) {
         zset[existingIndex].score = score;
       } else {
@@ -216,9 +227,13 @@ describe('TrendingService Calculation Logic Tests', () => {
       // Add data in reverse chronological order (oldest first) so growth rate is positive
       const now = Date.now();
       for (let i = 11; i >= 0; i--) {
-        const timestamp = now - (i * 24 * 60 * 60 * 1000);
+        const timestamp = now - i * 24 * 60 * 60 * 1000;
         const value = 100000 + (11 - i) * 100; // Strong positive trend from oldest to newest
-        await mockRedis.zAdd(`trends:testsub:subscriber_growth`, timestamp, `${timestamp}:${value}`);
+        await mockRedis.zAdd(
+          `trends:testsub:subscriber_growth`,
+          timestamp,
+          `${timestamp}:${value}`
+        );
       }
 
       const forecast = await service.generateGrowthForecast('testsub');
@@ -234,9 +249,13 @@ describe('TrendingService Calculation Logic Tests', () => {
       // Set up subscriber growth data with only 5 points
       const now = Date.now();
       for (let i = 0; i < 5; i++) {
-        const timestamp = now - (i * 24 * 60 * 60 * 1000);
+        const timestamp = now - i * 24 * 60 * 60 * 1000;
         const value = 100000 + i * 50;
-        await mockRedis.zAdd(`trends:testsub:subscriber_growth`, timestamp, `${timestamp}:${value}`);
+        await mockRedis.zAdd(
+          `trends:testsub:subscriber_growth`,
+          timestamp,
+          `${timestamp}:${value}`
+        );
       }
 
       const forecast = await service.generateGrowthForecast('testsub');
@@ -250,11 +269,15 @@ describe('TrendingService Calculation Logic Tests', () => {
       // Set up noisy subscriber growth data
       const now = Date.now();
       for (let i = 0; i < 15; i++) {
-        const timestamp = now - (i * 24 * 60 * 60 * 1000);
+        const timestamp = now - i * 24 * 60 * 60 * 1000;
         // Fixed noise pattern to ensure low R-squared (< 0.6)
-        const noise = (i % 3 === 0 ? 500 : (i % 3 === 1 ? -500 : 0));
+        const noise = i % 3 === 0 ? 500 : i % 3 === 1 ? -500 : 0;
         const value = 100000 + i * 50 + noise;
-        await mockRedis.zAdd(`trends:testsub:subscriber_growth`, timestamp, `${timestamp}:${value}`);
+        await mockRedis.zAdd(
+          `trends:testsub:subscriber_growth`,
+          timestamp,
+          `${timestamp}:${value}`
+        );
       }
 
       const forecast = await service.generateGrowthForecast('testsub');
@@ -268,13 +291,18 @@ describe('TrendingService Calculation Logic Tests', () => {
       // Set up high quality subscriber growth data
       const now = Date.now();
       for (let i = 0; i < 20; i++) {
-        const timestamp = now - (i * 24 * 60 * 60 * 1000);
+        const timestamp = now - i * 24 * 60 * 60 * 1000;
         const value = 100000 + i * 100; // Strong consistent trend
-        await mockRedis.zAdd(`trends:testsub:subscriber_growth`, timestamp, `${timestamp}:${value}`);
+        await mockRedis.zAdd(
+          `trends:testsub:subscriber_growth`,
+          timestamp,
+          `${timestamp}:${value}`
+        );
       }
 
       // Mock calculateLinearRegression to return high R-squared
-      const originalCalculateLinearRegression = (service as any).calculateLinearRegression;
+      const originalCalculateLinearRegression = (service as any)
+        .calculateLinearRegression;
       (service as any).calculateLinearRegression = () => ({
         slope: 100,
         intercept: 100000,
@@ -288,14 +316,19 @@ describe('TrendingService Calculation Logic Tests', () => {
         // With high quality data (R-squared > 0.9 and > 14 points), should extend to 45 days
         expect(forecast.horizonDays).toBe(45);
       } finally {
-        (service as any).calculateLinearRegression = originalCalculateLinearRegression;
+        (service as any).calculateLinearRegression =
+          originalCalculateLinearRegression;
       }
     });
 
     it('should handle insufficient data for forecasting', async () => {
       // Set up insufficient subscriber growth data (only 1 point)
       const timestamp = Date.now() - 1000;
-      await mockRedis.zAdd(`trends:testsub:subscriber_growth`, timestamp, `${timestamp}:100000`);
+      await mockRedis.zAdd(
+        `trends:testsub:subscriber_growth`,
+        timestamp,
+        `${timestamp}:100000`
+      );
 
       const forecast = await service.generateGrowthForecast('testsub');
 
@@ -309,16 +342,20 @@ describe('TrendingService Calculation Logic Tests', () => {
       // Set up subscriber growth data with some noise to ensure non-zero residual standard error
       const now = Date.now();
       for (let i = 0; i < 10; i++) {
-        const timestamp = now - (i * 24 * 60 * 60 * 1000);
+        const timestamp = now - i * 24 * 60 * 60 * 1000;
         // Add small noise to create non-zero residual standard error
         const value = 100000 + i * 100 + (i % 2 === 0 ? 10 : -10);
-        await mockRedis.zAdd(`trends:testsub:subscriber_growth`, timestamp, `${timestamp}:${value}`);
+        await mockRedis.zAdd(
+          `trends:testsub:subscriber_growth`,
+          timestamp,
+          `${timestamp}:${value}`
+        );
       }
 
       const forecast = await service.generateGrowthForecast('testsub');
 
       // Each forecast point should have confidence bands
-      forecast.forecast.forEach(point => {
+      forecast.forecast.forEach((point) => {
         expect(point).toHaveProperty('timestamp');
         expect(point).toHaveProperty('value');
         expect(point).toHaveProperty('lowerBound');
@@ -339,7 +376,7 @@ describe('TrendingService Calculation Logic Tests', () => {
         { timestamp: Date.now(), value: 2000 },
       ];
 
-      const growthRate = (service as any).calculateGrowthRate(dataPoints);
+      const growthRate = (service as any).calculateGrowthRate(dataPoints, 30);
 
       // Latest: 2000, baseline (closest to 30 days ago): ~1000
       // Growth rate: (2000-1000)/1000 * 100 = 100%
@@ -354,7 +391,7 @@ describe('TrendingService Calculation Logic Tests', () => {
         { timestamp: Date.now(), value: 1000 },
       ];
 
-      const growthRate = (service as any).calculateGrowthRate(dataPoints);
+      const growthRate = (service as any).calculateGrowthRate(dataPoints, 30);
 
       // Latest: 1000, baseline: ~2000
       // Growth rate: (1000-2000)/2000 * 100 = -50%
@@ -367,7 +404,7 @@ describe('TrendingService Calculation Logic Tests', () => {
         { timestamp: Date.now(), value: 1000 },
       ];
 
-      const growthRate = (service as any).calculateGrowthRate(dataPoints);
+      const growthRate = (service as any).calculateGrowthRate(dataPoints, 30);
 
       // When baseline is 0, growth rate should be 0 to avoid division by zero
       expect(growthRate).toBe(0);
@@ -376,7 +413,7 @@ describe('TrendingService Calculation Logic Tests', () => {
     it('should handle single data point', () => {
       const dataPoints = [{ timestamp: Date.now(), value: 1000 }];
 
-      const growthRate = (service as any).calculateGrowthRate(dataPoints);
+      const growthRate = (service as any).calculateGrowthRate(dataPoints, 30);
 
       // With only one point, can't calculate growth rate
       expect(growthRate).toBe(0);
@@ -385,7 +422,7 @@ describe('TrendingService Calculation Logic Tests', () => {
     it('should find closest point to 30 days ago', () => {
       const now = Date.now();
       const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
-      
+
       const dataPoints = [
         { timestamp: thirtyDaysAgo - 5 * 24 * 60 * 60 * 1000, value: 900 }, // 35 days ago
         { timestamp: thirtyDaysAgo + 2 * 24 * 60 * 60 * 1000, value: 1100 }, // 28 days ago
@@ -393,7 +430,7 @@ describe('TrendingService Calculation Logic Tests', () => {
         { timestamp: now, value: 2000 },
       ];
 
-      const growthRate = (service as any).calculateGrowthRate(dataPoints);
+      const growthRate = (service as any).calculateGrowthRate(dataPoints, 30);
 
       // Should use point at 28 days ago (1100) as baseline, not 35 days ago (900)
       // Growth rate: (2000-1100)/1100 * 100 ≈ 81.8%
@@ -406,7 +443,7 @@ describe('TrendingService Calculation Logic Tests', () => {
         { timestamp: Date.now(), value: 1234 },
       ];
 
-      const growthRate = (service as any).calculateGrowthRate(dataPoints);
+      const growthRate = (service as any).calculateGrowthRate(dataPoints, 30);
 
       // (1234-1000)/1000 * 100 = 23.4%
       // Should be rounded to 1 decimal place
@@ -422,7 +459,7 @@ describe('TrendingService Calculation Logic Tests', () => {
         { timestamp: now - 20 * 24 * 60 * 60 * 1000, value: 1200 },
       ];
 
-      const growthRate = (service as any).calculateGrowthRate(dataPoints);
+      const growthRate = (service as any).calculateGrowthRate(dataPoints, 30);
 
       // Should sort internally and calculate correctly
       expect(growthRate).toBeCloseTo(100, 0); // (2000-1000)/1000 * 100 = 100%
@@ -432,12 +469,14 @@ describe('TrendingService Calculation Logic Tests', () => {
   describe('Task 14.1.4: Test engagement average calculation from per-post TS ZSETs across retained window', () => {
     // Note: This test would require more complex mocking of Redis data structures
     // For unit testing calculation logic, we'll test the core averaging logic
-    
+
     it('should calculate average engagement from engagement values', () => {
       // This tests the core averaging logic that would be used in materializeEngagementOverTime
       const engagementValues = [1.5, 2.3, 3.1, 4.7, 2.9];
-      const average = engagementValues.reduce((sum, val) => sum + val, 0) / engagementValues.length;
-      
+      const average =
+        engagementValues.reduce((sum, val) => sum + val, 0) /
+        engagementValues.length;
+
       expect(average).toBeCloseTo(2.9, 1); // (1.5+2.3+3.1+4.7+2.9)/5 = 14.5/5 = 2.9
     });
 
@@ -454,7 +493,7 @@ describe('TrendingService Calculation Logic Tests', () => {
       const sum = engagementValues.reduce((s, v) => s + v, 0);
       const average = sum / engagementValues.length;
       const rounded = Math.round(average * 100) / 100;
-      
+
       expect(rounded).toBeCloseTo(2.35, 2); // (1.567+2.345+3.123)/3 = 7.035/3 = 2.345 ≈ 2.35
     });
   });
@@ -471,16 +510,18 @@ describe('TrendingService Calculation Logic Tests', () => {
 
       // Mock the detectEngagementAnomalies method or test the logic directly
       // For now, test the statistical calculation
-      const values = engagementData.map(d => d.value);
+      const values = engagementData.map((d) => d.value);
       const mean = values.reduce((sum, val) => sum + val, 0) / values.length;
-      const variance = values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / values.length;
+      const variance =
+        values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) /
+        values.length;
       const stdDev = Math.sqrt(variance);
       const threshold = 1.5 * stdDev;
 
       // The spike value (50) should be more than 1.5 std dev above mean
       const spikeValue = 50;
       const deviation = spikeValue - mean;
-      
+
       expect(Math.abs(deviation)).toBeGreaterThan(threshold);
     });
 
@@ -493,15 +534,17 @@ describe('TrendingService Calculation Logic Tests', () => {
         { timestamp: 5000, value: 1 }, // Dip (far below mean)
       ];
 
-      const values = engagementData.map(d => d.value);
+      const values = engagementData.map((d) => d.value);
       const mean = values.reduce((sum, val) => sum + val, 0) / values.length;
-      const variance = values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / values.length;
+      const variance =
+        values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) /
+        values.length;
       const stdDev = Math.sqrt(variance);
       const threshold = 1.5 * stdDev;
 
       const dipValue = 1;
       const deviation = dipValue - mean;
-      
+
       expect(Math.abs(deviation)).toBeGreaterThan(threshold);
       expect(deviation).toBeLessThan(0); // Negative deviation = dip
     });
@@ -515,15 +558,17 @@ describe('TrendingService Calculation Logic Tests', () => {
         { timestamp: 5000, value: 14 }, // Within normal range
       ];
 
-      const values = engagementData.map(d => d.value);
+      const values = engagementData.map((d) => d.value);
       const mean = values.reduce((sum, val) => sum + val, 0) / values.length;
-      const variance = values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / values.length;
+      const variance =
+        values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) /
+        values.length;
       const stdDev = Math.sqrt(variance);
       const threshold = 1.5 * stdDev;
 
       const testValue = 14;
       const deviation = testValue - mean;
-      
+
       expect(Math.abs(deviation)).toBeLessThan(threshold);
     });
 
@@ -541,9 +586,11 @@ describe('TrendingService Calculation Logic Tests', () => {
     it('should calculate correct standard deviation', () => {
       const values = [10, 12, 11, 13, 14];
       const mean = values.reduce((sum, val) => sum + val, 0) / values.length;
-      const variance = values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / values.length;
+      const variance =
+        values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) /
+        values.length;
       const stdDev = Math.sqrt(variance);
-      
+
       // For values [10, 12, 11, 13, 14]:
       // Mean = 12, Variance = ((10-12)²+(12-12)²+(11-12)²+(13-12)²+(14-12)²)/5 = (4+0+1+1+4)/5 = 10/5 = 2
       // StdDev = √2 ≈ 1.414
@@ -556,7 +603,7 @@ describe('TrendingService Calculation Logic Tests', () => {
       // Test the rounding logic used in detectEngagementAnomalies
       const deviation = 3.14159265;
       const rounded = Math.round(deviation * 100) / 100;
-      
+
       expect(rounded).toBeCloseTo(3.14, 2);
     });
   });

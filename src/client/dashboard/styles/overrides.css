@@ -28,15 +28,17 @@ body {
   align-items: center !important;
 }
 
-.entity-title-container>*,
-[class*='entity-title']>*,
-[class*='EntityTitle']>* {
+.entity-title-container > *,
+[class*='entity-title'] > *,
+[class*='EntityTitle'] > * {
   display: inline-flex !important;
 }
 
 /* ── Chart headers: force inline layout ─────────────────────────────────*/
-[class*='chart']:not([class*='chart-tooltip'])>div:first-child:not([class*='chart-tooltip']),
-[class*='Chart']:not([class*='chart-tooltip'])>div:first-child:not([class*='chart-tooltip']) {
+[class*='chart']:not([class*='chart-tooltip'])
+  > div:first-child:not([class*='chart-tooltip']),
+[class*='Chart']:not([class*='chart-tooltip'])
+  > div:first-child:not([class*='chart-tooltip']) {
   display: flex !important;
   flex-direction: row !important;
   align-items: center !important;
@@ -68,12 +70,12 @@ body {
 }
 
 /* Icon images inside headings */
-h1>img,
-h2>img,
-h3>img,
-h4>img,
-h5>img,
-h6>img {
+h1 > img,
+h2 > img,
+h3 > img,
+h4 > img,
+h5 > img,
+h6 > img {
   display: inline-block !important;
   flex-shrink: 0 !important;
   margin-right: 0.5rem !important;
@@ -96,7 +98,6 @@ h6>img {
 
 /* ── Print styles ────────────────────────────────────────────────────────*/
 @media print {
-
   /* Hide everything by default for a clean report */
   body.is-printing * {
     visibility: hidden;
@@ -123,24 +124,26 @@ h6>img {
   /* Hide UI chrome */
   body.is-printing .nav-toolbar,
   body.is-printing .tabs-list,
-  body.is-printing [data-report-view]>div:first-child,
+  body.is-printing [data-report-view] > div:first-child,
   body.is-printing .absolute.bottom-0 {
     display: none !important;
   }
 
-  /* Reset overflow for print — strip out SPA constraints so all pages print */
+  /* Reset overflow for print on shell containers only.
+     Avoid utility class selectors here; they can override chart layout internals. */
   body.is-printing,
   body.is-printing #root,
   body.is-printing .app-container,
-  body.is-printing .content-area,
-  body.is-printing .h-full,
-  body.is-printing .overflow-hidden,
-  body.is-printing .overflow-y-auto {
+  body.is-printing .content-area {
     overflow: visible !important;
     height: auto !important;
     min-height: auto !important;
     max-height: none !important;
-    position: static !important;
+  }
+
+  /* Keep Recharts absolutely positioned layers anchored to their local container. */
+  body.is-printing .print-report-container .recharts-responsive-container {
+    position: relative !important;
   }
 }
 

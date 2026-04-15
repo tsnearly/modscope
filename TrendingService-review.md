@@ -64,14 +64,14 @@ Phase 5 in the spec explicitly sets TTLs of `analysisWindowDays + 2` days on all
 
 **Summary table**
 
-| Area                                      | Status                          |
-| ----------------------------------------- | ------------------------------- |
+| Area                                      | Status                           |
+| ----------------------------------------- | -------------------------------- |
 | Five-phase structure                      | ✅ Present                       |
 | Trickle-read pacing                       | ✅ Correct                       |
 | Velocity derivation math                  | ✅ Correct                       |
 | Member parsing with lastIndexOf           | ✅ Correct                       |
 | Pool key alignment with schema            | ❌ Wrong key suffix              |
-| Engagement source (ts:* vs pool JSON)     | ❌ Pool JSON in Phase 2          |
+| Engagement source (ts:\* vs pool JSON)    | ❌ Pool JSON in Phase 2          |
 | avgVelocity per date bucket               | ❌ Computed but discarded        |
 | Best times ranked by velocity             | ❌ Uses raw engagement           |
 | Heatmap bin structure (countA/B/velocity) | ❌ Delta only                    |

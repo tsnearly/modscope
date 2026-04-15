@@ -80,7 +80,7 @@ export function TabList({ children, className = '', ...props }: TabListProps) {
       className={cn(
         'flex items-center',
         variantStyles[context.variant],
-        className,
+        className
       )}
       {...props}
     >
@@ -89,8 +89,7 @@ export function TabList({ children, className = '', ...props }: TabListProps) {
   );
 }
 
-export interface TabProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+export interface TabProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   value: string;
   name?: string;
   icon?: string;
@@ -130,13 +129,13 @@ export function Tab({
       'border-b-2 font-medium -mb-px',
       isActive
         ? 'border-primary text-primary'
-        : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border',
+        : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
     ),
     segmented: cn(
       'rounded-md font-semibold',
       isActive
         ? 'bg-background text-foreground shadow-sm'
-        : 'text-muted-foreground hover:bg-background/40 hover:text-foreground',
+        : 'text-muted-foreground hover:bg-background/40 hover:text-foreground'
     ),
     pills: cn(
       'rounded-full font-medium border',
@@ -144,7 +143,7 @@ export function Tab({
         ? accent
           ? `bg-${accent}-500 text-white border-${accent}-500`
           : 'bg-primary text-primary-foreground border-primary'
-        : 'bg-transparent text-muted-foreground border-border hover:bg-muted',
+        : 'bg-transparent text-muted-foreground border-border hover:bg-muted'
     ),
   }[variant];
 

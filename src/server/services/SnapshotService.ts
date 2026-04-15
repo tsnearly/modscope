@@ -18,7 +18,7 @@ export interface TrendMaterializer {
   cleanupTrendArtifacts(
     subreddit: string,
     deletedScanIds: number[],
-    deletedScanTimestamps: number[],
+    deletedScanTimestamps: number[]
   ): Promise<void>;
 }
 
@@ -57,7 +57,7 @@ export class SnapshotService {
   async takeSnapshot(
     subredditName: string,
     settings: CalculationSettings,
-    onPhase?: SnapshotPhaseReporter,
+    onPhase?: SnapshotPhaseReporter
   ): Promise<number> {
     console.log(`[SNAPSHOT] Starting analysis for r/${subredditName}...`);
     const snapshotStartMs = Date.now();
@@ -77,17 +77,17 @@ export class SnapshotService {
       const elapsedMs = getElapsedMs();
       if (elapsedMs > CORE_RUNTIME_DEADLINE_MS) {
         throw new Error(
-          `[SNAPSHOT] Core runtime deadline exceeded before ${stage} (${elapsedMs}ms > ${CORE_RUNTIME_DEADLINE_MS}ms)`,
+          `[SNAPSHOT] Core runtime deadline exceeded before ${stage} (${elapsedMs}ms > ${CORE_RUNTIME_DEADLINE_MS}ms)`
         );
       }
     };
 
     const reportPhase = async (
       phase: SnapshotPhase,
-      detail: string,
+      detail: string
     ): Promise<void> => {
       console.log(
-        `[SNAPSHOT][PHASE] ${phase}: ${detail} (elapsed ${getElapsedMs()}ms)`,
+        `[SNAPSHOT][PHASE] ${phase}: ${detail} (elapsed ${getElapsedMs()}ms)`
       );
       if (!onPhase) {
         return;
@@ -97,7 +97,7 @@ export class SnapshotService {
       } catch (phaseError) {
         console.warn(
           `[SNAPSHOT] Failed to report phase '${phase}' heartbeat:`,
-          phaseError,
+          phaseError
         );
       }
     };
@@ -105,7 +105,7 @@ export class SnapshotService {
     const withTimeout = async <T>(
       promise: Promise<T>,
       timeoutMs: number,
-      label: string,
+      label: string
     ): Promise<T> => {
       return await new Promise<T>((resolve, reject) => {
         let settled = false;
@@ -142,7 +142,7 @@ export class SnapshotService {
 
       await reportPhase(
         'fetch',
-        `Fetching subreddit metadata and post listings for r/${subredditName}`,
+        `Fetching subreddit metadata and post listings for r/${subredditName}`
       );
 
       let topTimeframe: 'hour' | 'day' | 'week' | 'month' | 'year' | 'all' =
@@ -181,7 +181,7 @@ export class SnapshotService {
       const currentUser = await reddit.getCurrentUsername();
       const officialAccounts = await getOfficialAccounts(
         reddit as RedditClient,
-        subredditName,
+        subredditName
       );
 
       const stats: SnapshotStats = {
@@ -206,7 +206,7 @@ export class SnapshotService {
 
       const fetchBounded = async <T>(
         iterable: AsyncIterable<T>,
-        limit: number,
+        limit: number
       ): Promise<T[]> => {
         const results: T[] = [];
         const MAX_RETRIES = 3;
@@ -239,7 +239,7 @@ export class SnapshotService {
               if (retries > MAX_RETRIES) {
                 const reason = isRateLimit ? 'Rate limit' : 'Server error';
                 console.warn(
-                  `[SNAPSHOT] ${reason}: max retries exhausted. Returning ${results.length} items collected so far.`,
+                  `[SNAPSHOT] ${reason}: max retries exhausted. Returning ${results.length} items collected so far.`
                 );
                 break;
               }
@@ -247,7 +247,7 @@ export class SnapshotService {
                 ? 'Rate limit (429)'
                 : 'Server error (500/503)';
               console.warn(
-                `[SNAPSHOT] ${reason} hit during fetchBounded. Returning ${results.length} partial items to avoid long blocking retries.`,
+                `[SNAPSHOT] ${reason} hit during fetchBounded. Returning ${results.length} partial items to avoid long blocking retries.`
               );
               // AsyncIterables are typically one-shot; return partial data quickly instead
               // of sleeping/retrying and risking host timeout.
@@ -264,44 +264,80 @@ export class SnapshotService {
       // We increase this to 1000 so that larger analysisDays (e.g. 90) can catch older posts.
       const maxPostsPerList = 220;
       console.log(
-        `[SNAPSHOT] Listing fetch cap per feed: ${maxPostsPerList} posts.`,
+        `[SNAPSHOT] Listing fetch cap per feed: ${maxPostsPerList} posts.`
       );
       const [allNew, allTop, allHot] = await Promise.all([
         withTimeout(
           fetchBounded(newPostsListing, maxPostsPerList),
           LISTING_FETCH_TIMEOUT_MS,
-          'new posts listing',
+          'new posts listing'
         ).catch((e) => {
           console.warn(
-            `[SNAPSHOT] Falling back to partial/empty new posts listing: ${e instanceof Error ? e.message : String(e)}`,
+            `[SNAPSHOT] Falling back to partial/empty new posts listing: ${e instanceof Error ? e.message : String(e)}`
           );
-          return [] as { id: string; createdAt: Date; authorName: string; isSelf: boolean; score: number; nsfw: boolean }[];
+          return [] as {
+            id: string;
+            createdAt: Date;
+            authorName: string;
+            isSelf: boolean;
+            score: number;
+            nsfw: boolean;
+          }[];
         }),
         withTimeout(
           fetchBounded(topPostsListing, maxPostsPerList),
           LISTING_FETCH_TIMEOUT_MS,
-          'top posts listing',
+          'top posts listing'
         ).catch((e) => {
           console.warn(
-            `[SNAPSHOT] Falling back to partial/empty top posts listing: ${e instanceof Error ? e.message : String(e)}`,
+            `[SNAPSHOT] Falling back to partial/empty top posts listing: ${e instanceof Error ? e.message : String(e)}`
           );
-          return [] as { id: string; createdAt: Date; authorName: string; isSelf: boolean; score: number; nsfw: boolean }[];
+          return [] as {
+            id: string;
+            createdAt: Date;
+            authorName: string;
+            isSelf: boolean;
+            score: number;
+            nsfw: boolean;
+          }[];
         }),
         withTimeout(
           fetchBounded(hotPostsListing, maxPostsPerList),
           LISTING_FETCH_TIMEOUT_MS,
-          'hot posts listing',
+          'hot posts listing'
         ).catch((e) => {
           console.warn(
-            `[SNAPSHOT] Falling back to partial/empty hot posts listing: ${e instanceof Error ? e.message : String(e)}`,
+            `[SNAPSHOT] Falling back to partial/empty hot posts listing: ${e instanceof Error ? e.message : String(e)}`
           );
-          return [] as { id: string; createdAt: Date; authorName: string; isSelf: boolean; score: number; nsfw: boolean }[];
+          return [] as {
+            id: string;
+            createdAt: Date;
+            authorName: string;
+            isSelf: boolean;
+            score: number;
+            nsfw: boolean;
+          }[];
         }),
       ]);
 
-      const uniquePosts = new Map<string, { id: string; createdAt: Date; createdUtc?: number; authorName: string; isSelf: boolean; score: number; commentCount?: number; numberOfComments?: number; numComments?: number; flair?: { text: string }; nsfw: boolean }>();
+      const uniquePosts = new Map<
+        string,
+        {
+          id: string;
+          createdAt: Date;
+          createdUtc?: number;
+          authorName: string;
+          isSelf: boolean;
+          score: number;
+          commentCount?: number;
+          numberOfComments?: number;
+          numComments?: number;
+          flair?: { text: string };
+          nsfw: boolean;
+        }
+      >();
       [...allNew, ...allTop, ...allHot].forEach((p) =>
-        uniquePosts.set(p.id, p as any),
+        uniquePosts.set(p.id, p as any)
       );
 
       // Devvit Post#createdAt is a Date object — convert to unix seconds for comparison
@@ -343,11 +379,11 @@ export class SnapshotService {
         DEFAULT_CALCULATION_SETTINGS.analysisPoolSize;
       const deepAnalysisLimit = Math.min(
         requestedDeepLimit,
-        MAX_DEEP_ANALYSIS_POSTS,
+        MAX_DEEP_ANALYSIS_POSTS
       );
       if (requestedDeepLimit > deepAnalysisLimit) {
         console.log(
-          `[SNAPSHOT] Capping deep analysis from ${requestedDeepLimit} to ${deepAnalysisLimit} posts for runtime reliability.`,
+          `[SNAPSHOT] Capping deep analysis from ${requestedDeepLimit} to ${deepAnalysisLimit} posts for runtime reliability.`
         );
       }
 
@@ -367,20 +403,20 @@ export class SnapshotService {
 
       if (getElapsedMs() > DEEP_ANALYSIS_START_CUTOFF_MS) {
         console.warn(
-          `[SNAPSHOT] Skipping deep analysis because fetch stage consumed ${getElapsedMs()}ms (cutoff ${DEEP_ANALYSIS_START_CUTOFF_MS}ms).`,
+          `[SNAPSHOT] Skipping deep analysis because fetch stage consumed ${getElapsedMs()}ms (cutoff ${DEEP_ANALYSIS_START_CUTOFF_MS}ms).`
         );
         deepPool = [];
         shallowPool = poolRaw;
       }
 
       console.log(
-        `[SNAPSHOT] Processing ${poolRaw.length} posts from the last ${cutoffDays} days (${deepPool.length} deep, ${shallowPool.length} shallow).`,
+        `[SNAPSHOT] Processing ${poolRaw.length} posts from the last ${cutoffDays} days (${deepPool.length} deep, ${shallowPool.length} shallow).`
       );
 
       assertWithinCoreRuntime('deep-analysis setup');
       await reportPhase(
         'deep-analysis',
-        `Deep analysis starting for ${deepPool.length} posts`,
+        `Deep analysis starting for ${deepPool.length} posts`
       );
 
       const analysisPoolMap = new Map<string, PostData>();
@@ -397,7 +433,7 @@ export class SnapshotService {
         assertWithinCoreRuntime('deep-analysis batch start');
         if (Date.now() - snapshotStartMs > DEEP_ANALYSIS_BUDGET_MS) {
           console.warn(
-            `[SNAPSHOT] Deep-analysis budget reached (${DEEP_ANALYSIS_BUDGET_MS / 1000}s). Skipping remaining deep posts and continuing with shallow data to complete scan.`,
+            `[SNAPSHOT] Deep-analysis budget reached (${DEEP_ANALYSIS_BUDGET_MS / 1000}s). Skipping remaining deep posts and continuing with shallow data to complete scan.`
           );
           break;
         }
@@ -410,21 +446,21 @@ export class SnapshotService {
         const batchNum = Math.floor(i / chunkSize) + 1;
         const totalBatches = Math.ceil(deepPool.length / chunkSize);
         console.log(
-          `[SNAPSHOT] Deep analysis batch ${batchNum}/${totalBatches}...`,
+          `[SNAPSHOT] Deep analysis batch ${batchNum}/${totalBatches}...`
         );
 
         const chunk = deepPool.slice(i, i + chunkSize);
         for (const p of chunk) {
           if (Date.now() - snapshotStartMs > DEEP_ANALYSIS_BUDGET_MS) {
             console.warn(
-              '[SNAPSHOT] Deep-analysis budget reached mid-batch. Continuing with shallow-only remainder.',
+              '[SNAPSHOT] Deep-analysis budget reached mid-batch. Continuing with shallow-only remainder.'
             );
             break;
           }
 
           const deepPostStart = Date.now();
           console.log(
-            `[SNAPSHOT] Deep analysis post ${p.id} started (batch ${batchNum}/${totalBatches}).`,
+            `[SNAPSHOT] Deep analysis post ${p.id} started (batch ${batchNum}/${totalBatches}).`
           );
 
           let maxDepth = 0;
@@ -451,12 +487,20 @@ export class SnapshotService {
                   const batch = await withTimeout(
                     fetchBounded(
                       listing,
-                      MAX_COMMENTS_PER_POST - allComments.length,
+                      MAX_COMMENTS_PER_POST - allComments.length
                     ),
                     COMMENT_TRAVERSAL_TIMEOUT_MS,
-                    `comment listing traversal for post ${p.id}`,
+                    `comment listing traversal for post ${p.id}`
                   );
-                  for (const c of batch as { authorName: string; createdAt: Date; createdUtc?: number; type?: string; count?: number; children?: any; replies?: any }[]) {
+                  for (const c of batch as {
+                    authorName: string;
+                    createdAt: Date;
+                    createdUtc?: number;
+                    type?: string;
+                    count?: number;
+                    children?: any;
+                    replies?: any;
+                  }[]) {
                     // Skip MoreComments placeholder objects
                     if (
                       c.type === 'MoreComments' ||
@@ -507,10 +551,11 @@ export class SnapshotService {
                     }
                   }
                 } catch (e: unknown) {
-                  const errorMessage = e instanceof Error ? e.message : String(e);
+                  const errorMessage =
+                    e instanceof Error ? e.message : String(e);
                   if (errorMessage.includes('429')) {
                     console.warn(
-                      `[SNAPSHOT] Rate limit 429 hit traversing replies for ${p.id}. Keeping ${allComments.length} comments collected.`,
+                      `[SNAPSHOT] Rate limit 429 hit traversing replies for ${p.id}. Keeping ${allComments.length} comments collected.`
                     );
                   } else {
                     throw e;
@@ -521,20 +566,23 @@ export class SnapshotService {
               // Top-level comments are at depth 1
               await withTimeout(
                 flattenReplies(
-                  reddit.getComments({ postId: p.id as `t3_${string}`, limit: 50 }),
-                  1,
+                  reddit.getComments({
+                    postId: p.id as `t3_${string}`,
+                    limit: 50,
+                  }),
+                  1
                 ),
                 COMMENT_TRAVERSAL_TIMEOUT_MS,
-                `top-level comments fetch for post ${p.id}`,
+                `top-level comments fetch for post ${p.id}`
               ).catch((e) => {
                 console.warn(
-                  `[SNAPSHOT] Timed out while scanning comments for ${p.id}; keeping partial depth data. ${e instanceof Error ? e.message : String(e)}`,
+                  `[SNAPSHOT] Timed out while scanning comments for ${p.id}; keeping partial depth data. ${e instanceof Error ? e.message : String(e)}`
                 );
               });
 
               if (allComments.length > 0) {
                 creatorReplies = allComments.filter(
-                  ({ comment: c }) => c.authorName === p.authorName,
+                  ({ comment: c }) => c.authorName === p.authorName
                 ).length;
               }
 
@@ -545,7 +593,7 @@ export class SnapshotService {
             } catch (e) {
               console.warn(
                 `[SNAPSHOT] Failed to fetch comments for ${p.id}:`,
-                e,
+                e
               );
             }
           }
@@ -560,7 +608,10 @@ export class SnapshotService {
             url: (p as any).url,
             created_utc: postCreatedSec,
             author: (p as any).authorName || '[deleted]',
-            is_self: typeof (p as any).isSelf === 'function' ? (p as any).isSelf() : ((p as any).isSelf || false),
+            is_self:
+              typeof (p as any).isSelf === 'function'
+                ? (p as any).isSelf()
+                : (p as any).isSelf || false,
             score: p.score,
             comments:
               p.commentCount ?? p.numberOfComments ?? p.numComments ?? 0,
@@ -568,7 +619,7 @@ export class SnapshotService {
             over_18: p.nsfw,
             max_depth: Math.min(
               maxDepth,
-              settings.depthMax || DEFAULT_CALCULATION_SETTINGS.depthMax,
+              settings.depthMax || DEFAULT_CALCULATION_SETTINGS.depthMax
             ),
             creator_replies: creatorReplies,
             engagement_score: 0, // Calculated below
@@ -577,7 +628,7 @@ export class SnapshotService {
           postData.engagement_score = this.calculateEngagementScore(
             postData,
             settings,
-            nowSec,
+            nowSec
           );
           analysisPoolMap.set(p.id, postData);
           analysisPool.push(postData);
@@ -587,7 +638,7 @@ export class SnapshotService {
           totalComments += commentCount;
 
           console.log(
-            `[SNAPSHOT] Deep analysis post ${p.id} finished in ${Date.now() - deepPostStart}ms.`,
+            `[SNAPSHOT] Deep analysis post ${p.id} finished in ${Date.now() - deepPostStart}ms.`
           );
 
           // Small per-post delay prevents request spikes inside a batch.
@@ -598,11 +649,11 @@ export class SnapshotService {
       // --- Phase 2: Shallow metadata for remaining posts (no API calls) ---
       await reportPhase(
         'shallow-processing',
-        `Shallow processing ${shallowPool.length} posts`,
+        `Shallow processing ${shallowPool.length} posts`
       );
       if (shallowPool.length > 0) {
         console.log(
-          `[SNAPSHOT] Adding ${shallowPool.length} posts with basic metadata (no comment fetch)...`,
+          `[SNAPSHOT] Adding ${shallowPool.length} posts with basic metadata (no comment fetch)...`
         );
         for (const p of shallowPool) {
           const commentCount =
@@ -617,7 +668,10 @@ export class SnapshotService {
             url: (p as any).url,
             created_utc: postCreatedSec,
             author: (p as any).authorName || '[deleted]',
-            is_self: typeof (p as any).isSelf === 'function' ? (p as any).isSelf() : ((p as any).isSelf || false),
+            is_self:
+              typeof (p as any).isSelf === 'function'
+                ? (p as any).isSelf()
+                : (p as any).isSelf || false,
             score: p.score,
             comments: commentCount,
             flair: p.flair?.text || null,
@@ -630,7 +684,7 @@ export class SnapshotService {
           postData.engagement_score = this.calculateEngagementScore(
             postData,
             settings,
-            nowSec,
+            nowSec
           );
           analysisPoolMap.set(p.id, postData);
           analysisPool.push(postData);
@@ -648,10 +702,10 @@ export class SnapshotService {
       assertWithinCoreRuntime('finalize stats');
       await reportPhase(
         'finalize',
-        `Finalizing stats and post lists for ${analysisPool.length} posts`,
+        `Finalizing stats and post lists for ${analysisPool.length} posts`
       );
       console.log(
-        `[SNAPSHOT] Finalizing stats for ${analysisPool.length} posts...`,
+        `[SNAPSHOT] Finalizing stats for ${analysisPool.length} posts...`
       );
       const totalPosts = analysisPool.length;
       stats.posts_per_day = Math.round(totalPosts / cutoffDays);
@@ -660,7 +714,7 @@ export class SnapshotService {
       stats.avg_score = Math.round(totalScore / totalPosts);
 
       const recent24h = analysisPool.filter(
-        (p) => nowSec - p.created_utc < 86400,
+        (p) => nowSec - p.created_utc < 86400
       );
       if (recent24h.length > 0) {
         let totalSv = 0;
@@ -671,24 +725,38 @@ export class SnapshotService {
           totalCv += p.comments / age;
         });
         stats.score_velocity = parseFloat(
-          (totalSv / recent24h.length).toFixed(2),
+          (totalSv / recent24h.length).toFixed(2)
         );
         stats.comment_velocity = parseFloat(
-          (totalCv / recent24h.length).toFixed(2),
+          (totalCv / recent24h.length).toFixed(2)
         );
         stats.combined_velocity = parseFloat(
-          (stats.score_velocity + stats.comment_velocity).toFixed(2),
+          (stats.score_velocity + stats.comment_velocity).toFixed(2)
         );
       }
 
       // 5. Generate Lists — all derived from existing data (no additional API calls)
       // The initial fetch phase already retrieved new, top, and hot posts.
       console.log(
-        `[SNAPSHOT] Generating sorted lists from ${totalPosts} posts...`,
+        `[SNAPSHOT] Generating sorted lists from ${totalPosts} posts...`
       );
 
       // Helper: map raw Reddit post to PostData using pool data if available
-      const rawToPostData = (p: { id: string; createdAt: Date; createdUtc?: number; title: string; url: string; authorName: string; isSelf: boolean; score: number; commentCount?: number; numberOfComments?: number; numComments?: number; flair?: { text: string }; nsfw: boolean }): PostData => {
+      const rawToPostData = (p: {
+        id: string;
+        createdAt: Date;
+        createdUtc?: number;
+        title: string;
+        url: string;
+        authorName: string;
+        isSelf: boolean;
+        score: number;
+        commentCount?: number;
+        numberOfComments?: number;
+        numComments?: number;
+        flair?: { text: string };
+        nsfw: boolean;
+      }): PostData => {
         const existing = analysisPoolMap.get(p.id);
         if (existing) {
           return existing;
@@ -703,7 +771,10 @@ export class SnapshotService {
           url: p.url,
           created_utc: postCreatedSec,
           author: p.authorName || '[deleted]',
-          is_self: typeof (p as any).isSelf === 'function' ? (p as any).isSelf() : ((p as any).isSelf || false),
+          is_self:
+            typeof (p as any).isSelf === 'function'
+              ? (p as any).isSelf()
+              : (p as any).isSelf || false,
           score: p.score,
           comments: p.commentCount ?? p.numberOfComments ?? p.numComments ?? 0,
           flair: p.flair?.text || null,
@@ -753,7 +824,7 @@ export class SnapshotService {
       if (Number(stats.active || 0) <= 0) {
         stats.active = activeAuthors.size;
         console.log(
-          `[SNAPSHOT] NumberOfActiveUsers API returned 0 — deriving proxy from unique authors in 24h window: ${stats.active}`,
+          `[SNAPSHOT] NumberOfActiveUsers API returned 0 — deriving proxy from unique authors in 24h window: ${stats.active}`
         );
       }
 
@@ -775,10 +846,10 @@ export class SnapshotService {
       assertWithinCoreRuntime('normalize persistence');
       await reportPhase(
         'normalize',
-        `Persisting normalized snapshot for r/${subredditName}`,
+        `Persisting normalized snapshot for r/${subredditName}`
       );
       console.log(
-        '[SNAPSHOT] Analysis complete. Normalizing and storing scan...',
+        '[SNAPSHOT] Analysis complete. Normalizing and storing scan...'
       );
       return await this.normalizer.normalizeSnapshot(snapshot);
     } catch (error) {
@@ -793,43 +864,74 @@ export class SnapshotService {
   async runLifecycle(
     subreddit: string,
     settings: CalculationSettings,
-    options: LifecycleOptions,
+    options: LifecycleOptions
   ): Promise<number> {
-    const { isManual, isContinuation, jobId, retentionDays, trendingService, redis, scheduler } = options;
+    const {
+      isManual,
+      isContinuation,
+      jobId,
+      retentionDays,
+      trendingService,
+      redis,
+      scheduler,
+    } = options;
     const startTime = Date.now();
     const historyEntry: any = {
       id: `h-${startTime}`,
       jobName: isManual
-        ? (isContinuation ? 'Replacement Snapshot' : 'Manual Snapshot')
-        : (isContinuation ? 'Replacement Snapshot' : 'Snapshot'),
+        ? isContinuation
+          ? 'Replacement Snapshot'
+          : 'Manual Snapshot'
+        : isContinuation
+          ? 'Replacement Snapshot'
+          : 'Snapshot',
       startTime,
       status: 'running',
       jobType: isManual ? 'one-time' : 'recurring',
-      details: `${isManual ? (isContinuation ? 'Continuation' : 'Manual scan') : (isContinuation ? 'Continuation' : 'Auto-scan')} for r/${subreddit} started`,
+      details: `${isManual ? (isContinuation ? 'Continuation' : 'Manual scan') : isContinuation ? 'Continuation' : 'Auto-scan'} for r/${subreddit} started`,
       isContinuation,
       jobId,
     };
     let historyEntryStr = JSON.stringify(historyEntry);
 
     const updateRunningDetails = async (details: string): Promise<void> => {
-      if (historyEntry.status !== 'running' || historyEntry.details === details) return;
+      if (historyEntry.status !== 'running' || historyEntry.details === details)
+        return;
       await redis.zRem('jobs:history', [historyEntryStr]);
       historyEntry.details = details;
       historyEntryStr = JSON.stringify(historyEntry);
-      await redis.zAdd('jobs:history', { member: historyEntryStr, score: startTime });
+      await redis.zAdd('jobs:history', {
+        member: historyEntryStr,
+        score: startTime,
+      });
     };
 
     let scanId: number | undefined;
 
     try {
-      await redis.zAdd('jobs:history', { member: historyEntryStr, score: startTime });
-
-      const resolvedScanId = await this.takeSnapshot(subreddit, settings, async (phase, detail) => {
-        try {
-          const prefix = isManual ? 'Manual scan' : 'Auto-scan';
-          await updateRunningDetails(this.formatSnapshotPhaseDetail(`${prefix} for r/${subreddit} in progress`, phase, detail));
-        } catch (e) { /* skip */ }
+      await redis.zAdd('jobs:history', {
+        member: historyEntryStr,
+        score: startTime,
       });
+
+      const resolvedScanId = await this.takeSnapshot(
+        subreddit,
+        settings,
+        async (phase, detail) => {
+          try {
+            const prefix = isManual ? 'Manual scan' : 'Auto-scan';
+            await updateRunningDetails(
+              this.formatSnapshotPhaseDetail(
+                `${prefix} for r/${subreddit} in progress`,
+                phase,
+                detail
+              )
+            );
+          } catch (e) {
+            /* skip */
+          }
+        }
+      );
       scanId = resolvedScanId;
 
       const endTime = Date.now();
@@ -841,7 +943,10 @@ export class SnapshotService {
       historyEntry.duration = duration;
       const nextStep = 'Trend Service queued';
       historyEntry.details = `${isManual ? 'Manual' : 'Auto'}-scan completed [${resolvedScanId}]. ${nextStep}.`;
-      await redis.zAdd('jobs:history', { member: JSON.stringify(historyEntry), score: startTime });
+      await redis.zAdd('jobs:history', {
+        member: JSON.stringify(historyEntry),
+        score: startTime,
+      });
 
       // DIAGNOSTICS: Track successful snapshot
       try {
@@ -854,17 +959,23 @@ export class SnapshotService {
           chainId: jobId || 'unknown',
         };
         const successLogKey = `diag:success-log:${subreddit}`;
-        await redis.zAdd(successLogKey, { member: JSON.stringify(successEvent), score: endTime });
+        await redis.zAdd(successLogKey, {
+          member: JSON.stringify(successEvent),
+          score: endTime,
+        });
         const successLogSize = await redis.zCard(successLogKey);
         if (successLogSize > 100) {
           await redis.zRemRangeByRank(successLogKey, 0, successLogSize - 101);
         }
-        
+
         // Clear retry window for this subreddit on success
         const windowKey = `diag:retry-window:${subreddit}:${Math.floor(endTime / 900000)}`;
         await redis.del(`${windowKey}:count`);
       } catch (diagError) {
-        console.warn('[DIAGNOSTICS] Failed to record success diagnostics:', diagError);
+        console.warn(
+          '[DIAGNOSTICS] Failed to record success diagnostics:',
+          diagError
+        );
       }
 
       // Trigger post-processing asynchronously
@@ -887,25 +998,39 @@ export class SnapshotService {
           jobId,
         };
         let postHistoryEntryStr = JSON.stringify(postHistoryEntry);
-        await redis.zAdd('jobs:history', { member: postHistoryEntryStr, score: psStart });
+        await redis.zAdd('jobs:history', {
+          member: postHistoryEntryStr,
+          score: psStart,
+        });
 
         try {
           await Promise.race([
             (async () => {
               // ONLY purge expired snapshots if NOT manual
               if (!isManual) {
-                const deleted = await this.purgeExpiredSnapshots(resolvedScanId, retentionDays || 180, psStart, psTimeout, redis);
+                const deleted = await this.purgeExpiredSnapshots(
+                  resolvedScanId,
+                  retentionDays || 180,
+                  psStart,
+                  psTimeout,
+                  redis
+                );
                 deletedCount = deleted.length;
               }
               try {
-                await trendingService.materializeForScan(subreddit, resolvedScanId);
+                await trendingService.materializeForScan(
+                  subreddit,
+                  resolvedScanId
+                );
                 matStatus = 'Trend update: success';
               } catch (e) {
                 matStatus = `Trend update: failed (${String(e)})`;
                 postProcessFailed = true;
               }
             })(),
-            new Promise<never>((_, rej) => setTimeout(() => rej(new Error('Timeout')), psTimeout))
+            new Promise<never>((_, rej) =>
+              setTimeout(() => rej(new Error('Timeout')), psTimeout)
+            ),
           ]);
         } catch (postError) {
           postProcessFailed = true;
@@ -915,29 +1040,44 @@ export class SnapshotService {
         const postEndTime = Date.now();
         postHistoryEntry.endTime = postEndTime;
         postHistoryEntry.status = postProcessFailed ? 'failure' : 'success';
-        postHistoryEntry.duration = Math.max(0, Math.round((postEndTime - psStart) / 1000));
-        const cleanupDetail = deletedCount > 0 ? ` Cleaned up ${deletedCount} snapshots.` : '';
+        postHistoryEntry.duration = Math.max(
+          0,
+          Math.round((postEndTime - psStart) / 1000)
+        );
+        const cleanupDetail =
+          deletedCount > 0 ? ` Cleaned up ${deletedCount} snapshots.` : '';
         postHistoryEntry.details = `Trend Service completed.${cleanupDetail} ${matStatus}${postProcessFailureReason ? ` | Reason: ${postProcessFailureReason}` : ''}`;
         await redis.zRem('jobs:history', [postHistoryEntryStr]);
         postHistoryEntryStr = JSON.stringify(postHistoryEntry);
-        await redis.zAdd('jobs:history', { member: postHistoryEntryStr, score: psStart });
+        await redis.zAdd('jobs:history', {
+          member: postHistoryEntryStr,
+          score: psStart,
+        });
       })();
 
       return resolvedScanId;
     } catch (error) {
       historyEntry.status = 'failure';
       historyEntry.details = String(error);
-      await redis.zAdd('jobs:history', { member: JSON.stringify(historyEntry), score: startTime });
+      await redis.zAdd('jobs:history', {
+        member: JSON.stringify(historyEntry),
+        score: startTime,
+      });
 
       // Automatic "Replacement Snapshot" on failure
       if (!isContinuation && scheduler) {
         try {
-          console.log(`[LIFECYCLE] Scheduling replacement snapshot for r/${subreddit} due to failure:`, error);
-          const nextRun = isManual ? new Date(Date.now() + 5000) : (() => {
-            const n = new Date();
-            n.setMinutes(Math.ceil((n.getMinutes() + 1) / 15) * 15, 0, 0);
-            return n;
-          })();
+          console.log(
+            `[LIFECYCLE] Scheduling replacement snapshot for r/${subreddit} due to failure:`,
+            error
+          );
+          const nextRun = isManual
+            ? new Date(Date.now() + 5000)
+            : (() => {
+                const n = new Date();
+                n.setMinutes(Math.ceil((n.getMinutes() + 1) / 15) * 15, 0, 0);
+                return n;
+              })();
 
           // DIAGNOSTICS: Track retry events for clustering analysis
           try {
@@ -947,26 +1087,32 @@ export class SnapshotService {
             const retryEvent = {
               timestamp: now,
               scanId: retryScanId,
-              errorType: error instanceof Error ? error.message.split('\n')[0] : String(error),
+              errorType:
+                error instanceof Error
+                  ? error.message.split('\n')[0]
+                  : String(error),
               isManual,
               scheduledFor: nextRun.getTime(),
               chainId: jobId || 'unknown',
             };
-            
+
             // Track retry in 15-min window
             const windowCount = await redis.incr(`${windowKey}:count`);
             if (windowCount === 1) {
               await redis.expire(`${windowKey}:count`, 1800); // 30 min TTL
             }
-            
+
             // Store detailed retry events (keep last 100 per subreddit)
             const retryLogKey = `diag:retry-log:${subreddit}`;
-            await redis.zAdd(retryLogKey, { member: JSON.stringify(retryEvent), score: now });
+            await redis.zAdd(retryLogKey, {
+              member: JSON.stringify(retryEvent),
+              score: now,
+            });
             const retryLogSize = await redis.zCard(retryLogKey);
             if (retryLogSize > 100) {
               await redis.zRemRangeByRank(retryLogKey, 0, retryLogSize - 101);
             }
-            
+
             // Flag for clustering if 3+ retries in 15-min window
             if (windowCount >= 3) {
               console.warn(
@@ -978,12 +1124,15 @@ export class SnapshotService {
                 latestError: String(error).substring(0, 200),
               });
             }
-            
+
             console.log(
               `[DIAGNOSTICS] Retry scheduled for r/${subreddit}. Window count: ${windowCount}, NextRun: ${nextRun.toISOString()}`
             );
           } catch (diagError) {
-            console.warn('[DIAGNOSTICS] Failed to record retry diagnostics:', diagError);
+            console.warn(
+              '[DIAGNOSTICS] Failed to record retry diagnostics:',
+              diagError
+            );
           }
 
           await scheduler.runJob({
@@ -992,7 +1141,10 @@ export class SnapshotService {
             runAt: nextRun,
           } as any);
         } catch (schedError) {
-          console.error('[LIFECYCLE] Failed to schedule replacement snapshot:', schedError);
+          console.error(
+            '[LIFECYCLE] Failed to schedule replacement snapshot:',
+            schedError
+          );
         }
       }
       throw error;
@@ -1002,7 +1154,7 @@ export class SnapshotService {
   private formatSnapshotPhaseDetail(
     prefix: string,
     phase: SnapshotPhase,
-    detail?: string,
+    detail?: string
   ): string {
     const phaseLabel = phase
       .split('-')
@@ -1017,7 +1169,7 @@ export class SnapshotService {
     retentionDays: number,
     startTime: number,
     timeoutMs: number,
-    redis: any,
+    redis: any
   ): Promise<number[]> {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
@@ -1040,7 +1192,9 @@ export class SnapshotService {
                 member: id.toString(),
               });
             }
-          } catch { /* skip */ }
+          } catch {
+            /* skip */
+          }
         }
       }
     }
@@ -1049,11 +1203,14 @@ export class SnapshotService {
       'global:snapshots:timeline',
       0,
       cutoffTimestamp,
-      { by: 'score' },
+      { by: 'score' }
     );
 
     for (const entry of expiredEntries) {
-      const idStr = typeof entry === 'string' ? entry : (entry as { member: string }).member;
+      const idStr =
+        typeof entry === 'string'
+          ? entry
+          : (entry as { member: string }).member;
       const id = parseInt(idStr, 10);
       if (Date.now() - startTime > timeoutMs) break;
       if (Number.isNaN(id) || id === currentScanId) continue;
@@ -1073,7 +1230,7 @@ export class SnapshotService {
   private calculateEngagementScore(
     post: PostData,
     settings: CalculationSettings,
-    now: number,
+    now: number
   ): number {
     // Base engagement (Upvotes and Comments weighted by settings)
     let engagement =
@@ -1123,7 +1280,7 @@ export class SnapshotService {
    */
   static async getRetryDiagnostics(
     subreddit: string,
-    redis: any,
+    redis: any
   ): Promise<{
     retryCount: number;
     recentRetries: any[];
@@ -1138,11 +1295,12 @@ export class SnapshotService {
       const successLogKey = `diag:success-log:${subreddit}`;
       const clusterKey = `diag:clustering:${subreddit}`;
 
-      const [recentRetries, recentSuccesses, clusteringFlags] = await Promise.all([
-        redis.zRange(retryLogKey, -10, -1), // Last 10 retries
-        redis.zRange(successLogKey, -10, -1), // Last 10 successes
-        redis.hGetAll(clusterKey),
-      ]);
+      const [recentRetries, recentSuccesses, clusteringFlags] =
+        await Promise.all([
+          redis.zRange(retryLogKey, -10, -1), // Last 10 retries
+          redis.zRange(successLogKey, -10, -1), // Last 10 successes
+          redis.hGetAll(clusterKey),
+        ]);
 
       const retryCount = await redis.zCard(retryLogKey);
       const successCount = await redis.zCard(successLogKey);
@@ -1219,7 +1377,9 @@ export class SnapshotService {
         }
       }
 
-      return events.sort((a, b) => parseInt(b.lastClusterTime) - parseInt(a.lastClusterTime));
+      return events.sort(
+        (a, b) => parseInt(b.lastClusterTime) - parseInt(a.lastClusterTime)
+      );
     } catch (error) {
       console.error('[DIAGNOSTICS] Failed to fetch clustering events:', error);
       return [];

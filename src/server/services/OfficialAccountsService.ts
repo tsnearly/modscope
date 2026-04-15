@@ -2,7 +2,7 @@ import type { RedditClient } from '@devvit/web/server';
 
 export async function getOfficialAccounts(
   reddit: RedditClient,
-  subredditName: string,
+  subredditName: string
 ): Promise<string[]> {
   const official: string[] = [];
   try {
@@ -45,7 +45,7 @@ export async function getOfficialAccounts(
         } catch (modError) {
           console.warn(
             `[OfficialAccounts] Could not access moderator at index ${i} for r/${subredditName} (SDK user lookup may have failed):`,
-            modError,
+            modError
           );
         }
       }
@@ -53,7 +53,7 @@ export async function getOfficialAccounts(
   } catch (error) {
     console.error(
       `[OfficialAccounts] Error fetching moderators for r/${subredditName}:`,
-      error,
+      error
     );
   }
   return official;

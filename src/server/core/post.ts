@@ -17,13 +17,13 @@ export const createPost = async (subredditName: string) => {
       // Note: getPostById will throw or return null if not found.
       if (post) {
         console.log(
-          `[CREATE_POST] ✓ Reusing existing dashboard post: ${existingPostId}`,
+          `[CREATE_POST] ✓ Reusing existing dashboard post: ${existingPostId}`
         );
         return post;
       }
     } catch (error) {
       console.log(
-        `[CREATE_POST] Existing post ${existingPostId} not found or inaccessible, creating new. Error: ${error}`,
+        `[CREATE_POST] Existing post ${existingPostId} not found or inaccessible, creating new. Error: ${error}`
       );
     }
   }
@@ -59,7 +59,7 @@ export const createPost = async (subredditName: string) => {
   // 4. Store the new post ID
   await redis.set(DASHBOARD_POST_KEY, newPost.id);
   console.log(
-    `[CREATE_POST] ✓ Created new persistent dashboard post: ${newPost.id}`,
+    `[CREATE_POST] ✓ Created new persistent dashboard post: ${newPost.id}`
   );
 
   return newPost;

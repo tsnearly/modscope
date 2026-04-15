@@ -30,7 +30,7 @@ export class NormalizationService {
 
     const scanId = await this.redis.incrBy('global:scan_counter', 1);
     console.log(
-      `[NORMALIZATION] Ingesting scan #${scanId} for r/${sub} (${date})`,
+      `[NORMALIZATION] Ingesting scan #${scanId} for r/${sub} (${date})`
     );
 
     const scanTimestampScore = snapshot.meta.scanDate
@@ -43,9 +43,7 @@ export class NormalizationService {
         scan_date: snapshot.meta.scanDate || '',
         proc_date: new Date().toISOString(),
         official_account: snapshot.meta.officialAccount || '',
-        official_accounts: JSON.stringify(
-          snapshot.meta.officialAccounts || [],
-        ),
+        official_accounts: JSON.stringify(snapshot.meta.officialAccounts || []),
       }),
       this.redis.hSet(`run:${scanId}:stats`, {
         subscribers: (snapshot.stats.subscribers || '0').toString(),
@@ -76,20 +74,27 @@ export class NormalizationService {
     // This ensures we can handle thousands of posts without hitting individual key limits.
     const poolKey = `scan:${scanId}:pool:json`;
     if (snapshot.analysisPool && snapshot.analysisPool.length > 0) {
-      console.log(`[NORMALIZATION] Storing ${snapshot.analysisPool.length} posts in ZSET...`);
+      console.log(
+        `[NORMALIZATION] Storing ${snapshot.analysisPool.length} posts in ZSET...`
+      );
       // Add in chunks to avoid blocking the thread too long
       const CHUNK = 50;
       for (let i = 0; i < snapshot.analysisPool.length; i += CHUNK) {
-        const batch = snapshot.analysisPool.slice(i, i + CHUNK).map((post, idx) => ({
-          score: i + idx,
-          member: JSON.stringify(post),
-        }));
+        const batch = snapshot.analysisPool
+          .slice(i, i + CHUNK)
+          .map((post, idx) => ({
+            score: i + idx,
+            member: JSON.stringify(post),
+          }));
         await this.redis.zAdd(poolKey, ...batch);
       }
     }
 
     // Store lists (we keep these as a JSON blob because they are usually small - max 600 refs)
-    await this.redis.set(`scan:${scanId}:lists`, JSON.stringify(snapshot.lists || {}));
+    await this.redis.set(
+      `scan:${scanId}:lists`,
+      JSON.stringify(snapshot.lists || {})
+    );
 
     // Write scan summary for TrendingService Phase 1 to retrieve timestamps
     await this.redis.hSet(`scan:${scanId}:summary`, {
@@ -100,14 +105,17 @@ export class NormalizationService {
 
     // Write per-post data shards (static, metrics) and time-series entries for TrendingService phases 2 & 3
     if (snapshot.analysisPool && snapshot.analysisPool.length > 0) {
-      console.log(`[NORMALIZATION] Writing per-post data shards and time-series entries...`);
+      console.log(
+        `[NORMALIZATION] Writing per-post data shards and time-series entries...`
+      );
       const tsChunk = 50;
       for (let i = 0; i < snapshot.analysisPool.length; i += tsChunk) {
         const posts = snapshot.analysisPool.slice(i, i + tsChunk);
         const tsWrites: Promise<any>[] = [];
 
         for (const post of posts) {
-          const utcId = post.utcId || post.id || `post_${post.url?.replace(/\\//g, '_')}`;
+          const utcId =
+            post.utcId || post.id || `post_${post.url?.replace(/\\/ / g, '_')}`;
 
           // Write static shard (immutable fields)
           tsWrites.push(
@@ -125,7 +133,11 @@ export class NormalizationService {
             this.redis.hSet(`post:${utcId}:metrics`, {
               score_sum: (post.score || 0).toString(),
               comments_sum: (post.comments || 0).toString(),
-              engagement_sum: (post.engagement_score || post.score || 0).toString(),
+              engagement_sum: (
+                post.engagement_score ||
+                post.score ||
+                0
+              ).toString(),
               samples: '1',
             })
           );
@@ -189,12 +201,26 @@ export class NormalizationService {
       const poolMembers = await this.redis.zRange(`scan:${scanId}:pool`, 0, -1);
       for (const member of poolMembers) {
         const postKey =
-          typeof member === 'string' ? member : (member as { member: string }).member;
+          typeof member === 'string'
+            ? member
+            : (member as { member: string }).member;
         if (postKey) {
           await Promise.all([
-            this.redis.zRemRangeByScore(`post:${postKey}:ts:score`, scanTimestamp, scanTimestamp),
-            this.redis.zRemRangeByScore(`post:${postKey}:ts:comments`, scanTimestamp, scanTimestamp),
-            this.redis.zRemRangeByScore(`post:${postKey}:ts:engagement`, scanTimestamp, scanTimestamp),
+            this.redis.zRemRangeByScore(
+              `post:${postKey}:ts:score`,
+              scanTimestamp,
+              scanTimestamp
+            ),
+            this.redis.zRemRangeByScore(
+              `post:${postKey}:ts:comments`,
+              scanTimestamp,
+              scanTimestamp
+            ),
+            this.redis.zRemRangeByScore(
+              `post:${postKey}:ts:engagement`,
+              scanTimestamp,
+              scanTimestamp
+            ),
           ]);
         }
       }
@@ -220,9 +246,16 @@ export class NormalizationService {
       // 4. Finally, trigger trend artifact cleanup and recomputation
       // Now getRetainedScans will correctly see the scan as gone
       try {
-        await this.trendService.cleanupTrendArtifacts(subreddit, [scanId], [scanTimestamp]);
+        await this.trendService.cleanupTrendArtifacts(
+          subreddit,
+          [scanId],
+          [scanTimestamp]
+        );
       } catch (error) {
-        console.warn(`[NORMALIZATION] Trend artifact cleanup failed for scan #${scanId}:`, error);
+        console.warn(
+          `[NORMALIZATION] Trend artifact cleanup failed for scan #${scanId}:`,
+          error
+        );
       }
 
       // 5. Remove from global timeline
@@ -255,7 +288,7 @@ export class NormalizationService {
 
     await this.redis.del('global:scan_counter');
     console.log(
-      `[STORAGE] Reset complete. Cleared pointers for: ${[...subreddits].join(', ') || 'none'}`,
+      `[STORAGE] Reset complete. Cleared pointers for: ${[...subreddits].join(', ') || 'none'}`
     );
   }
 }

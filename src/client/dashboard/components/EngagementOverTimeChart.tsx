@@ -77,13 +77,13 @@ function EngagementTooltip({
   const value = point?.value;
 
   return (
-    <div className='chart-tooltip-container'>
-      <div className='chart-tooltip-date'>
+    <div className="chart-tooltip-container">
+      <div className="chart-tooltip-date">
         {timestamp ? formatTooltipDate(timestamp) : label}
       </div>
-      <div className='chart-tooltip-row'>
-        <span className='chart-tooltip-label'>Avg Engagement</span>
-        <span className='chart-tooltip-value'>
+      <div className="chart-tooltip-row">
+        <span className="chart-tooltip-label">Avg Engagement</span>
+        <span className="chart-tooltip-value">
           {typeof value === 'number' ? formatEngagementValue(value) : 'N/A'}
         </span>
       </div>
@@ -104,15 +104,20 @@ export function EngagementOverTimeChart({
   if (engagementData.length === 0) {
     return (
       <Chart
-        title='Engagement Over Time'
-        icon={<Icon src={getDataGroupingIcon('engagement', iconContext)} size={16} />}
+        title="Engagement Over Time"
+        icon={
+          <Icon
+            src={getDataGroupingIcon('engagement', iconContext)}
+            size={16}
+          />
+        }
         height={320}
       >
-        <div className='h-full flex items-center justify-center'>
+        <div className="h-full flex items-center justify-center">
           <NonIdealState
-            title='No Engagement Data'
-            message='No engagement data available for this time period. Run a snapshot to generate engagement trends.'
-            icon='mono-unavailable'
+            title="No Engagement Data"
+            message="No engagement data available for this time period. Run a snapshot to generate engagement trends."
+            icon="mono-unavailable"
           />
         </div>
       </Chart>
@@ -123,7 +128,15 @@ export function EngagementOverTimeChart({
     const dayMs = 24 * 60 * 60 * 1000;
     const toUtcDayNoon = (ts: number): number => {
       const d = new Date(ts);
-      return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12, 0, 0, 0);
+      return Date.UTC(
+        d.getUTCFullYear(),
+        d.getUTCMonth(),
+        d.getUTCDate(),
+        12,
+        0,
+        0,
+        0
+      );
     };
 
     const aggregate = new Map<number, { sum: number; count: number }>();
@@ -139,13 +152,24 @@ export function EngagementOverTimeChart({
     for (const anomaly of anomalies) {
       const dayKey = toUtcDayNoon(anomaly.timestamp);
       const existing = anomalyByDay.get(dayKey);
-      if (!existing || Math.abs(anomaly.deviation) > Math.abs(existing.deviation)) {
+      if (
+        !existing ||
+        Math.abs(anomaly.deviation) > Math.abs(existing.deviation)
+      ) {
         anomalyByDay.set(dayKey, anomaly);
       }
     }
 
     const now = new Date();
-    const todayUtcNoon = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12, 0, 0, 0);
+    const todayUtcNoon = Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate(),
+      12,
+      0,
+      0,
+      0
+    );
 
     return Array.from({ length: trendAnalysisDays }, (_, idx) => {
       const offset = trendAnalysisDays - 1 - idx;
@@ -171,10 +195,21 @@ export function EngagementOverTimeChart({
   };
 
   const renderLegend = () => (
-    <div style={{ display: 'flex', justifyContent: 'center', gap: '14px', flexWrap: 'wrap', fontSize: '10px', marginBottom: '8px' }}>
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: 'center',
+        gap: '14px',
+        flexWrap: 'wrap',
+        fontSize: '10px',
+        marginBottom: '8px',
+      }}
+    >
       <button
         type="button"
-        onClick={() => setHiddenSeries(prev => ({ ...prev, engagement: !prev.engagement }))}
+        onClick={() =>
+          setHiddenSeries((prev) => ({ ...prev, engagement: !prev.engagement }))
+        }
         style={{
           display: 'inline-flex',
           alignItems: 'center',
@@ -188,7 +223,15 @@ export function EngagementOverTimeChart({
         }}
         aria-pressed={!hiddenSeries.engagement}
       >
-        <span style={{ width: '10px', height: '8px', borderRadius: '2px', background: 'var(--chart-primary)', border: `1px solid ${hiddenSeries.engagement ? 'var(--color-border)' : 'var(--chart-primary)'}` }} />
+        <span
+          style={{
+            width: '10px',
+            height: '8px',
+            borderRadius: '2px',
+            background: 'var(--chart-primary)',
+            border: `1px solid ${hiddenSeries.engagement ? 'var(--color-border)' : 'var(--chart-primary)'}`,
+          }}
+        />
         <span>Avg Engagement</span>
       </button>
     </div>
@@ -196,34 +239,46 @@ export function EngagementOverTimeChart({
 
   return (
     <Chart
-      title='Engagement Over Time'
-      icon={<Icon src={getDataGroupingIcon('engagement', iconContext)} size={16} />}
-      className='mb-3'
+      title="Engagement Over Time"
+      icon={
+        <Icon src={getDataGroupingIcon('engagement', iconContext)} size={16} />
+      }
+      className="mb-3"
       height={340}
     >
       <div style={{ position: 'relative', zIndex: 3, marginBottom: '8px' }}>
         {renderLegend()}
       </div>
       <div style={{ width: '100%', height: 'calc(100% - 32px)' }}>
-        <ResponsiveContainer width='100%' height='100%'>
-          <LineChart data={chartData} margin={{ top: 10, right: 10, left: 5, bottom: 5 }}>
-            <CartesianGrid strokeDasharray='3 3' stroke='rgba(8,10,12,.175)' opacity={1} />
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart
+            data={chartData}
+            margin={{ top: 10, right: 10, left: 5, bottom: 5 }}
+          >
+            <CartesianGrid
+              strokeDasharray="3 3"
+              stroke="rgba(8,10,12,.175)"
+              opacity={1}
+            />
             <XAxis
-              dataKey='timestamp'
-              type='number'
-              scale='time'
+              dataKey="timestamp"
+              type="number"
+              scale="time"
               domain={['dataMin', 'dataMax']}
               tickCount={6}
               minTickGap={18}
               tickFormatter={(value) => formatShortDate(Number(value))}
               tick={{ fontSize: 8, fill: 'var(--text-primary)' }}
             />
-            <YAxis tick={{ fontSize: 8, fill: 'var(--text-primary)' }} tickFormatter={value => formatEngagementValue(Number(value))} />
+            <YAxis
+              tick={{ fontSize: 8, fill: 'var(--text-primary)' }}
+              tickFormatter={(value) => formatEngagementValue(Number(value))}
+            />
             <RechartsTooltip {...compactTooltipProps} />
             <Line
-              type='monotone'
-              dataKey='value'
-              stroke='var(--chart-primary)'
+              type="monotone"
+              dataKey="value"
+              stroke="var(--chart-primary)"
               strokeWidth={2.25}
               dot={(props: any) => {
                 const { cx, cy, payload } = props as {
@@ -232,28 +287,39 @@ export function EngagementOverTimeChart({
                   payload: any;
                 };
                 const anomaly = payload?.anomaly;
-                
 
                 if (anomaly) {
                   const tooltipContent = (
                     <div className="space-y-1">
                       <div className="font-small">
-                        {anomaly.type === 'spike' ? 'Engagement Spike' : 'Engagement Dip'}
+                        {anomaly.type === 'spike'
+                          ? 'Engagement Spike'
+                          : 'Engagement Dip'}
                       </div>
-                      <div className="text-xs">Date: {formatTooltipDate(anomaly.timestamp)}</div>
-                      <div className="text-xs">Deviation: {formatEngagementValue(anomaly.deviation)}σ</div>
-                      <div className="text-xs">Value: {formatEngagementValue(anomaly.value)}</div>
+                      <div className="text-xs">
+                        Date: {formatTooltipDate(anomaly.timestamp)}
+                      </div>
+                      <div className="text-xs">
+                        Deviation: {formatEngagementValue(anomaly.deviation)}σ
+                      </div>
+                      <div className="text-xs">
+                        Value: {formatEngagementValue(anomaly.value)}
+                      </div>
                     </div>
                   );
 
                   return (
-                    <Tooltip content={tooltipContent} side="top" delayDuration={100}>
+                    <Tooltip
+                      content={tooltipContent}
+                      side="top"
+                      delayDuration={100}
+                    >
                       <circle
                         cx={cx}
                         cy={cy}
                         r={6}
                         fill={anomaly.type === 'spike' ? '#ef4444' : '#f59e0b'}
-                        stroke='#fff'
+                        stroke="#fff"
                         strokeWidth={2}
                         style={{ cursor: 'pointer' }}
                       />
@@ -267,13 +333,18 @@ export function EngagementOverTimeChart({
                     cx={cx}
                     cy={cy}
                     r={2}
-                    fill='var(--chart-primary)'
-                    stroke='#fff'
+                    fill="var(--chart-primary)"
+                    stroke="#fff"
                     strokeWidth={1}
                   />
                 );
               }}
-              activeDot={{ r: 2, fill: '#fff', stroke: 'var(--chart-primary)', strokeWidth: 1 }}
+              activeDot={{
+                r: 2,
+                fill: '#fff',
+                stroke: 'var(--chart-primary)',
+                strokeWidth: 1,
+              }}
               isAnimationActive={!isPrintMode}
               hide={!!hiddenSeries.engagement}
             />

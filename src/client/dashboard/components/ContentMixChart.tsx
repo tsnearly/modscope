@@ -64,14 +64,14 @@ function ContentMixTooltip({
   const timestamp = point?.timestamp;
 
   return (
-    <div className='chart-tooltip-container'>
-      <div className='chart-tooltip-date'>
+    <div className="chart-tooltip-container">
+      <div className="chart-tooltip-date">
         {timestamp ? formatTooltipDate(timestamp) : label}
       </div>
       {payload.map((item: any, idx: number) => (
-        <div key={idx} className='chart-tooltip-row'>
-          <span className='chart-tooltip-label'>{item.name}</span>
-          <span className='chart-tooltip-value'>
+        <div key={idx} className="chart-tooltip-row">
+          <span className="chart-tooltip-label">{item.name}</span>
+          <span className="chart-tooltip-value">
             {Number(item.value).toLocaleString()}
           </span>
         </div>
@@ -87,7 +87,10 @@ export function ContentMixChart({
   isPrintMode = false,
 }: ContentMixChartProps) {
   const [hiddenSeries, setHiddenSeries] = useState<Record<string, boolean>>({});
-  const contentMixData = useMemo(() => trendsData.contentMix || [], [trendsData.contentMix]);
+  const contentMixData = useMemo(
+    () => trendsData.contentMix || [],
+    [trendsData.contentMix]
+  );
   const contentMixRecap = trendsData.contentMixRecap || '';
 
   const { chartData, contentKeys } = useMemo(() => {
@@ -98,12 +101,20 @@ export function ContentMixChart({
     const dayMs = 24 * 60 * 60 * 1000;
     const toUtcDayNoon = (ts: number): number => {
       const d = new Date(ts);
-      return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12, 0, 0, 0);
+      return Date.UTC(
+        d.getUTCFullYear(),
+        d.getUTCMonth(),
+        d.getUTCDate(),
+        12,
+        0,
+        0,
+        0
+      );
     };
 
     const allFlairs = new Set<string>();
-    contentMixData.forEach(point => {
-      Object.keys(point.flairs).forEach(flair => allFlairs.add(flair));
+    contentMixData.forEach((point) => {
+      Object.keys(point.flairs).forEach((flair) => allFlairs.add(flair));
     });
 
     const flairKeys = Array.from(allFlairs).sort();
@@ -119,20 +130,31 @@ export function ContentMixChart({
     }
 
     const now = new Date();
-    const todayUtcNoon = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12, 0, 0, 0);
-    const transformedData = Array.from({ length: trendAnalysisDays }, (_, idx) => {
-      const offset = trendAnalysisDays - 1 - idx;
-      const timestamp = todayUtcNoon - offset * dayMs;
-      const dayValues = byDay.get(timestamp) || {};
-      const row: Record<string, string | number> = {
-        timestamp,
-        date: formatShortDate(timestamp),
-      };
-      flairKeys.forEach(flair => {
-        row[flair] = dayValues[flair] || 0;
-      });
-      return row;
-    });
+    const todayUtcNoon = Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate(),
+      12,
+      0,
+      0,
+      0
+    );
+    const transformedData = Array.from(
+      { length: trendAnalysisDays },
+      (_, idx) => {
+        const offset = trendAnalysisDays - 1 - idx;
+        const timestamp = todayUtcNoon - offset * dayMs;
+        const dayValues = byDay.get(timestamp) || {};
+        const row: Record<string, string | number> = {
+          timestamp,
+          date: formatShortDate(timestamp),
+        };
+        flairKeys.forEach((flair) => {
+          row[flair] = dayValues[flair] || 0;
+        });
+        return row;
+      }
+    );
 
     return {
       chartData: transformedData,
@@ -143,15 +165,17 @@ export function ContentMixChart({
   if (contentMixData.length === 0) {
     return (
       <Chart
-        title='Content Mix'
-        icon={<Icon src={getDataGroupingIcon('flair', iconContext)} size={16} />}
+        title="Content Mix"
+        icon={
+          <Icon src={getDataGroupingIcon('flair', iconContext)} size={16} />
+        }
         height={340}
       >
-        <div className='h-full flex items-center justify-center'>
+        <div className="h-full flex items-center justify-center">
           <NonIdealState
-            title='No Content Mix Data'
-            message='No content mix data available for this time period. Run a snapshot to generate content mix trends.'
-            icon='mono-unavailable'
+            title="No Content Mix Data"
+            message="No content mix data available for this time period. Run a snapshot to generate content mix trends."
+            icon="mono-unavailable"
           />
         </div>
       </Chart>
@@ -168,12 +192,23 @@ export function ContentMixChart({
   };
 
   const renderLegend = () => (
-    <div style={{ display: 'flex', justifyContent: 'center', gap: '14px', flexWrap: 'wrap', fontSize: '10px', marginBottom: '8px' }}>
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: 'center',
+        gap: '14px',
+        flexWrap: 'wrap',
+        fontSize: '10px',
+        marginBottom: '8px',
+      }}
+    >
       {contentKeys.map((flair: string, idx: number) => (
         <button
           key={flair}
           type="button"
-          onClick={() => setHiddenSeries(prev => ({ ...prev, [flair]: !prev[flair] }))}
+          onClick={() =>
+            setHiddenSeries((prev) => ({ ...prev, [flair]: !prev[flair] }))
+          }
           style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -187,7 +222,15 @@ export function ContentMixChart({
           }}
           aria-pressed={!hiddenSeries[flair]}
         >
-          <span style={{ width: '10px', height: '8px', borderRadius: '2px', background: `hsl(${(idx * 47) % 360} 70% 55%)`, border: `1px solid ${hiddenSeries[flair] ? 'var(--color-border)' : `hsl(${(idx * 47) % 360} 70% 45%)`}` }} />
+          <span
+            style={{
+              width: '10px',
+              height: '8px',
+              borderRadius: '2px',
+              background: `hsl(${(idx * 47) % 360} 70% 55%)`,
+              border: `1px solid ${hiddenSeries[flair] ? 'var(--color-border)' : `hsl(${(idx * 47) % 360} 70% 45%)`}`,
+            }}
+          />
           <span>{flair}</span>
         </button>
       ))}
@@ -196,7 +239,7 @@ export function ContentMixChart({
 
   return (
     <Chart
-      title='Content Mix'
+      title="Content Mix"
       icon={<Icon src={getDataGroupingIcon('flair', iconContext)} size={16} />}
       height={340}
     >
@@ -204,13 +247,20 @@ export function ContentMixChart({
         {renderLegend()}
       </div>
       <div style={{ width: '100%', height: 'calc(100% - 32px)' }}>
-        <ResponsiveContainer width='100%' height='100%'>
-          <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 5, bottom: 5 }}>
-            <CartesianGrid strokeDasharray='3 3' stroke='rgba(8,10,12,.175)' opacity={1} />
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart
+            data={chartData}
+            margin={{ top: 10, right: 10, left: 5, bottom: 5 }}
+          >
+            <CartesianGrid
+              strokeDasharray="3 3"
+              stroke="rgba(8,10,12,.175)"
+              opacity={1}
+            />
             <XAxis
-              dataKey='timestamp'
-              type='number'
-              scale='time'
+              dataKey="timestamp"
+              type="number"
+              scale="time"
               domain={['dataMin', 'dataMax']}
               tickCount={6}
               minTickGap={18}
@@ -222,9 +272,9 @@ export function ContentMixChart({
             {contentKeys.map((flair: string, idx: number) => (
               <Area
                 key={flair}
-                type='monotone'
+                type="monotone"
                 dataKey={flair}
-                stackId='mix'
+                stackId="mix"
                 stroke={`hsl(${(idx * 47) % 360} 70% 45%)`}
                 strokeWidth={2.25}
                 fill={`hsl(${(idx * 47) % 360} 70% 55%)`}
@@ -238,8 +288,10 @@ export function ContentMixChart({
       </div>
 
       {contentMixRecap && (
-        <div className='mt-3 px-3 py-2 bg-muted/50 rounded-md'>
-          <p className='text-sm text-muted-foreground text-center'>{contentMixRecap}</p>
+        <div className="mt-3 px-3 py-2 bg-muted/50 rounded-md">
+          <p className="text-sm text-muted-foreground text-center">
+            {contentMixRecap}
+          </p>
         </div>
       )}
     </Chart>

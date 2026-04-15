@@ -3,7 +3,10 @@ import { cn } from '../../utils/cn';
 import { Icon } from './icon';
 import { Card, CardContent } from './card';
 
-export interface SectionProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "title"> {
+export interface SectionProps extends Omit<
+  React.HTMLAttributes<HTMLDivElement>,
+  'title'
+> {
   title: React.ReactNode;
   subtitle?: React.ReactNode;
   icon?: string;
@@ -42,7 +45,7 @@ export function Section({
       className={cn(
         'flex flex-col w-full mb-4',
         compact ? 'gap-2' : 'gap-4',
-        className,
+        className
       )}
       {...props}
     >
@@ -53,7 +56,7 @@ export function Section({
           collapsible
             ? 'cursor-pointer hover:opacity-80 transition-opacity'
             : '',
-          compact ? 'py-1' : 'py-2',
+          compact ? 'py-1' : 'py-2'
         )}
         onClick={handleToggle}
       >
@@ -63,7 +66,7 @@ export function Section({
             <div
               className={cn(
                 'text-muted-foreground flex items-center justify-center transition-transform duration-200',
-                isOpen ? 'rotate-0' : '-rotate-90',
+                isOpen ? 'rotate-0' : '-rotate-90'
               )}
             >
               <Icon
@@ -89,7 +92,7 @@ export function Section({
             <h3
               className={cn(
                 'font-semibold text-foreground truncate',
-                compact ? 'text-sm' : 'text-base',
+                compact ? 'text-sm' : 'text-base'
               )}
             >
               {title}
@@ -98,7 +101,7 @@ export function Section({
               <span
                 className={cn(
                   'text-muted-foreground truncate',
-                  compact ? 'text-xs' : 'text-sm',
+                  compact ? 'text-xs' : 'text-sm'
                 )}
               >
                 {subtitle}
@@ -122,7 +125,7 @@ export function Section({
       {isOpen && (
         <div
           className={cn(
-            'flex flex-col w-full transition-all duration-200 ease-in-out',
+            'flex flex-col w-full transition-all duration-200 ease-in-out'
             // Indent content if collapsible to align with title (optional, but good for hierarchy)
             // collapsible && !compact ? "pl-6" : ""
             // Actually, let's keep it flush for card usage

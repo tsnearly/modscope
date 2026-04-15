@@ -6,7 +6,7 @@
     "redis": true,
     "http": {
       "enable": true,
-      "domains": ["modscope-production.onrender.com"]
+      "domains": ["raw.githubusercontent.com"]
     }
   },
   "post": {
@@ -61,7 +61,7 @@
       },
       "check-for-updates": {
         "endpoint": "/internal/triggers/tasks/check-for-updates",
-        "cron": "*/60 * * * *"
+        "cron": "0 9 * * 1"
       }
     }
   },

@@ -3,7 +3,14 @@ import { context as devvitContext } from '@devvit/web/client';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { EntityTitle } from './ui/entity-title';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from './ui/table';
 import { Tooltip } from './ui/tooltip';
 import { NonIdealState } from './ui/non-ideal-state';
 
@@ -43,7 +50,7 @@ export function SnapshotsView({
       const d = new Date(
         dateStr.includes(' ') && !dateStr.includes('Z')
           ? dateStr.replace(' ', 'T') + 'Z'
-          : dateStr,
+          : dateStr
       );
       if (isNaN(d.getTime())) {
         return dateStr;
@@ -80,7 +87,7 @@ export function SnapshotsView({
       await fetch('/api/ui/toast', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message })
+        body: JSON.stringify({ message }),
       });
     } catch (err) {
       console.error('Failed to trigger native toast:', err);
@@ -96,7 +103,7 @@ export function SnapshotsView({
         await fetch('/api/ui/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ webViewId })
+          body: JSON.stringify({ webViewId }),
         });
       } catch (err) {
         console.error('Failed to register WebView:', err);
@@ -110,10 +117,12 @@ export function SnapshotsView({
       const msg = event.data;
       if (msg.type === 'SNAPSHOT_DELETED' && msg.scanId) {
         // Show the native toast via bridge upon job completion
-        showNativeToast(`Snapshot #${msg.scanId} has been successfully cleaned up along with all artifacts.`);
-        
+        showNativeToast(
+          `Snapshot #${msg.scanId} has been successfully cleaned up along with all artifacts.`
+        );
+
         // Update local state
-        setSnapshots(prev => prev.filter(s => s.scanId !== msg.scanId));
+        setSnapshots((prev) => prev.filter((s) => s.scanId !== msg.scanId));
         if (selectedId === msg.scanId) setSelectedId(null);
       }
     };
@@ -142,7 +151,7 @@ export function SnapshotsView({
       const ok = await onSelectSnapshot(selectedId);
       if (!ok) {
         setLoadError(
-          `Snapshot #${selectedId} could not be loaded — data may be incomplete. Check browser console for details.`,
+          `Snapshot #${selectedId} could not be loaded — data may be incomplete. Check browser console for details.`
         );
       }
     }
@@ -153,7 +162,7 @@ export function SnapshotsView({
     const ok = await onSelectSnapshot(scanId);
     if (!ok) {
       setLoadError(
-        `Snapshot #${scanId} could not be loaded — data may be incomplete.`,
+        `Snapshot #${scanId} could not be loaded — data may be incomplete.`
       );
     }
   };
@@ -199,10 +208,10 @@ export function SnapshotsView({
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               message: `Deletion of snapshot #${selectedId} started in the background...`,
-              type: 'info'
-            })
+              type: 'info',
+            }),
           }).catch(() => {});
-          
+
           // Optimistically mark as pending or just wait for the realtime event
           // For now, we'll keep the row but wait for the background job to finish
         } else if (!res.ok) {
@@ -295,9 +304,7 @@ export function SnapshotsView({
               />
             </div>
 
-            <Table
-              containerClassName="overflow-auto min-h-0"
-            >
+            <Table containerClassName="overflow-auto min-h-0">
               <TableHeader className="bg-background sticky top-0 z-10 shadow-sm">
                 <TableRow>
                   <TableHead className="w-[160px] text-center">
@@ -350,12 +357,12 @@ export function SnapshotsView({
                     style={
                       selectedId === snapshot.scanId
                         ? {
-                          backgroundColor: 'var(--color-primary, #3b82f6)',
-                          opacity: 0.85,
-                          fontWeight: 600,
-                          outline: '2px solid var(--color-primary, #3b82f6)',
-                          outlineOffset: '-2px',
-                        }
+                            backgroundColor: 'var(--color-primary, #3b82f6)',
+                            opacity: 0.85,
+                            fontWeight: 600,
+                            outline: '2px solid var(--color-primary, #3b82f6)',
+                            outlineOffset: '-2px',
+                          }
                         : {}
                     }
                   >

@@ -107,7 +107,7 @@ export const DATA_GROUPING_ICONS = {
  */
 export function getIcon<T extends { screen: string; printed: string }>(
   iconMap: T,
-  context: IconContext = 'screen',
+  context: IconContext = 'screen'
 ): string {
   return iconMap[context];
 }
@@ -155,7 +155,7 @@ export function getIconPath(filename: string): string {
   // 3. Fallback: Contains name
   if (!match) {
     match = keys.find((key) =>
-      key.toLowerCase().includes(basename.toLowerCase()),
+      key.toLowerCase().includes(basename.toLowerCase())
     );
   }
 
@@ -197,7 +197,7 @@ export function getIconPath(filename: string): string {
  */
 export function getPostDetailIcon(
   type: keyof typeof POST_DETAIL_ICONS,
-  context: IconContext = 'screen',
+  context: IconContext = 'screen'
 ): string {
   return getIconPath(getIcon(POST_DETAIL_ICONS[type], context));
 }
@@ -207,7 +207,7 @@ export function getPostDetailIcon(
  */
 export function getDataGroupingIcon(
   type: keyof typeof DATA_GROUPING_ICONS,
-  context: IconContext = 'screen',
+  context: IconContext = 'screen'
 ): string {
   return getIconPath(getIcon(DATA_GROUPING_ICONS[type], context));
 }

@@ -1,7 +1,7 @@
 import type { RedisClient } from '@devvit/web/server';
 
 export class HistoryService {
-  constructor(private redis: RedisClient) { }
+  constructor(private redis: RedisClient) {}
 
   async getLatestSnapshot(_subredditId: string) {
     // This is handled by DataRetrievalService usually, but we could add history-specific methods here
@@ -46,21 +46,27 @@ export class HistoryService {
               ? (item as { member: string }).member
               : String(item);
           const h = JSON.parse(member);
-          
+
           // Auto-timeout detection for "running" jobs that have stalled
-          if (h.status === 'running' && h.startTime && (now - h.startTime > TIMEOUT_THRESHOLD_MS)) {
+          if (
+            h.status === 'running' &&
+            h.startTime &&
+            now - h.startTime > TIMEOUT_THRESHOLD_MS
+          ) {
             h.status = 'timeout';
-            h.details = h.details ? `${h.details} (System detected stall/timeout after 45m)` : 'Job stalled or reached platform timeout.';
+            h.details = h.details
+              ? `${h.details} (System detected stall/timeout after 45m)`
+              : 'Job stalled or reached platform timeout.';
             h.endTime = h.startTime + TIMEOUT_THRESHOLD_MS;
           }
-          
+
           return h;
         } catch {
           return null;
         }
       })
       .filter((h) => h !== null);
-      
+
     return history;
   }
 }

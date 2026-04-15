@@ -11,11 +11,13 @@ interface TimingViewProps {
 
 export function TimingView({ heatmapResult, iconContext }: TimingViewProps) {
   const heatmapData = heatmapResult.grid;
-  const [hiddenCategories, setHiddenCategories] = useState<Record<string, boolean>>({});
+  const [hiddenCategories, setHiddenCategories] = useState<
+    Record<string, boolean>
+  >({});
 
   const tiers = useMemo(() => {
     if (!heatmapResult.thresholds) return [];
-    
+
     const baseTiers = [
       {
         key: 'low',
@@ -48,8 +50,10 @@ export function TimingView({ heatmapResult, iconContext }: TimingViewProps) {
         t: heatmapResult.thresholds.superhigh,
       },
     ];
-    
-    return baseTiers.filter(({ t }, idx, arr) => idx === 0 || t[0] !== arr[idx - 1]!.t[0]);
+
+    return baseTiers.filter(
+      ({ t }, idx, arr) => idx === 0 || t[0] !== arr[idx - 1]!.t[0]
+    );
   }, [heatmapResult.thresholds]);
 
   const getCellColor = (intensity: number): string => {
@@ -59,14 +63,14 @@ export function TimingView({ heatmapResult, iconContext }: TimingViewProps) {
       }
       return 'var(--color-bg)';
     }
-    
+
     if (intensity > 0 && intensity <= tiers.length) {
       const tier = tiers[intensity - 1];
       if (tier && hiddenCategories[tier.key]) {
         return 'transparent';
       }
     }
-    
+
     const colors = [
       'var(--color-bg)',
       'var(--heatmap-1)',
@@ -79,10 +83,23 @@ export function TimingView({ heatmapResult, iconContext }: TimingViewProps) {
   };
 
   const renderLegend = () => (
-    <div style={{ display: 'flex', justifyContent: 'center', gap: '14px', flexWrap: 'wrap', fontSize: '9px', marginBottom: '12px', position: 'relative', zIndex: 3 }}>
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: 'center',
+        gap: '14px',
+        flexWrap: 'wrap',
+        fontSize: '9px',
+        marginBottom: '12px',
+        position: 'relative',
+        zIndex: 3,
+      }}
+    >
       <button
         type="button"
-        onClick={() => setHiddenCategories(prev => ({ ...prev, none: !prev.none }))}
+        onClick={() =>
+          setHiddenCategories((prev) => ({ ...prev, none: !prev.none }))
+        }
         style={{
           display: 'inline-flex',
           alignItems: 'center',
@@ -97,14 +114,24 @@ export function TimingView({ heatmapResult, iconContext }: TimingViewProps) {
         }}
         aria-pressed={!hiddenCategories.none}
       >
-        <span style={{ width: '12px', height: '12px', borderRadius: '2px', background: 'var(--color-bg)', border: `1px solid ${hiddenCategories.none ? 'var(--color-border)' : 'rgba(0,0,0,0.2)'}` }} />
+        <span
+          style={{
+            width: '12px',
+            height: '12px',
+            borderRadius: '2px',
+            background: 'var(--color-bg)',
+            border: `1px solid ${hiddenCategories.none ? 'var(--color-border)' : 'rgba(0,0,0,0.2)'}`,
+          }}
+        />
         <span>none: 0</span>
       </button>
       {tiers.map(({ key, label, color, t }) => (
         <button
           key={key}
           type="button"
-          onClick={() => setHiddenCategories(prev => ({ ...prev, [key]: !prev[key] }))}
+          onClick={() =>
+            setHiddenCategories((prev) => ({ ...prev, [key]: !prev[key] }))
+          }
           style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -119,8 +146,19 @@ export function TimingView({ heatmapResult, iconContext }: TimingViewProps) {
           }}
           aria-pressed={!hiddenCategories[key]}
         >
-          <span style={{ width: '12px', height: '12px', borderRadius: '2px', background: color, border: `1px solid ${hiddenCategories[key] ? 'var(--color-border)' : 'rgba(0,0,0,0.2)'}` }} />
-          <span>{label}: {t[0]}{t[1] === Infinity ? '+' : `\u2013${t[1]}`}</span>
+          <span
+            style={{
+              width: '12px',
+              height: '12px',
+              borderRadius: '2px',
+              background: color,
+              border: `1px solid ${hiddenCategories[key] ? 'var(--color-border)' : 'rgba(0,0,0,0.2)'}`,
+            }}
+          />
+          <span>
+            {label}: {t[0]}
+            {t[1] === Infinity ? '+' : `\u2013${t[1]}`}
+          </span>
         </button>
       ))}
     </div>

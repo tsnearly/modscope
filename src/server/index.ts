@@ -15,7 +15,9 @@ if (!Object.prototype.hasOwnProperty.call(globalThis, 'DATA_SUBREDDIT')) {
     get() {
       const name = context.subredditName;
       if (!name) {
-        throw new Error('[DATA_SUBREDDIT] Subreddit name unavailable in current context');
+        throw new Error(
+          '[DATA_SUBREDDIT] Subreddit name unavailable in current context'
+        );
       }
       return name;
     },
@@ -44,7 +46,9 @@ serve({
   port: port,
 });
 
-console.log(`[SERVER] ModScope routing layer successfully refactored to modular Hono/Node Server pattern on port ${port}.`);
+console.log(
+  `[SERVER] ModScope routing layer successfully refactored to modular Hono/Node Server pattern on port ${port}.`
+);
 
 // Export the app as the default export for the new Devvit server layer architecture.
 export default app;

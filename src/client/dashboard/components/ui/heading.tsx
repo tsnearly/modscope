@@ -18,7 +18,8 @@ const headingVariants = cva('font-medium text-foreground', {
 });
 
 export interface HeadingProps
-  extends React.HTMLAttributes<HTMLHeadingElement>,
+  extends
+    React.HTMLAttributes<HTMLHeadingElement>,
     VariantProps<typeof headingVariants> {
   asChild?: boolean;
 }
@@ -33,7 +34,7 @@ const Heading = React.forwardRef<HTMLHeadingElement, HeadingProps>(
         {...props}
       />
     );
-  },
+  }
 );
 Heading.displayName = 'Heading';
 

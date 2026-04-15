@@ -10,7 +10,7 @@ interface AccordionContextType {
 }
 
 const AccordionContext = createContext<AccordionContextType | undefined>(
-  undefined,
+  undefined
 );
 
 export interface AccordionRootProps {
@@ -78,14 +78,14 @@ export function AccordionItem({
       className={cn(
         'border border-border rounded-lg bg-background overflow-hidden',
         disabled && 'opacity-50 pointer-events-none',
-        className,
+        className
       )}
     >
       <button
         data-accordion-trigger
         className={cn(
           'w-full flex items-center justify-between px-6 py-4 text-sm font-bold text-[var(--color-text)] transition-all hover:bg-black/5',
-          isOpen && 'bg-black/[0.02]',
+          isOpen && 'bg-black/[0.02]'
         )}
         onClick={() => context.toggleItem(id)}
       >
@@ -98,7 +98,7 @@ export function AccordionItem({
                 'flex-shrink-0 transition-transform duration-200',
                 isOpen
                   ? 'rotate-180 text-[var(--color-primary)]'
-                  : 'text-muted-foreground',
+                  : 'text-muted-foreground'
               )}
             />
             <span className="flex-1 text-left">{heading}</span>
@@ -113,7 +113,7 @@ export function AccordionItem({
                 'flex-shrink-0 transition-transform duration-200',
                 isOpen
                   ? 'rotate-180 text-[var(--color-primary)]'
-                  : 'text-muted-foreground',
+                  : 'text-muted-foreground'
               )}
             />
           </div>
@@ -122,7 +122,7 @@ export function AccordionItem({
       <div
         className={cn(
           'transition-all duration-300 ease-in-out overflow-hidden',
-          isOpen ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0',
+          isOpen ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0'
         )}
       >
         <div
