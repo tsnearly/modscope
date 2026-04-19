@@ -1,5 +1,8 @@
 import type { ReactNode } from 'react';
-import type { AnalyticsSnapshot, PostData } from '../../../shared/types/api';
+import type {
+  AnalyticsSnapshot,
+  PostData,
+} from '../../../shared/types/api';
 import { getDataGroupingIcon, type IconContext } from '../utils/iconMappings';
 import { Chart } from './ui/chart';
 import { Icon } from './ui/icon';
@@ -29,6 +32,43 @@ interface OverviewViewProps {
   officialAccount: string;
 }
 
+const DAY_TO_INDEX: Record<string, number> = {
+  Sun: 0,
+  Mon: 1,
+  Tue: 2,
+  Wed: 3,
+  Thu: 4,
+  Fri: 5,
+  Sat: 6,
+};
+
+const SHORT_DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+function localizeTrendDayHour(day: string, hour: number) {
+  const dayIdx = DAY_TO_INDEX[day];
+  if (dayIdx === undefined || Number.isNaN(hour)) {
+    return {
+      dayShort: day,
+      hour,
+      hourFmt: `${hour % 12 || 12} ${hour < 12 ? 'AM' : 'PM'}`,
+    };
+  }
+
+  const baseDate = new Date('2024-01-07T00:00:00.000Z');
+  const local = new Date(baseDate);
+  local.setUTCDate(baseDate.getUTCDate() + dayIdx);
+  local.setUTCHours(hour, 0, 0, 0);
+
+  const localHour = local.getHours();
+  const localDayShort = SHORT_DAY_NAMES[local.getDay()] || day;
+
+  return {
+    dayShort: localDayShort,
+    hour: localHour,
+    hourFmt: `${localHour % 12 || 12} ${localHour < 12 ? 'AM' : 'PM'}`,
+  };
+}
+
 export function OverviewView({
   analytics,
   trendPrecisionNotice,
@@ -37,7 +77,37 @@ export function OverviewView({
   effectiveOfficials,
   officialAccount,
 }: OverviewViewProps) {
+  const trendData = analytics?.trendData;
+  const useTrendPrecisionData = !!(
+    trendData?.globalStats ||
+    (trendData?.globalWordCloud &&
+      Object.keys(trendData.globalWordCloud).length > 0) ||
+    (trendData?.globalBestPostingTimes &&
+      trendData.globalBestPostingTimes.length > 0)
+  );
+
   const getBestTimes = () => {
+    if (
+      useTrendPrecisionData &&
+      Array.isArray(trendData?.globalBestPostingTimes) &&
+      trendData.globalBestPostingTimes.length > 0
+    ) {
+      return trendData.globalBestPostingTimes
+        .map((slot) => {
+          const localized = localizeTrendDayHour(slot.day, slot.hour);
+          return {
+            day: localized.dayShort,
+            hour: localized.hour,
+            hour_fmt: localized.hourFmt,
+            score: Math.round(slot.score),
+            sortWeight: slot.sortWeight,
+            count: slot.count,
+          };
+        })
+        .sort((a, b) => b.sortWeight - a.sortWeight)
+        .slice(0, 3);
+    }
+
     const pool = analytics?.analysisPool;
     if (!Array.isArray(pool) || pool.length === 0) {
       return [];
@@ -92,6 +162,23 @@ export function OverviewView({
   };
 
   const getWordCloudData = () => {
+    if (useTrendPrecisionData && trendData?.globalWordCloud) {
+      const trendWords = Object.entries(trendData.globalWordCloud)
+        .filter(([, count]) => Number(count) > 0)
+        .sort((a, b) => Number(b[1]) - Number(a[1]))
+        .slice(0, 50)
+        .map(([word, count]) => ({ word, count: Number(count) }));
+
+      if (trendWords.length > 0) {
+        const maxCount = trendWords[0]!.count;
+        return trendWords.map((item) => ({
+          ...item,
+          size: 0.8 + (item.count / maxCount) * 1.5,
+          opacity: 0.6 + (0.8 + (item.count / maxCount) * 1.5) / 6,
+        }));
+      }
+    }
+
     const pool = analytics?.analysisPool;
     if (!Array.isArray(pool)) {
       return [];
@@ -282,6 +369,10 @@ export function OverviewView({
 
   const wordCloudData = getWordCloudData();
   const bestTimes = getBestTimes();
+  const trendGlobalStats =
+    useTrendPrecisionData && trendData?.globalStats
+      ? trendData.globalStats
+      : null;
 
   const metrics = {
     minPosts,
@@ -293,6 +384,20 @@ export function OverviewView({
     avgScore,
     minVote,
     maxVote,
+  };
+
+  const formatMetricNumber = (value: number): string => {
+    if (!Number.isFinite(value)) {
+      return '0';
+    }
+
+    if (Number.isInteger(value)) {
+      return value.toLocaleString();
+    }
+
+    return Number(value.toFixed(2)).toLocaleString(undefined, {
+      maximumFractionDigits: 2,
+    });
   };
 
   const metricBoxes: OverviewMetric[] = [
@@ -313,33 +418,47 @@ export function OverviewView({
     },
     {
       label: 'Avg Score',
-      value: analytics.stats.avg_score,
+      value: formatMetricNumber(
+        trendGlobalStats?.avg_score ?? analytics.stats.avg_score
+      ),
       color: 'text-[var(--color-primary)]',
-      title: `Lowest Post: ${metrics.minVote} | Highest Post: ${metrics.maxVote}`,
+      title: trendGlobalStats
+        ? 'Multi-day trend aggregate'
+        : `Lowest Post: ${formatMetricNumber(metrics.minVote)} | Highest Post: ${formatMetricNumber(metrics.maxVote)}`,
     },
     {
       label: 'Posts/Day',
-      value: analytics.stats.posts_per_day,
+      value: formatMetricNumber(
+        trendGlobalStats?.posts_per_day ?? analytics.stats.posts_per_day
+      ),
       color: 'text-foreground',
-      title: `Lowest Day: ${metrics.minPosts} | Highest Day: ${metrics.maxPosts}`,
+      title: trendGlobalStats
+        ? 'Multi-day trend aggregate'
+        : `Lowest Day: ${formatMetricNumber(metrics.minPosts)} | Highest Day: ${formatMetricNumber(metrics.maxPosts)}`,
     },
     {
       label: 'Comments/Day',
-      value: analytics.stats.comments_per_day,
+      value: formatMetricNumber(
+        trendGlobalStats?.comments_per_day ?? analytics.stats.comments_per_day
+      ),
       color: 'text-foreground',
-      title: `Lowest Day: ${metrics.minComments} | Highest Day: ${metrics.maxComments}`,
+      title: trendGlobalStats
+        ? 'Multi-day trend aggregate'
+        : `Lowest Day: ${formatMetricNumber(metrics.minComments)} | Highest Day: ${formatMetricNumber(metrics.maxComments)}`,
     },
     {
       label: 'Velocity',
-      value: `${analytics.stats.combined_velocity}/hr`,
+      value: `${formatMetricNumber(analytics.stats.combined_velocity)}/hr`,
       color: 'text-[var(--color-primary)]',
-      title: `Score: ${analytics.stats.score_velocity}/hr | Comments: ${analytics.stats.comment_velocity}/hr`,
+      title: `Score: ${formatMetricNumber(analytics.stats.score_velocity)}/hr | Comments: ${formatMetricNumber(analytics.stats.comment_velocity)}/hr`,
     },
     {
       label: 'Avg Engagement',
-      value: metrics.avgScore,
+      value: formatMetricNumber(trendGlobalStats?.avg_engagement ?? metrics.avgScore),
       color: 'text-[var(--color-primary)]',
-      title: `Lowest Post: ${metrics.minScore} | Highest Post: ${metrics.maxScore}`,
+      title: trendGlobalStats
+        ? 'Multi-day trend aggregate'
+        : `Lowest Post: ${formatMetricNumber(metrics.minScore)} | Highest Post: ${formatMetricNumber(metrics.maxScore)}`,
     },
   ];
 

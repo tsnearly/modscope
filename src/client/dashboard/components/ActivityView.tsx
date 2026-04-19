@@ -1,12 +1,12 @@
 import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  Legend,
-  Tooltip as RechartsTooltip,
-  ResponsiveContainer,
-  XAxis,
-  YAxis,
+    Area,
+    AreaChart,
+    CartesianGrid,
+    Legend,
+    Tooltip as RechartsTooltip,
+    ResponsiveContainer,
+    XAxis,
+    YAxis,
 } from 'recharts';
 import { getDataGroupingIcon, type IconContext } from '../utils/iconMappings';
 import { Chart } from './ui/chart';
@@ -218,8 +218,6 @@ export function ActivityView({
                 interval={3}
                 tick={{ fontSize: 8, fill: 'var(--text-primary)' }}
                 height={42}
-                angle={-45}
-                textAnchor="end"
               />
               <YAxis
                 yAxisId="left"
@@ -350,8 +348,6 @@ export function ActivityView({
                 interval={2}
                 tick={{ fontSize: 8, fill: 'var(--text-primary)' }}
                 height={42}
-                angle={-45}
-                textAnchor="end"
               />
               <YAxis
                 yAxisId="left"
@@ -361,7 +357,7 @@ export function ActivityView({
                 stroke="var(--color-text)"
                 width={40}
                 label={{
-                  value: 'Avg Posts',
+                  value: 'Avg Score',
                   angle: -90,
                   position: 'insideLeft',
                   style: { fontSize: 9, fill: 'var(--text-primary)' },
@@ -375,7 +371,7 @@ export function ActivityView({
                 stroke="var(--color-text)"
                 width={40}
                 label={{
-                  value: 'Avg Comments',
+                  value: 'Avg Engagement',
                   angle: 90,
                   position: 'insideRight',
                   style: { fontSize: 9, fill: 'var(--text-primary)' },

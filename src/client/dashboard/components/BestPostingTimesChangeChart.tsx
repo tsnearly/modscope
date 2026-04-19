@@ -42,11 +42,13 @@ type BestPostingTimesChangeChartProps = {
 };
 
 /**
- * Localizes a UTC bucket string (e.g., "Mon-08") to the user's browser timezone hour.
+ * Localizes a UTC bucket string (e.g., "Mon-08") to the user's browser timezone day/hour.
  */
-function getLocalHour(dayHour: string): number {
+function getLocalDayHour(dayHour: string): { dayShort: string; hour: number } {
   const parts = dayHour.split('-');
-  if (parts.length !== 2) return 0;
+  if (parts.length !== 2) {
+    return { dayShort: 'Mon', hour: 0 };
+  }
 
   const utcDayName = parts[0];
   const utcHourStr = parts[1];
@@ -54,14 +56,20 @@ function getLocalHour(dayHour: string): number {
   const hour = parseInt(utcHourStr!, 10);
   const DAYS_UTC = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const dayIdx = DAYS_UTC.indexOf(utcDayName!);
-  if (dayIdx === -1 || isNaN(hour)) return 0;
+  if (dayIdx === -1 || isNaN(hour)) {
+    return { dayShort: utcDayName || 'Mon', hour: 0 };
+  }
 
   const baseDate = new Date('2024-01-07T00:00:00.000Z'); // Sunday
   const d = new Date(baseDate);
   d.setUTCDate(baseDate.getUTCDate() + dayIdx);
   d.setUTCHours(hour);
 
-  return d.getHours();
+  const localDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  return {
+    dayShort: localDays[d.getDay()] || utcDayName || 'Mon',
+    hour: d.getHours(),
+  };
 }
 
 function formatHour(h: number): string {
@@ -81,13 +89,9 @@ const FULL_DAY_NAMES: Record<string, string> = {
 };
 
 function formatDayHour(dayHour: string): string {
-  const parts = dayHour.split('-');
-  if (parts.length !== 2) {
-    return dayHour;
-  }
-
-  const day = FULL_DAY_NAMES[parts[0] || ''] || parts[0] || 'Unknown';
-  return `${day} - ${formatHour(getLocalHour(dayHour))}`;
+  const local = getLocalDayHour(dayHour);
+  const day = FULL_DAY_NAMES[local.dayShort] || local.dayShort || 'Unknown';
+  return `${day} - ${formatHour(local.hour)}`;
 }
 
 function buildSparkPath(
@@ -187,7 +191,7 @@ export function BestPostingTimesChangeChart({
     }
 
     risingSlots.forEach((slot) => {
-      const day = slot.dayHour.split('-')[0] || 'Mon';
+      const day = getLocalDayHour(slot.dayHour).dayShort;
       const bucket = dayTotals.get(day) || {
         net: 0,
         rising: 0,
@@ -200,7 +204,7 @@ export function BestPostingTimesChangeChart({
     });
 
     fallingSlots.forEach((slot) => {
-      const day = slot.dayHour.split('-')[0] || 'Mon';
+      const day = getLocalDayHour(slot.dayHour).dayShort;
       const bucket = dayTotals.get(day) || {
         net: 0,
         rising: 0,
@@ -213,7 +217,7 @@ export function BestPostingTimesChangeChart({
     });
 
     stableSlots.forEach((slot) => {
-      const day = slot.dayHour.split('-')[0] || 'Mon';
+      const day = getLocalDayHour(slot.dayHour).dayShort;
       const bucket = dayTotals.get(day) || {
         net: 0,
         rising: 0,

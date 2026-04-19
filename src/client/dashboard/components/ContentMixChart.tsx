@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react';
 import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  Tooltip as RechartsTooltip,
-  ResponsiveContainer,
-  XAxis,
-  YAxis,
+    Area,
+    AreaChart,
+    CartesianGrid,
+    Tooltip as RechartsTooltip,
+    ResponsiveContainer,
+    XAxis,
+    YAxis,
 } from 'recharts';
 import { getDataGroupingIcon } from '../utils/iconMappings';
 import { Chart } from './ui/chart';
@@ -32,19 +32,21 @@ type ContentMixChartProps = {
 
 function formatShortDate(ts: number): string {
   const d = new Date(ts);
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${mm}/${dd}`;
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  }).format(d);
 }
 
 function formatTooltipDate(ts: number): string {
   const d = new Date(ts);
-  return d.toLocaleDateString(undefined, {
+  return new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
-    month: 'short',
+    month: 'numeric',
     day: 'numeric',
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-  });
+  }).format(d);
 }
 
 function ContentMixTooltip({

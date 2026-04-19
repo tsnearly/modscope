@@ -3259,9 +3259,15 @@ export class TrendingService {
         velocity?: number;
       }> = [];
 
-      // Parse legacy numeric hash values first; structured JSON entries are handled below.
+      // Parse legacy numeric hash values first; skip structured JSON entries to avoid noisy warnings.
+      const legacyRawData = Object.fromEntries(
+        Object.entries(rawData).filter(
+          ([, value]) => !(typeof value === 'string' && value.trim().startsWith('{'))
+        )
+      ) as Record<string, string>;
+
       const legacyDeltas = this.parseHashEntries<number>(
-        rawData as Record<string, string>,
+        legacyRawData,
         hashKey,
         (v: string) => Number(v),
         dayHourValidator

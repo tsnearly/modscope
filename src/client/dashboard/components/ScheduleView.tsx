@@ -14,7 +14,6 @@ import {
 } from './ui/card';
 import { EntityTitle } from './ui/entity-title';
 import { Icon } from './ui/icon';
-import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { RadioGroup, RadioItem } from './ui/radio';
 import {
@@ -39,6 +38,8 @@ type ScheduleType =
   | 'custom'
   | '12h';
 
+type CustomFrequencyType = 'hourly' | 'daily' | 'weekly' | 'monthly' | 'yearly';
+
 interface Job {
   id: string;
   name: string;
@@ -52,6 +53,12 @@ interface Job {
     startTime: string;
     daysOfWeek?: number[];
     customCron?: string;
+    customFrequencyType?: string;
+    selectedHours?: number[];
+    selectedMonthDay?: number;
+    selectedMonths?: number[];
+    yearlyDate?: string;
+    description?: string;
   };
 }
 
@@ -111,7 +118,37 @@ function ScheduleView({
     }
   };
 
-  const sortedHistory = [...history].sort((a, b) => {
+  const parseTimestamp = (value: number | string | undefined): number | null => {
+    if (value === undefined || value === null) {
+      return null;
+    }
+    const parsed = new Date(value).getTime();
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
+  const getDurationSeconds = (entry: JobHistoryEntry): number => {
+    if (typeof entry.duration === 'number' && Number.isFinite(entry.duration)) {
+      return Math.max(0, Math.round(entry.duration));
+    }
+
+    const startRaw = entry.startTime || entry.timestamp;
+    const endRaw = entry.endTime;
+    const start = parseTimestamp(startRaw);
+    const end = parseTimestamp(endRaw);
+
+    if (start !== null && end !== null && end >= start) {
+      return Math.max(0, Math.round((end - start) / 1000));
+    }
+
+    return 0;
+  };
+
+  const normalizedHistory = history.map((h) => ({
+    ...h,
+    duration: getDurationSeconds(h),
+  }));
+
+  const sortedHistory = [...normalizedHistory].sort((a, b) => {
     let valueA = a[sortKey];
     let valueB = b[sortKey];
 
@@ -171,21 +208,32 @@ function ScheduleView({
   }, [sortedHistory, autoScrollHistory]);
 
   // Calculate dynamic stats
-  const totalRuns = history.length;
-  const successCount = history.filter(
+  const totalRuns = normalizedHistory.length;
+  const successCount = normalizedHistory.filter(
     (h) => h.status === 'success' || h.status === 'completed'
   ).length;
-  const failedCount = history.filter(
+  const failedCount = normalizedHistory.filter(
     (h) =>
       h.status === 'error' || h.status === 'failed' || h.status === 'failure'
   ).length;
 
-  // Calculate avg processing time from snapshots
+  // Calculate avg processing time from normalized history first, then snapshots as fallback
   let avgProcTime = '0.0s';
-  if (snapshots.length > 0) {
+  const completedDurations = normalizedHistory
+    .filter((h) => {
+      const status = (h.status || '').toLowerCase();
+      return status === 'success' || status === 'completed';
+    })
+    .map((h) => h.duration || 0)
+    .filter((d) => d > 0);
+
+  if (completedDurations.length > 0) {
+    const totalCompletedDuration = completedDurations.reduce((sum, d) => sum + d, 0);
+    avgProcTime = (totalCompletedDuration / completedDurations.length).toFixed(1) + 's';
+  } else if (snapshots.length > 0) {
     let totalDuration = 0;
     let durationCount = 0;
-    let totalDataPoints = 0;
+
     snapshots.forEach((s) => {
       if (s.meta?.scanDate && s.meta?.procDate) {
         const start = new Date(
@@ -199,15 +247,13 @@ function ScheduleView({
             : s.meta.procDate
         ).getTime();
         const duration = (end - start) / 1000;
-        if (!isNaN(duration) && duration > 0 && duration < 300) {
-          // Filter out anomalies
+        if (!isNaN(duration) && duration > 0) {
           totalDuration += duration;
           durationCount++;
         }
-        // Accumulate actual data points from the analysis pool size
-        totalDataPoints += s.analysisPool?.length || 0;
       }
     });
+
     if (durationCount > 0) {
       avgProcTime = (totalDuration / durationCount).toFixed(1) + 's';
     }
@@ -224,7 +270,16 @@ function ScheduleView({
   const [startTime, setStartTime] = useState(getCurrentTime());
   const [recurringInterval, _setRecurringInterval] = useState(1);
   const [daysOfWeek, setDaysOfWeek] = useState<number[]>([1]); // Default to Monday
-  const [customCron, setCustomCron] = useState('');
+
+  // Custom frequency controls
+  const [customFrequencyType, setCustomFrequencyType] =
+    useState<CustomFrequencyType>('daily');
+  const [selectedHours, setSelectedHours] = useState<Set<number>>(new Set([8])); // Default to 8 AM
+  const [selectedMonthDay, setSelectedMonthDay] = useState(1); // 1-31
+  const [selectedMonths, setSelectedMonths] = useState<number[]>([1]); // 1-12, default January
+  const [yearlyDate, setYearlyDate] = useState(getTodayDateInput()); // yyyy-mm-dd format for date picker
+  const [customCron, setCustomCron] = useState(''); // Read-only, auto-generated
+  const [description, setDescription] = useState(''); // Read-only, auto-generated
 
   useEffect(() => {
     if (settings?.storage?.snapshotFrequency) {
@@ -235,6 +290,63 @@ function ScheduleView({
       );
     }
   }, [settings?.storage]);
+
+  // Auto-generate cron and description when custom frequency settings change
+  useEffect(() => {
+    if (scheduleType === 'custom') {
+      const cron = generateCustomFrequencyCronLocal(
+        customFrequencyType,
+        startTime,
+        selectedHours,
+        selectedMonthDay,
+        selectedMonths,
+        yearlyDate
+      );
+      setCustomCron(cron);
+
+      // Generate description
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      let desc = '';
+      
+      switch (customFrequencyType) {
+        case 'hourly': {
+          const { minute } = parseTimeTo24Hour(startTime);
+          const hourList = Array.from(selectedHours)
+            .sort((a, b) => a - b)
+            .map((h) => `${String(h).padStart(2, '0')}:${String(minute).padStart(2, '0')}`)
+            .join(', ');
+          desc = `Runs hourly at: ${hourList}`;
+          break;
+        }
+        case 'daily':
+          desc = `Runs daily at ${startTime}`;
+          break;
+        case 'weekly': {
+          const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+          const dayList = daysOfWeek.map(d => dayNames[d]).join(', ');
+          desc = `Runs on ${dayList} at ${startTime}`;
+          break;
+        }
+        case 'monthly': {
+          const monthList = selectedMonths.map(m => monthNames[m - 1]).join(', ');
+          desc = `Runs on day ${selectedMonthDay} of: ${monthList} at ${startTime}`;
+          break;
+        }
+        case 'yearly': {
+          const md = getMonthDayFromYearlyInput(yearlyDate);
+          if (md) {
+            const monthName = monthNames[md.month - 1] || 'January';
+            const day = String(md.day).padStart(2, '0');
+            desc = `Runs once per year on ${monthName} ${day} at ${startTime}`;
+          } else {
+            desc = `Runs once per year at ${startTime}`;
+          }
+          break;
+        }
+      }
+      setDescription(desc);
+    }
+  }, [customFrequencyType, startTime, selectedHours, selectedMonthDay, selectedMonths, yearlyDate, daysOfWeek, scheduleType]);
 
   useEffect(() => {
     fetchJobs();
@@ -327,6 +439,240 @@ function ScheduleView({
     });
   };
 
+  const toggleHour = (hour: number) => {
+    setSelectedHours((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(hour)) {
+        newSet.delete(hour);
+      } else {
+        newSet.add(hour);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleMonth = (month: number) => {
+    setSelectedMonths((prev) => {
+      if (prev.includes(month)) {
+        return prev.filter((m) => m !== month);
+      }
+      return [...prev, month].sort((a, b) => a - b);
+    });
+  };
+
+  const handleYearlyDateChange = (value: string) => {
+    setYearlyDate(value);
+  };
+
+  const handleYearlyDateBlur = () => {
+    const md = getMonthDayFromYearlyInput(yearlyDate);
+    if (!md) {
+      setYearlyDate(getTodayDateInput());
+      return;
+    }
+
+    const fallbackYear = new Date().getFullYear();
+    const parsedYear = yearlyDate.includes('-')
+      ? Number(yearlyDate.split('-')[0])
+      : fallbackYear;
+    const year = Number.isFinite(parsedYear) ? parsedYear : fallbackYear;
+    setYearlyDate(
+      `${year}-${String(md.month).padStart(2, '0')}-${String(md.day).padStart(2, '0')}`
+    );
+  };
+
+  const parseTimeTo24Hour = (timeStr: string): { hour: number; minute: number } => {
+    const isPM = timeStr.toLowerCase().includes('pm');
+    const isAM = timeStr.toLowerCase().includes('am');
+    const timeParts = timeStr
+      .replace(/\s*[a-zA-Z]+/, '')
+      .split(':')
+      .map(Number);
+
+    let localHour = timeParts[0] || 0;
+    const minute = timeParts[1] || 0;
+
+    if (isPM && localHour < 12) {
+      localHour += 12;
+    }
+    if (isAM && localHour === 12) {
+      localHour = 0;
+    }
+
+    return { hour: localHour, minute };
+  };
+
+  const convertLocalTimeToUtc = (
+    localHour: number,
+    localMinute: number
+  ): { utcHour: number; utcMinute: number; dayShift: number } => {
+    const offsetMinutes = new Date().getTimezoneOffset();
+    const localTotalMinutes = localHour * 60 + localMinute;
+    const utcTotalMinutes = localTotalMinutes + offsetMinutes;
+
+    const dayShift = Math.floor(utcTotalMinutes / 1440);
+    const wrappedMinutes = ((utcTotalMinutes % 1440) + 1440) % 1440;
+    const utcHour = Math.floor(wrappedMinutes / 60);
+    const utcMinute = wrappedMinutes % 60;
+
+    return { utcHour, utcMinute, dayShift };
+  };
+
+  const getMonthDayFromYearlyInput = (
+    value: string
+  ): { month: number; day: number } | null => {
+    if (!value) {
+      return null;
+    }
+
+    if (value.includes('-')) {
+      const parts = value.split('-');
+      if (parts.length === 3) {
+        const year = Number(parts[0]);
+        const month = Number(parts[1]);
+        const day = Number(parts[2]);
+        if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+          return null;
+        }
+        const maxDay = new Date(year, month, 0).getDate();
+        if (month >= 1 && month <= 12 && day >= 1 && day <= maxDay) {
+          return { month, day };
+        }
+      }
+    }
+
+    if (value.includes('/')) {
+      const parts = value.split('/');
+      if (parts.length >= 2) {
+        const month = Number(parts[0]);
+        const day = Number(parts[1]);
+        const year = new Date().getFullYear();
+        if (!Number.isFinite(month) || !Number.isFinite(day)) {
+          return null;
+        }
+        const maxDay = new Date(year, month, 0).getDate();
+        if (month >= 1 && month <= 12 && day >= 1 && day <= maxDay) {
+          return { month, day };
+        }
+      }
+    }
+
+    return null;
+  };
+
+  const generateCustomFrequencyCronLocal = (
+    frequencyType: CustomFrequencyType,
+    timeStr: string,
+    hourSet?: Set<number>,
+    dayOfMonth?: number,
+    months?: number[],
+    yearlyDateInput?: string
+  ): string => {
+    const { hour: localHour, minute } = parseTimeTo24Hour(timeStr);
+
+    switch (frequencyType) {
+      case 'hourly': {
+        if (hourSet && hourSet.size > 0) {
+          const hoursArray = Array.from(hourSet).sort((a, b) => a - b);
+          return `${minute} ${hoursArray.join(',')} * * *`;
+        }
+        return `${minute} * * * *`;
+      }
+
+      case 'daily': {
+        return `${minute} ${localHour} * * *`;
+      }
+
+      case 'weekly': {
+        const localDays = [...daysOfWeek].sort((a, b) => a - b);
+        return `${minute} ${localHour} * * ${localDays.join(',')}`;
+      }
+
+      case 'monthly': {
+        const monthsList = months && months.length > 0 ? months.join(',') : '*';
+        const dayNum = dayOfMonth || 1;
+        return `${minute} ${localHour} ${dayNum} ${monthsList} *`;
+      }
+
+      case 'yearly': {
+        const md = getMonthDayFromYearlyInput(yearlyDateInput || '');
+        if (md) {
+          return `${minute} ${localHour} ${md.day} ${md.month} *`;
+        }
+        return `${minute} ${localHour} 15 1 *`;
+      }
+
+      default:
+        return '';
+    }
+  };
+
+  const generateCustomFrequencyCronUtc = (
+    frequencyType: CustomFrequencyType,
+    timeStr: string,
+    hourSet?: Set<number>,
+    dayOfMonth?: number,
+    months?: number[],
+    yearlyDateInput?: string
+  ): string => {
+    const { hour: localHour, minute } = parseTimeTo24Hour(timeStr);
+    const { utcHour, utcMinute, dayShift } = convertLocalTimeToUtc(
+      localHour,
+      minute
+    );
+
+    switch (frequencyType) {
+      case 'hourly': {
+        if (hourSet && hourSet.size > 0) {
+          const hoursArray = Array.from(hourSet)
+            .map((h) => convertLocalTimeToUtc(h, minute).utcHour)
+            .sort((a, b) => a - b);
+          return `${utcMinute} ${hoursArray.join(',')} * * *`;
+        }
+        return `${utcMinute} * * * *`;
+      }
+
+      case 'daily': {
+        return `${utcMinute} ${utcHour} * * *`;
+      }
+
+      case 'weekly': {
+        const adjustedDays = daysOfWeek
+          .map((d) => {
+            let shifted = d + dayShift;
+            if (shifted < 0) {
+              shifted += 7;
+            }
+            if (shifted > 6) {
+              shifted -= 7;
+            }
+            return shifted;
+          })
+          .sort((a, b) => a - b);
+        return `${utcMinute} ${utcHour} * * ${adjustedDays.join(',')}`;
+      }
+
+      case 'monthly': {
+        const monthsList = months && months.length > 0 ? months.join(',') : '*';
+        const dayNum = dayOfMonth || 1;
+        return `${utcMinute} ${utcHour} ${dayNum} ${monthsList} *`;
+      }
+
+      case 'yearly': {
+        const md = getMonthDayFromYearlyInput(yearlyDateInput || '');
+        if (md) {
+          const year = new Date().getFullYear();
+          const localDateTime = new Date(year, md.month - 1, md.day, localHour, minute, 0, 0);
+          return `${localDateTime.getUTCMinutes()} ${localDateTime.getUTCHours()} ${localDateTime.getUTCDate()} ${localDateTime.getUTCMonth() + 1} *`;
+        }
+        return `${utcMinute} ${utcHour} 15 1 *`;
+      }
+
+      default:
+        return '';
+    }
+  };
+
   const handleEditJob = (job: Job) => {
     setEditingJobId(job.id);
     setName(job.config?.name || job.name || 'Snapshot Job');
@@ -335,8 +681,40 @@ function ScheduleView({
     if (job.config?.daysOfWeek) {
       setDaysOfWeek(job.config.daysOfWeek);
     }
-    if (job.config?.customCron || job.cron) {
-      setCustomCron(job.config?.customCron || job.cron || '');
+    
+    // Restore custom frequency settings if present
+    if (job.config?.customFrequencyType) {
+      setCustomFrequencyType(job.config.customFrequencyType as CustomFrequencyType);
+    }
+    if (job.config?.selectedHours) {
+      setSelectedHours(new Set(job.config.selectedHours));
+    }
+    if (job.config?.selectedMonthDay) {
+      setSelectedMonthDay(job.config.selectedMonthDay);
+    }
+    if (job.config?.selectedMonths) {
+      setSelectedMonths(job.config.selectedMonths);
+    }
+    if (job.config?.yearlyDate) {
+      if (job.config.yearlyDate.includes('-')) {
+        setYearlyDate(job.config.yearlyDate);
+      } else {
+        const md = getMonthDayFromYearlyInput(job.config.yearlyDate);
+        if (md) {
+          setYearlyDate(
+            `${new Date().getFullYear()}-${String(md.month).padStart(2, '0')}-${String(md.day).padStart(2, '0')}`
+          );
+        } else {
+          setYearlyDate(getTodayDateInput());
+        }
+      }
+    }
+
+    if (job.config?.customCron) {
+      setCustomCron(job.config.customCron);
+    }
+    if (job.config?.description) {
+      setDescription(job.config.description);
     }
 
     // Scroll to top
@@ -361,6 +739,7 @@ function ScheduleView({
       let finalName = name;
       if (!finalName || finalName.trim() === '') {
         const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        
         switch (scheduleType) {
           case 'daily':
             finalName = `Daily Snapshot at ${startTime}`;
@@ -371,9 +750,11 @@ function ScheduleView({
           case 'weekly':
             finalName = `Weekly on ${daysOfWeek.map((d) => dayNames[d]).join(', ')} at ${startTime}`;
             break;
-          case 'custom':
-            finalName = `Custom Schedule (${customCron})`;
+          case 'custom': {
+            // Keep saved job name aligned with the generated description shown in UI.
+            finalName = description || `Custom Schedule (${customFrequencyType})`;
             break;
+          }
           default:
             finalName = `Automated Snapshot (${scheduleType})`;
         }
@@ -387,7 +768,15 @@ function ScheduleView({
         days: number[]
       ) => {
         if (type === 'custom') {
-          return customCron;
+          // Convert custom local schedule to UTC only when persisting
+          return generateCustomFrequencyCronUtc(
+            customFrequencyType,
+            timeStr,
+            selectedHours,
+            selectedMonthDay,
+            selectedMonths,
+            yearlyDate
+          );
         }
         const isPM = timeStr.toLowerCase().includes('pm');
         const isAM = timeStr.toLowerCase().includes('am');
@@ -483,7 +872,13 @@ function ScheduleView({
       }
 
       if (finalType === 'custom') {
+        config.customFrequencyType = customFrequencyType;
+        config.selectedHours = Array.from(selectedHours);
+        config.selectedMonthDay = selectedMonthDay;
+        config.selectedMonths = selectedMonths;
+        config.yearlyDate = yearlyDate;
         config.customCron = customCron;
+        config.description = description;
       }
 
       const url = editingJobId ? `/api/jobs/${editingJobId}` : '/api/jobs';
@@ -626,14 +1021,184 @@ function ScheduleView({
                         )}
 
                         {scheduleType === 'custom' && (
-                          <Input
-                            label="Cron Expression"
-                            placeholder="0 8 * * *"
-                            description="min hour day month weekday"
-                            value={customCron}
-                            onChange={(e) => setCustomCron(e.target.value)}
-                            className="border-l border-border"
-                          />
+                          <div className="space-y-3">
+                            {/* Frequency Type Dropdown */}
+                            <div className="space-y-1.5">
+                              <Label className="text-xs font-semibold">
+                                Schedule Type
+                              </Label>
+                              <select
+                                value={customFrequencyType}
+                                onChange={(e) =>
+                                  setCustomFrequencyType(
+                                    e.target.value as CustomFrequencyType
+                                  )
+                                }
+                                className="w-full px-2 py-1.5 border border-border rounded-md bg-background text-sm text-foreground"
+                              >
+                                <option value="hourly">Hourly</option>
+                                <option value="daily">Daily</option>
+                                <option value="weekly">Weekly</option>
+                                <option value="monthly">Monthly</option>
+                                <option value="yearly">Yearly</option>
+                              </select>
+                            </div>
+
+                            {/* Generated Cron (Read-Only) */}
+                            <div className="space-y-1.5">
+                              <Label className="text-xs font-semibold">
+                                Cron Expression
+                              </Label>
+                              <div className="w-full px-2 py-1.5 border border-border rounded-md bg-muted/30 text-sm font-mono text-muted-foreground">
+                                {customCron || 'Not generated yet'}
+                              </div>
+                            </div>
+
+                            {/* Generated Description (Read-Only) */}
+                            <div className="space-y-1.5">
+                              <Label className="text-xs font-semibold">
+                                Schedule Description
+                              </Label>
+                              <div className="w-full px-2 py-1.5 border border-border rounded-md bg-muted/30 text-sm text-muted-foreground">
+                                {description || 'Not generated yet'}
+                              </div>
+                            </div>
+
+                            {/* Hourly Controls */}
+                            {customFrequencyType === 'hourly' && (
+                              <div className="space-y-2">
+                                <Label className="text-xs">
+                                  Select Hours (Local)
+                                </Label>
+                                <div className="grid grid-cols-6 gap-1.5 max-h-48 overflow-y-auto p-2 border border-border rounded-md bg-muted/30">
+                                  {Array.from({ length: 24 }, (_, i) => i).map(
+                                    (hour) => (
+                                      <Button
+                                        key={hour}
+                                        variant={
+                                          selectedHours.has(hour)
+                                            ? 'default'
+                                            : 'outline'
+                                        }
+                                        size="xs"
+                                        square
+                                        className="w-full h-8 text-[11px] font-semibold"
+                                        onClick={() => toggleHour(hour)}
+                                      >
+                                        {String(hour).padStart(2, '0')}
+                                      </Button>
+                                    )
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Weekly Controls */}
+                            {customFrequencyType === 'weekly' && (
+                              <div className="space-y-2">
+                                <Label className="text-xs">Select Days</Label>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(
+                                    (day, idx) => (
+                                      <Button
+                                        key={idx}
+                                        variant={
+                                          daysOfWeek.includes(idx)
+                                            ? 'default'
+                                            : 'outline'
+                                        }
+                                        size="xs"
+                                        square
+                                        className="w-8 h-8 font-bold"
+                                        onClick={() => toggleDay(idx)}
+                                      >
+                                        {day}
+                                      </Button>
+                                    )
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Monthly Controls */}
+                            {customFrequencyType === 'monthly' && (
+                              <div className="space-y-3">
+                                <div className="space-y-1.5">
+                                  <Label className="text-xs">Day of Month</Label>
+                                  <select
+                                    value={selectedMonthDay}
+                                    onChange={(e) =>
+                                      setSelectedMonthDay(parseInt(e.target.value))
+                                    }
+                                    className="w-full px-2 py-1.5 border border-border rounded-md bg-background text-sm"
+                                  >
+                                    {Array.from({ length: 31 }, (_, i) => i + 1).map(
+                                      (day) => (
+                                        <option key={day} value={day}>
+                                          Day {day}
+                                        </option>
+                                      )
+                                    )}
+                                  </select>
+                                </div>
+                                <div className="space-y-1.5">
+                                  <Label className="text-xs">
+                                    Select Months
+                                  </Label>
+                                  <div className="grid grid-cols-3 gap-1.5 p-2 border border-border rounded-md bg-muted/30">
+                                    {[
+                                      'Jan',
+                                      'Feb',
+                                      'Mar',
+                                      'Apr',
+                                      'May',
+                                      'Jun',
+                                      'Jul',
+                                      'Aug',
+                                      'Sep',
+                                      'Oct',
+                                      'Nov',
+                                      'Dec',
+                                    ].map((month, idx) => (
+                                      <Button
+                                        key={idx}
+                                        variant={
+                                          selectedMonths.includes(idx + 1)
+                                            ? 'default'
+                                            : 'outline'
+                                        }
+                                        size="xs"
+                                        className="text-[11px] font-semibold"
+                                        onClick={() => toggleMonth(idx + 1)}
+                                      >
+                                        {month}
+                                      </Button>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Yearly Controls */}
+                            {customFrequencyType === 'yearly' && (
+                              <div className="space-y-1.5">
+                                <Label className="text-xs">
+                                  Date
+                                </Label>
+                                <input
+                                  type="date"
+                                  value={yearlyDate}
+                                  onChange={(e) => handleYearlyDateChange(e.target.value)}
+                                  onBlur={handleYearlyDateBlur}
+                                  className="w-full px-2 py-1.5 border border-border rounded-md bg-background text-sm"
+                                />
+                                <div className="text-[10px] text-muted-foreground italic">
+                                  Pick any date in the year; the month and day are used for the yearly cron.
+                                </div>
+                              </div>
+                            )}
+
+                          </div>
                         )}
 
                         {scheduleType !== 'custom' &&
@@ -788,7 +1353,7 @@ function ScheduleView({
                       Job Name
                     </TableHead>
                     <TableHead
-                      className="w-[80px] text-xs text-center"
+                      className="w-[65px] text-xs text-center"
                       sortable
                       sortDirection={
                         sortKey === 'scanId' ? sortDirection : null
@@ -818,18 +1383,18 @@ function ScheduleView({
                       End Time
                     </TableHead>
                     <TableHead
-                      className="w-[90px] text-xs text-center"
+                      className="w-[35px] text-xs text-center"
                       sortable
                       sortDirection={
                         sortKey === 'duration' ? sortDirection : null
                       }
                       onSort={() => handleSort('duration')}
                     >
-                      Duration
+                      Len
                     </TableHead>
                     <TableHead className="text-xs">Details</TableHead>
                     <TableHead
-                      className="text-right w-[100px] text-xs"
+                      className="text-right w-[90px] text-xs"
                       sortable
                       sortDirection={
                         sortKey === 'status' ? sortDirection : null
@@ -853,22 +1418,22 @@ function ScheduleView({
                   ) : (
                     sortedHistory.map((h, i) => (
                       <TableRow key={i}>
-                        <TableCell className="py-2.5 text-[10px] font-bold">
+                        <TableCell className="py-2.5 text-[9px]">
                           {h.jobName}
                         </TableCell>
-                        <TableCell className="py-2.5 text-[10px] text-muted-foreground text-center">
+                        <TableCell className="py-2.5 text-[9px] text-muted-foreground text-center">
                           {h.scanId ? `#${h.scanId}` : '-'}
                         </TableCell>
-                        <TableCell className="py-2.5 text-[10px] text-muted-foreground whitespace-nowrap">
+                        <TableCell className="py-2.5 text-[9px] text-muted-foreground whitespace-nowrap">
                           {formatDateTime(h.startTime || h.timestamp)}
                         </TableCell>
-                        <TableCell className="py-2.5 text-[10px] text-muted-foreground whitespace-nowrap">
+                        <TableCell className="py-2.5 text-[9px] text-muted-foreground whitespace-nowrap">
                           {h.endTime ? formatDateTime(h.endTime) : '-'}
                         </TableCell>
-                        <TableCell className="py-2.5 text-[10px] text-muted-foreground text-center">
-                          {h.duration !== undefined ? `${h.duration}s` : '-'}
+                        <TableCell className="py-2.5 text-[9px] text-muted-foreground text-center">
+                          {`${h.duration ?? 0}s`}
                         </TableCell>
-                        <TableCell className="py-2.5 text-[10px] text-muted-foreground leading-snug">
+                        <TableCell className="py-2.5 text-[9px] leading-snug">
                           {h.details}
                         </TableCell>
                         <TableCell className="py-2.5 text-right">
@@ -940,6 +1505,10 @@ function getCurrentTime(): string {
   const minutes = Math.ceil(now.getMinutes() / 15) * 15; // Round to nearest 15 min
   now.setMinutes(minutes);
   return now.toTimeString().slice(0, 5);
+}
+
+function getTodayDateInput(): string {
+  return new Date().toISOString().split('T')[0] ?? '';
 }
 
 export default ScheduleView;

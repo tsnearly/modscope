@@ -115,7 +115,9 @@ export class NormalizationService {
 
         for (const post of posts) {
           const utcId =
-            post.utcId || post.id || `post_${post.url?.replace(/\\/ / g, '_')}`;
+            (post as { utcId?: string }).utcId ||
+            post.id ||
+            `post_${post.url?.replace(/\//g, '_')}`;
 
           // Write static shard (immutable fields)
           tsWrites.push(

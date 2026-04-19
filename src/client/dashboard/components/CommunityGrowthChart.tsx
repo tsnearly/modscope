@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react';
 import {
-  Area,
-  CartesianGrid,
-  ComposedChart,
-  Line,
-  Tooltip as RechartsTooltip,
-  ResponsiveContainer,
-  XAxis,
-  YAxis,
+    Area,
+    CartesianGrid,
+    ComposedChart,
+    Line,
+    Tooltip as RechartsTooltip,
+    ResponsiveContainer,
+    XAxis,
+    YAxis,
 } from 'recharts';
 import { getDataGroupingIcon } from '../utils/iconMappings';
 import { Chart } from './ui/chart';
@@ -49,17 +49,21 @@ type GrowthDatum = {
 
 function formatDate(ts: number): string {
   const d = new Date(ts);
-  const mm = String(d.getMonth() + 1);
-  const dd = String(d.getDate());
-  return `${mm}/${dd}`;
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  }).format(d);
 }
 
 function formatDateWithYear(ts: number): string {
   const d = new Date(ts);
-  const mm = d.getMonth() + 1;
-  const dd = d.getDate();
-  const yyyy = d.getFullYear();
-  return `${mm}/${dd}/${yyyy}`;
+  return new Intl.DateTimeFormat('en-US', {
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  }).format(d);
 }
 
 function formatSubscribers(n: number | undefined): string {
@@ -381,7 +385,6 @@ export function CommunityGrowthChart({
                   tickCount={6}
                   minTickGap={22}
                   height={42}
-                  angle={-45}
                   tickMargin={10}
                   axisLine={{ stroke: 'var(--color-border)', strokeWidth: 1 }}
                   tickLine={{ stroke: 'var(--color-border)', strokeWidth: 1 }}

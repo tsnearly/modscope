@@ -75,7 +75,7 @@ function formatHeatmapTooltipLine(
     return `${dayName} - ${hourLabel}\nNo Change`;
   }
 
-  return `${dayName} - ${hourLabel}\n${direction} ${magnitude} posts`;
+  return `${dayName} - ${hourLabel}\n${direction} ${magnitude} post${Math.abs(delta) === 1 ? '' : 's'}`;
 }
 
 function convertUTCBucketToLocal(
@@ -424,11 +424,15 @@ export function PostingActivityHeatmapChart({
                     }
                   >
                     <div
-                      className="aspect-square rounded-sm border border-border/20 cursor-default"
                       style={{
+                        aspectRatio: '1',
+                        borderRadius: '2px',
                         backgroundColor: cell
                           ? getCellColor(cell.delta)
                           : 'var(--color-bg)',
+                        border: '1px solid var(--color-border)',
+                        opacity: 0.9,
+                        cursor: 'default',
                       }}
                       aria-label={
                         cell

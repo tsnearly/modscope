@@ -316,7 +316,7 @@ triggers.post('/tasks/delete-snapshot', async (c) => {
         entry.status = 'completed';
         entry.endTime = endTime;
         entry.duration = Math.max(0, Math.round((endTime - startTime) / 1000));
-        entry.details = `Successfully deleted snapshot #${scanId}`;
+        entry.details = `Successfully deleted snapshot`;
 
         await redis.zRem('jobs:history', [oldEntryStr]);
         await redis.zAdd('jobs:history', {

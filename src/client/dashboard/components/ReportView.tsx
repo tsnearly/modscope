@@ -180,21 +180,40 @@ function ReportView({
   const [trendsError, setTrendsError] = useState<string | null>(null);
   const [trendsData, setTrendsData] = useState<any>(null);
   const [trendsLoadedKey, setTrendsLoadedKey] = useState<string | null>(null);
+  const trendsCacheKey = `${analytics?.meta?.subreddit || 'unknown'}:${analytics?.meta?.scanDate || 'unknown'}`;
 
-  const isTrendPrecisionActive = useMemo(() => {
+  const useTrendPrecisionData = useMemo(() => {
+    if (trendsLoadedKey !== trendsCacheKey || !trendsData) {
+      return false;
+    }
+
     return !!(
-      (analytics?.trendData?.globalWordCloud &&
-        Object.keys(analytics.trendData.globalWordCloud).length > 0) ||
-      (analytics?.trendData?.globalBestPostingTimes &&
-        analytics.trendData.globalBestPostingTimes.length > 0) ||
-      analytics?.trendData?.globalStats ||
-      (trendsData?.subscriberGrowth &&
-        trendsData.subscriberGrowth.length > 0) ||
-      (trendsData?.engagementOverTime &&
-        trendsData.engagementOverTime.length > 0) ||
-      (trendsData?.contentMix && trendsData.contentMix.length > 0)
+      (trendsData.globalWordCloud &&
+        Object.keys(trendsData.globalWordCloud).length > 0) ||
+      (trendsData.globalBestPostingTimes &&
+        trendsData.globalBestPostingTimes.length > 0) ||
+      trendsData.globalStats
     );
-  }, [analytics, trendsData]);
+  }, [trendsData, trendsLoadedKey, trendsCacheKey]);
+
+  const hasRenderableTrendData = useMemo(() => {
+    if (!trendsData) {
+      return false;
+    }
+
+    return !!(
+      trendsData.subscriberGrowth?.length ||
+      trendsData.engagementOverTime?.length ||
+      trendsData.contentMix?.length ||
+      trendsData.postingHeatmap?.length ||
+      trendsData.bestPostingTimesChange?.timeline?.length ||
+      (trendsData.globalWordCloud &&
+        Object.keys(trendsData.globalWordCloud).length > 0) ||
+      (trendsData.globalBestPostingTimes &&
+        trendsData.globalBestPostingTimes.length > 0) ||
+      trendsData.globalStats
+    );
+  }, [trendsData]);
 
   // Activity tab state - for toggling chart series visibility
   const [hiddenSeries, setHiddenSeries] = useState<Record<string, boolean>>({});
@@ -244,16 +263,26 @@ function ReportView({
         let intensity = 0;
 
         if (count > 0 && thresholds) {
-          if (count >= (thresholds.superhigh?.[0] ?? Infinity)) {
-            intensity = 5;
-          } else if (count >= (thresholds.extreme?.[0] ?? Infinity)) {
-            intensity = 4;
-          } else if (count >= (thresholds.high?.[0] ?? Infinity)) {
-            intensity = 3;
-          } else if (count >= (thresholds.medium?.[0] ?? Infinity)) {
-            intensity = 2;
-          } else {
-            intensity = 1;
+          // Assign intensity by checking which tier's range contains this count
+          // Check each tier in order from lowest to highest
+          const tierOrder = [
+            { level: 1, name: 'low' as const },
+            { level: 2, name: 'medium' as const },
+            { level: 3, name: 'high' as const },
+            { level: 4, name: 'extreme' as const },
+            { level: 5, name: 'superhigh' as const },
+          ];
+
+          for (const { level, name } of tierOrder) {
+            const tierThreshold = thresholds[name];
+            if (!tierThreshold) continue;
+
+            const tierMin = tierThreshold[0] ?? -Infinity;
+            const tierMax = tierThreshold[1] ?? Infinity;
+            if (count >= tierMin && count <= tierMax) {
+              intensity = level;
+              break;
+            }
           }
         }
         grid[key] = { intensity, count };
@@ -264,7 +293,6 @@ function ReportView({
   }, [analytics?.analysisPool]);
 
   // Load trends data when trends tab is active OR in print mode
-  const trendsCacheKey = `${analytics?.meta?.subreddit || 'unknown'}:${analytics?.meta?.scanDate || 'unknown'}`;
 
   useEffect(() => {
     // Load trends if we're on the trends tab OR if we're in print mode and any trend chart is enabled
@@ -278,15 +306,20 @@ function ReportView({
           reportSettings.showTrendPosting ||
           reportSettings.showTrendBestPostTime));
 
+    let mounted = true;
+
     if (!shouldLoadTrends) {
-      return;
+      return () => {
+        mounted = false;
+      };
     }
 
     if (trendsLoadedKey === trendsCacheKey && trendsData) {
-      return;
+      return () => {
+        mounted = false;
+      };
     }
 
-    let mounted = true;
     const loadTrends = async () => {
       setTrendsLoading(true);
       setTrendsError(null);
@@ -314,7 +347,7 @@ function ReportView({
       }
     };
 
-    loadTrends();
+    void loadTrends();
     return () => {
       mounted = false;
     };
@@ -340,7 +373,7 @@ function ReportView({
   const officialAccount = analytics?.meta?.officialAccount || '';
 
   const iconContext: IconContext = isPrintMode ? 'printed' : 'screen';
-  const trendPrecisionNotice = isTrendPrecisionActive ? (
+  const trendPrecisionNotice = useTrendPrecisionData ? (
     <div className="mt-2 flex justify-end px-1">
       <div className="flex items-center gap-1 opacity-70">
         <Icon name="mono-info" size={10} className="text-blue-500" />
@@ -445,6 +478,9 @@ function ReportView({
       reportSettings.showTrendPosting === false &&
       reportSettings.showTrendBestPostTime === false
     ) {
+      return false;
+    }
+    if (t.tab === 'trends' && !isPrintMode && !hasRenderableTrendData) {
       return false;
     }
     return true;
@@ -946,7 +982,11 @@ function ReportView({
                 >
                   {activeTab === t.tab && t.tab === 'overview' && (
                     <OverviewView
-                      analytics={analytics}
+                      analytics={
+                        useTrendPrecisionData
+                          ? { ...analytics, trendData: trendsData }
+                          : { ...analytics, trendData: undefined }
+                      }
                       trendPrecisionNotice={trendPrecisionNotice}
                       iconContext={iconContext}
                       excludeOfficial={excludeOfficial}
@@ -1583,8 +1623,6 @@ function ReportView({
                                   fill: 'var(--text-primary)',
                                 }}
                                 height={42}
-                                angle={-45}
-                                textAnchor="end"
                               />
                               <YAxis
                                 yAxisId="left"
@@ -1708,8 +1746,6 @@ function ReportView({
                                   fill: 'var(--text-primary)',
                                 }}
                                 height={42}
-                                angle={-45}
-                                textAnchor="end"
                               />
                               <YAxis
                                 yAxisId="left"

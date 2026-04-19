@@ -145,13 +145,41 @@ ModScope supports a custom UI engine designed for different modding environments
 
 If you want to quickly check the current status of the app, open the **About** view (info icon). Here you can see the currently running program version and release date. You can also expand the accordion controls (like "What is ModScope?" and "Features") to read quick refreshers on the app's capabilities.
 
+All report dates and times are now rendered in your current browser timezone, even though ModScope continues to use UTC internally on the server for storage and processing. That keeps the data aligned with the server clock while making the report easier to read, interpret, and compare at a glance.
+
 _Note: ModScope runs entirely within the Devvit ecosystem. It requires no external servers or API keys, ensuring strict adherence to Reddit's data privacy guidelines._
 
 ---
 
 ## Changelog
 
-### v0.9.5 [In Development]
+### v0.9.8 [Currently Testing]
+
+**Report Date and Time Standardization**
+
+- Standardized report chart labels so the Activity, Community Growth, Engagement Over Time, and Content Mix views now use cleaner date formats on the X-axis while keeping tooltips detailed and fully date-stamped.
+- Removed tilted X-axis labels from the Activity Trend and Engagement-vs-Votes charts so the report reads more cleanly with parallel text across the dashboard.
+- Updated the Posting Activity and Timing heatmaps so their hover tooltips use a consistent presentation, including matching font sizing between the two heatmap views.
+- Corrected the report heatmap bucket rendering so the visual intensity matches the legend ranges instead of collapsing sparse values into the darkest shading.
+
+**Data Normalization and Stability**
+
+- Fixed a normalization edge case in post identifier handling so malformed fallback IDs no longer break processing.
+- Updated report freshness handling so stale trend state is based on the actual materialization timestamp stored for the current subreddit.
+- Reports are easier to read with cleaner date/time displays and more consistent chart/heatmap formatting.
+
+**Scheduling View**
+
+- Custom scheduling is more flexible and easier to understand, with improved options and clearer generated schedule descriptions.
+- Job history is more accurate, including better processing-time and duration reporting.
+
+**Dashboard Launch**
+
+- Overall stability and access control were tightened to reduce errors and improve consistency.
+- Trending data when available replaces the snapshot calculations for data buckets, word cloud, and prime posting times; and indicates with a notification on the overview.
+- Added owner-only utility component to About view for seeding trends, exporting and importing snapshot JSON files.
+
+### v0.9.5
 
 **Dashboard Date/Time Values**
 

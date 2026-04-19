@@ -146,29 +146,11 @@ export function ContentView({ analytics, iconContext }: ContentViewProps) {
     .sort((a, b) => b.count - a.count)
     .slice(0, 10);
 
-  const rawPoolCountForContent = allPostsForContent.length;
-  const uniquePoolCountForContent = uniquePostsForContent.length;
-  const duplicateCountForContent = Math.max(
-    0,
-    rawPoolCountForContent - uniquePoolCountForContent
-  );
+  const formatPostCount = (count: number) =>
+    `${count} post${count === 1 ? '' : 's'}`;
 
   return (
     <div className="flex flex-col gap-2 p-2 h-full overflow-y-auto">
-      <div className="bg-card border border-border rounded-md px-3 py-2 text-[11px] text-slate-600 flex flex-wrap gap-x-4 gap-y-1">
-        <span>
-          Raw pool posts:{' '}
-          <strong>{rawPoolCountForContent.toLocaleString()}</strong>
-        </span>
-        <span>
-          Unique posts (URL dedupe):{' '}
-          <strong>{uniquePoolCountForContent.toLocaleString()}</strong>
-        </span>
-        <span>
-          Duplicate entries removed:{' '}
-          <strong>{duplicateCountForContent.toLocaleString()}</strong>
-        </span>
-      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2 shrink-0">
         <Chart
           title="Post Types"
@@ -196,7 +178,7 @@ export function ContentView({ analytics, iconContext }: ContentViewProps) {
                     {type.category}
                   </span>
                   <Tooltip
-                    content={`${type.count} ${type.category} posts (${type.percentage}%)`}
+                    content={`${formatPostCount(type.count)}`}
                     side="top"
                   >
                     <div
@@ -264,7 +246,7 @@ export function ContentView({ analytics, iconContext }: ContentViewProps) {
                   {len.category}
                 </span>
                 <Tooltip
-                  content={`${len.count} posts [avg len ${len.avg_len}]`}
+                  content={`${formatPostCount(len.count)} [avg len ${len.avg_len}]`}
                   side="right"
                 >
                   <div
@@ -335,7 +317,9 @@ export function ContentView({ analytics, iconContext }: ContentViewProps) {
                 >
                   {f.flair}
                 </span>
-                <Tooltip content={`${f.count}`} side="left">
+                <Tooltip
+                  content={`${formatPostCount(f.count)}`}
+                  side="left">
                   <div
                     style={{
                       flex: 1,

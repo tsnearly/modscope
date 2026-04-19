@@ -942,7 +942,7 @@ export class SnapshotService {
       historyEntry.endTime = endTime;
       historyEntry.duration = duration;
       const nextStep = 'Trend Service queued';
-      historyEntry.details = `${isManual ? 'Manual' : 'Auto'}-scan completed [${resolvedScanId}]. ${nextStep}.`;
+      historyEntry.details = `${isManual ? 'Manual' : 'Auto'}-scan completed. ${nextStep}.`;
       await redis.zAdd('jobs:history', {
         member: JSON.stringify(historyEntry),
         score: startTime,
@@ -994,7 +994,7 @@ export class SnapshotService {
           status: 'running',
           jobType: historyEntry.jobType,
           scanId: resolvedScanId,
-          details: `Trend forecasting for scan [${resolvedScanId}] started.`,
+          details: `Trend forecasting started.`,
           jobId,
         };
         let postHistoryEntryStr = JSON.stringify(postHistoryEntry);

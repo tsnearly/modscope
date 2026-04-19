@@ -9,7 +9,7 @@ export default defineConfig({
     testTimeout: 30000, // 30 seconds for performance tests
     hookTimeout: 30000,
     teardownTimeout: 10000,
-    reporter: ['verbose', 'json'],
+    reporters: ['verbose', 'json'],
     outputFile: {
       json: './test-results.json',
     },

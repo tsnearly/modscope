@@ -1,42 +1,15 @@
-import { useState } from 'react';
+import { OwnerUtilitiesSection } from './OwnerUtilitiesSection.js';
 import { Accordion } from './ui/accordion';
 import { EntityTitle } from './ui/entity-title';
 import { Icon } from './ui/icon';
 
 interface AboutViewProps {
   appVersion: string;
+  currentUsername?: string;
 }
 
-function AboutView({ appVersion }: AboutViewProps) {
-  // PLAYTEST_BYPASS: Manual trend seed state
-  const [seedStatus, setSeedStatus] = useState<
-    'idle' | 'loading' | 'success' | 'error'
-  >('idle');
-  const [seedMessage, setSeedMessage] = useState('');
-
-  const handleSeedTrends = async () => {
-    setSeedStatus('loading');
-    setSeedMessage('');
-    console.log('[PLAYTEST] Triggering trend seed via /api/trigger-trends...');
-    try {
-      const res = await fetch('/api/trigger-trends', { method: 'POST' });
-      const body = await res.json().catch(() => ({}));
-      console.log('[PLAYTEST] Trigger response:', res.status, body);
-      if (res.ok) {
-        setSeedStatus('success');
-        setSeedMessage(
-          `Seeded ${body.scansProcessed ?? '?'} scans. Trends locked to 2099.`
-        );
-      } else {
-        setSeedStatus('error');
-        setSeedMessage(body.message || `HTTP ${res.status}`);
-      }
-    } catch (e) {
-      console.error('[PLAYTEST] Trigger fetch error:', e);
-      setSeedStatus('error');
-      setSeedMessage(String(e));
-    }
-  };
+function AboutView({ appVersion, currentUsername }: AboutViewProps) {
+  const isOwner = (currentUsername || '').toLowerCase() === 'seetigerlearn';
 
   return (
     <div className="about-view h-full flex flex-col bg-[var(--color-surface)] text-left">
@@ -62,30 +35,9 @@ function AboutView({ appVersion }: AboutViewProps) {
                 Build: {new Date().toISOString().split('T')[0]}
               </p>
               <p className="text-xs text-muted-foreground">
-                Phase 5a: Overhaul trend forecasting system
+                Phase: Final Testing/Initial Rollout
               </p>
-              {/* PLAYTEST_BYPASS: Trend seed and migration buttons */}
-              <div className="mt-3 pt-3 border-t border-border flex flex-col gap-2">
-                <div>
-                  <button
-                    onClick={handleSeedTrends}
-                    disabled={seedStatus === 'loading'}
-                    className="text-xs px-3 py-1.5 rounded bg-primary text-primary-foreground hover:opacity-80 disabled:opacity-40 transition-opacity w-full text-left"
-                  >
-                    {seedStatus === 'loading'
-                      ? 'Seeding trends…'
-                      : '⚡ Seed Trends (Playtest)'}
-                  </button>
-                  {seedMessage && (
-                    <p
-                      className={`text-xs mt-1 ${seedStatus === 'success' ? 'text-green-500' : 'text-red-500'}`}
-                    >
-                      {seedStatus === 'success' ? '✓ ' : '✗ '}
-                      {seedMessage}
-                    </p>
-                  )}
-                </div>
-              </div>
+              {isOwner && <OwnerUtilitiesSection />}
             </div>
             <div className="flex-1" style={{ padding: '1.5rem' }}>
               <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">

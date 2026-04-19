@@ -3,6 +3,7 @@ import { getDataGroupingIcon, type IconContext } from '../utils/iconMappings';
 import { DAYS, FULL_DAYS, formatHourLabel } from '../utils/reportFormatting';
 import { Chart } from './ui/chart';
 import { Icon } from './ui/icon';
+import { Tooltip } from './ui/tooltip';
 
 interface TimingViewProps {
   heatmapResult: any;
@@ -16,44 +17,59 @@ export function TimingView({ heatmapResult, iconContext }: TimingViewProps) {
   >({});
 
   const tiers = useMemo(() => {
-    if (!heatmapResult.thresholds) return [];
+    const rawRanges = [
+      heatmapResult?.thresholds?.low,
+      heatmapResult?.thresholds?.medium,
+      heatmapResult?.thresholds?.high,
+      heatmapResult?.thresholds?.extreme,
+      heatmapResult?.thresholds?.superhigh,
+    ].map((pair, index) => {
+      const fallback = index + 1;
+      const rawMin = Number(pair?.[0]);
+      const rawMax = Number(pair?.[1]);
+      const min = Number.isFinite(rawMin) ? Math.max(1, Math.round(rawMin)) : fallback;
+      const max = Number.isFinite(rawMax)
+        ? Math.max(min, Math.round(rawMax))
+        : index === 4
+          ? Infinity
+          : min;
+      return [min, max] as [number, number];
+    });
 
     const baseTiers = [
+      { intensity: 1, key: 'i1', label: 'low', color: 'var(--heatmap-1)' },
+      { intensity: 2, key: 'i2', label: 'medium', color: 'var(--heatmap-3)' },
+      { intensity: 3, key: 'i3', label: 'high', color: 'var(--heatmap-5)' },
+      { intensity: 4, key: 'i4', label: 'extreme', color: 'var(--heatmap-7)' },
       {
-        key: 'low',
-        label: 'low',
-        color: 'var(--heatmap-1)',
-        t: heatmapResult.thresholds.low,
-      },
-      {
-        key: 'medium',
-        label: 'medium',
-        color: 'var(--heatmap-3)',
-        t: heatmapResult.thresholds.medium,
-      },
-      {
-        key: 'high',
-        label: 'high',
-        color: 'var(--heatmap-5)',
-        t: heatmapResult.thresholds.high,
-      },
-      {
-        key: 'extreme',
-        label: 'extreme',
-        color: 'var(--heatmap-7)',
-        t: heatmapResult.thresholds.extreme,
-      },
-      {
-        key: 'superhigh',
+        intensity: 5,
+        key: 'i5',
         label: 'superhigh',
         color: 'var(--heatmap-9)',
-        t: heatmapResult.thresholds.superhigh,
       },
     ];
 
-    return baseTiers.filter(
-      ({ t }, idx, arr) => idx === 0 || t[0] !== arr[idx - 1]!.t[0]
-    );
+    let previousUpper = 0;
+
+    return baseTiers.map((tier, idx) => {
+      const [rawMin, rawMax] = rawRanges[idx] ?? [idx + 1, idx + 1];
+      const min = idx === 0 ? rawMin : Math.max(rawMin, previousUpper + 1);
+      const max =
+        idx === baseTiers.length - 1
+          ? Number.isFinite(rawMax)
+            ? Math.max(min, rawMax)
+            : Infinity
+          : Math.max(min, rawMax);
+
+      if (Number.isFinite(max)) {
+        previousUpper = max;
+      }
+
+      return {
+        ...tier,
+        range: [min, max] as [number, number],
+      };
+    });
   }, [heatmapResult.thresholds]);
 
   const getCellColor = (intensity: number): string => {
@@ -64,11 +80,9 @@ export function TimingView({ heatmapResult, iconContext }: TimingViewProps) {
       return 'var(--color-bg)';
     }
 
-    if (intensity > 0 && intensity <= tiers.length) {
-      const tier = tiers[intensity - 1];
-      if (tier && hiddenCategories[tier.key]) {
-        return 'transparent';
-      }
+    const tierKey = `i${intensity}`;
+    if (tierKey && hiddenCategories[tierKey]) {
+      return 'transparent';
     }
 
     const colors = [
@@ -79,7 +93,7 @@ export function TimingView({ heatmapResult, iconContext }: TimingViewProps) {
       'var(--heatmap-7)',
       'var(--heatmap-9)',
     ];
-    return colors[intensity] || colors[0];
+    return colors[intensity] ?? colors[0] ?? 'var(--color-bg)';
   };
 
   const renderLegend = () => (
@@ -125,7 +139,7 @@ export function TimingView({ heatmapResult, iconContext }: TimingViewProps) {
         />
         <span>none: 0</span>
       </button>
-      {tiers.map(({ key, label, color, t }) => (
+      {tiers.map(({ key, label, color, range }) => (
         <button
           key={key}
           type="button"
@@ -156,8 +170,12 @@ export function TimingView({ heatmapResult, iconContext }: TimingViewProps) {
             }}
           />
           <span>
-            {label}: {t[0]}
-            {t[1] === Infinity ? '+' : `\u2013${t[1]}`}
+            {label}: {range[0]}
+            {range[1] === Infinity
+              ? '+'
+              : range[1] === range[0]
+                ? ''
+                : `\u2013${range[1]}`}
           </span>
         </button>
       ))}
@@ -212,16 +230,27 @@ export function TimingView({ heatmapResult, iconContext }: TimingViewProps) {
                   const dayLabel = FULL_DAYS[d] || DAYS[d] || 'Unknown day';
                   const hourLabel = formatHourLabel(h);
                   return (
-                    <div
+                    <Tooltip
                       key={h}
-                      style={{
-                        aspectRatio: '1',
-                        borderRadius: '2px',
-                        background: getCellColor(data.intensity),
-                        cursor: 'default',
-                      }}
-                      title={`${dayLabel} - ${hourLabel}\n${data.count} post${data.count !== 1 ? 's' : ''}`}
-                    />
+                      delayDuration={80}
+                      content={
+                        <span className="whitespace-pre-line">
+                          {`${dayLabel} - ${hourLabel}\n${data.count} post${data.count !== 1 ? 's' : ''}`}
+                        </span>
+                      }
+                    >
+                      <div
+                        style={{
+                          aspectRatio: '1',
+                          borderRadius: '2px',
+                          background: getCellColor(data.intensity),
+                          border: '1px solid var(--color-border)',
+                          opacity: 0.9,
+                          cursor: 'default',
+                        }}
+                        aria-label={`${dayLabel} - ${hourLabel}\n${data.count} post${data.count !== 1 ? 's' : ''}`}
+                      />
+                    </Tooltip>
                   );
                 })}
               </React.Fragment>

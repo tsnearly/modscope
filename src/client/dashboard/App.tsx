@@ -4,6 +4,12 @@ import {
 } from '@devvit/web/client';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
+import {
+  AnalyticsSnapshot,
+  AppConfig,
+  JobDescriptor,
+  JobHistoryEntry,
+} from '../../shared/types/api';
 import { useTheme } from '../hooks/useTheme';
 import AboutView from './components/AboutView';
 import ConfigView from './components/ConfigView';
@@ -14,12 +20,6 @@ import { Button } from './components/ui/button';
 import { Heading } from './components/ui/heading';
 import { Icon } from './components/ui/icon';
 import { Tooltip } from './components/ui/tooltip';
-import {
-  AppConfig,
-  JobDescriptor,
-  JobHistoryEntry,
-  AnalyticsSnapshot,
-} from '../../shared/types/api';
 import './styles/main.css';
 import { cn } from './utils/cn';
 import { getIconPath } from './utils/iconMappings';
@@ -81,9 +81,7 @@ class ErrorBoundary extends React.Component<
 export const App = () => {
   useTheme(); // Initialize and apply theme on mount
   const [activeView, setActiveView] = useState<View>('report');
-  const [selectedSnapshotId, setSelectedSnapshotId] = useState<number | null>(
-    null
-  );
+  const [, setSelectedSnapshotId] = useState<number | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [reportData, setReportData] = useState<AnalyticsSnapshot | null>(null);
   const [officialAccounts, setOfficialAccounts] = useState<string[]>([]);
@@ -108,55 +106,51 @@ export const App = () => {
       try {
         const res = await fetch('/api/init');
 
-        if (res.status === 403) {
-          // Non-moderator accessed the post
-          // PLAYTEST_BYPASS: Temporarily allow non-mods to access for playtesting
-          // setIsLoading(false);
-          // setShowSplash(false);
-          // setIsUnauthorized(true);
-          // return;
+        if (res.status === 401 || res.status === 403) {
+          setIsLoading(false);
+          setShowSplash(false);
+          setIsUnauthorized(true);
+          return;
         }
 
-        if (res.ok) {
-          const data = await res.json();
-          if (data.analytics) {
-            setReportData(data.analytics);
-          }
-          if (data.officialAccounts) {
-            setOfficialAccounts(data.officialAccounts);
-          }
-          if (data.jobs) {
-            setJobs(data.jobs);
-          }
-          if (data.jobHistory) {
-            setJobHistory(data.jobHistory);
-          }
-          if (data.config) {
-            setConfig(data.config);
-          }
-
-          // Use client context first, fallback to server data
-          if (!devvitContext?.appVersion && data.appVersion) {
-            setAppVersion(data.appVersion);
-          }
-
-          if (data.display?.theme) {
-            // Need to get the changeTheme function somehow.
-            // We can just set the data-theme attribute directly on document.documentElement
-            document.documentElement.setAttribute(
-              'data-theme',
-              data.display.theme
-            );
-            localStorage.setItem(
-              'modscope_settings',
-              JSON.stringify(data.display)
-            );
-          }
-
-          if (!data.analytics) {
-            setActiveView('config');
-          }
+        if (!res.ok) {
+          throw new Error(`Failed to initialize dashboard (${res.status})`);
         }
+
+        const data = await res.json();
+        if (data.analytics) {
+          setReportData(data.analytics);
+        }
+        if (data.officialAccounts) {
+          setOfficialAccounts(data.officialAccounts);
+        }
+        if (data.jobs) {
+          setJobs(data.jobs);
+        }
+        if (data.jobHistory) {
+          setJobHistory(data.jobHistory);
+        }
+        if (data.config) {
+          setConfig(data.config);
+        }
+
+        // Use client context first, fallback to server data
+        if (!devvitContext?.appVersion && data.appVersion) {
+          setAppVersion(data.appVersion);
+        }
+
+        if (data.display?.theme) {
+          // Need to get the changeTheme function somehow.
+          // We can just set the data-theme attribute directly on document.documentElement
+          document.documentElement.setAttribute('data-theme', data.display.theme);
+          localStorage.setItem('modscope_settings', JSON.stringify(data.display));
+        }
+
+        if (!data.analytics) {
+          setActiveView('config');
+        }
+
+        await fetchSnapshots();
       } catch (err) {
         console.error('Failed to auto-load latest snapshot:', err);
       }
@@ -168,13 +162,16 @@ export const App = () => {
     };
 
     loadData();
-    fetchSnapshots();
   }, []);
 
   const fetchSnapshots = async () => {
     try {
       setSnapshotsLoading(true);
       const res = await fetch('/api/snapshots');
+      if (res.status === 401 || res.status === 403) {
+        setIsUnauthorized(true);
+        return;
+      }
       if (res.ok) {
         const data = await res.json();
         setSnapshots(Array.isArray(data) ? data : []);
@@ -332,7 +329,10 @@ export const App = () => {
       case 'about':
         return (
           <ErrorBoundary>
-            <AboutView appVersion={appVersion} />
+            <AboutView
+              appVersion={appVersion}
+              currentUsername={devvitContext?.username || ''}
+            />
           </ErrorBoundary>
         );
       default:

@@ -7,6 +7,7 @@ import {
   type RedisClient,
 } from '@devvit/web/server';
 import { Hono } from 'hono';
+import type { AnalyticsSnapshot } from '../../shared/types/api';
 import {
   DEFAULT_CALCULATION_SETTINGS,
   DEFAULT_REPORT_SETTINGS,
@@ -32,12 +33,131 @@ const normalizer = new NormalizationService(storage);
 const retriever = new DataRetrievalService(storage);
 const snapshotter = new SnapshotService(normalizer);
 const historyService = new HistoryService(storage as RedisClient);
-const noopTrendService: TrendMaterializer = {
-  async materializeForScan() {},
-  async materializeTrends() {},
-  async cleanupTrendArtifacts() {},
-};
 const trendDataService = new TrendingService(storage as RedisClient);
+const resilientTrendService: TrendMaterializer = {
+  async materializeForScan(subreddit: string, scanId: number) {
+    try {
+      await trendDataService.materializeForScan(subreddit, scanId);
+    } catch (error) {
+      console.warn(
+        '[API] Full trend materialization failed after snapshot, falling back to manual seed:',
+        error
+      );
+      await runManualMaterialization(subreddit);
+    }
+  },
+  async materializeTrends(subreddit: string, scanId: number) {
+    return this.materializeForScan(subreddit, scanId);
+  },
+  async cleanupTrendArtifacts(
+    subreddit: string,
+    deletedScanIds: number[],
+    deletedScanTimestamps: number[]
+  ) {
+    return trendDataService.cleanupTrendArtifacts(
+      subreddit,
+      deletedScanIds,
+      deletedScanTimestamps
+    );
+  },
+};
+
+const OWNER_USERNAME = 'SeeTigerLearn';
+const MODERATOR_CACHE_TTL_MS = 60 * 1000;
+const moderatorCache = new Map<
+  string,
+  { usernames: Set<string>; expiresAt: number }
+>();
+
+const isOwnerUser = (username: string | null | undefined): boolean => {
+  return (username || '').toLowerCase() === OWNER_USERNAME.toLowerCase();
+};
+
+const ensureOwnerAccess = async (c: any): Promise<string | null> => {
+  const username = context.username;
+  if (!isOwnerUser(username)) {
+    c.status(403);
+    return null;
+  }
+  return username || null;
+};
+
+const safeSubredditName = (value: string): string => {
+  return (
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, '_')
+      .replace(/^_+|_+$/g, '') || 'all'
+  );
+};
+
+const getModeratorUsernames = async (
+  subredditName: string
+): Promise<Set<string>> => {
+  const cacheKey = subredditName.toLowerCase();
+  const now = Date.now();
+  const cached = moderatorCache.get(cacheKey);
+  if (cached && cached.expiresAt > now) {
+    return cached.usernames;
+  }
+
+  const subreddit = await reddit.getSubredditByName(subredditName);
+  const moderators = await subreddit.getModerators().all();
+  const usernames = new Set<string>();
+
+  if (Array.isArray(moderators)) {
+    for (let i = 0; i < moderators.length; i++) {
+      try {
+        const username = moderators[i]?.username;
+        if (username) {
+          usernames.add(String(username).toLowerCase());
+        }
+      } catch {
+        // Ignore malformed moderator objects from the SDK.
+      }
+    }
+  }
+
+  moderatorCache.set(cacheKey, {
+    usernames,
+    expiresAt: now + MODERATOR_CACHE_TTL_MS,
+  });
+
+  return usernames;
+};
+
+type ModeratorAccessResult =
+  | { ok: true; username: string }
+  | { ok: false; status: 401 | 403 | 500; message: string };
+
+const ensureModeratorAccess = async (): Promise<ModeratorAccessResult> => {
+  const username = context.username;
+  const userId = context.userId;
+  if (!userId || !username) {
+    return { ok: false, status: 401, message: 'Not authenticated' };
+  }
+
+  const subredditName = context.subredditName;
+  if (!subredditName) {
+    return {
+      ok: false,
+      status: 500,
+      message: 'Subreddit context unavailable',
+    };
+  }
+
+  const moderators = await getModeratorUsernames(subredditName);
+  if (!moderators.has(username.toLowerCase())) {
+    return {
+      ok: false,
+      status: 403,
+      message: 'Moderator access required',
+    };
+  }
+
+  return { ok: true, username };
+};
 
 const readTrendData = async (subreddit: string) => {
   return trendDataService.getTrendData(subreddit);
@@ -89,6 +209,31 @@ async function ensureBootstrap(username?: string) {
   }
 }
 
+api.use('*', async (c, next) => {
+  try {
+    const access = await ensureModeratorAccess();
+    if (!access.ok) {
+      return c.json(
+        {
+          status: 'error',
+          message: access.message,
+        },
+        access.status
+      );
+    }
+
+    return next();
+  } catch (error) {
+    return c.json(
+      {
+        status: 'error',
+        message: 'Authorization check failed',
+      },
+      500
+    );
+  }
+});
+
 api.get('/init', async (c) => {
   const { postId } = context;
   if (!postId)
@@ -101,7 +246,7 @@ api.get('/init', async (c) => {
     );
 
   try {
-    const username = await reddit.getCurrentUsername();
+    const username = context.username;
     if (!username)
       return c.json({ status: 'error', message: 'Not authenticated' }, 401);
 
@@ -482,7 +627,11 @@ api.get('/history', async (c) => {
 
     const history = await Promise.all(
       historyRaw.map(async (e: any) => {
-        const entry = JSON.parse(e.member);
+        const member =
+          typeof e === 'object' && e !== null && 'member' in e
+            ? (e as { member: string }).member
+            : String(e);
+        const entry = JSON.parse(member);
         if (entry.status === 'running' && now - entry.startTime > expiration) {
           try {
             const oldEntryStr = JSON.stringify(entry);
@@ -512,7 +661,7 @@ api.get('/history', async (c) => {
 
 api.get('/settings', async (c) => {
   try {
-    const username = await reddit.getCurrentUsername();
+    const username = context.username;
     if (!username) return c.json({ status: 'error' }, 401);
     const [settingsStr, displayStr, storageStr, reportStr] = await Promise.all([
       storage.get(`subreddit:${DATA_SUBREDDIT}:settings`),
@@ -535,7 +684,7 @@ api.get('/settings', async (c) => {
 
 api.post('/settings', async (c) => {
   try {
-    const username = await reddit.getCurrentUsername();
+    const username = context.username;
     if (!username) return c.json({ status: 'error' }, 401);
     const {
       settings,
@@ -593,24 +742,11 @@ api.post('/snapshot/take-now', async (c) => {
       {
         isManual: true,
         isContinuation,
-        trendingService: noopTrendService,
+        trendingService: resilientTrendService,
         redis,
         scheduler,
       }
     );
-
-    // Keep the HTTP request responsive; run full trend materialization in background.
-    void (async () => {
-      try {
-        await trendDataService.materializeForScan(DATA_SUBREDDIT, scanId);
-      } catch (error) {
-        console.warn(
-          '[API] Full trend materialization failed after snapshot, falling back to manual seed:',
-          error
-        );
-        await runManualMaterialization(DATA_SUBREDDIT);
-      }
-    })();
 
     return c.json({ status: 'success', scanId });
   } catch (error) {
@@ -634,25 +770,54 @@ api.post('/trigger-trends', async (c) => {
       );
     }
 
-    void (async () => {
-      try {
-        await trendDataService.materializeTrends(subreddit, latestScanId);
-      } catch (error) {
-        console.warn(
-          '[API] Full trend materialization failed from trigger, falling back to manual seed:',
-          error
-        );
-        await runManualMaterialization(subreddit);
-      }
-    })();
+    try {
+      await trendDataService.materializeTrends(subreddit, latestScanId);
+      return c.json({
+        status: 'success',
+        mode: 'full',
+        subreddit,
+        scanId: latestScanId,
+        message: `Trend materialization completed for r/${subreddit} (scan #${latestScanId}).`,
+      });
+    } catch (fullError) {
+      console.warn(
+        '[API] Full trend materialization failed from trigger, falling back to manual seed:',
+        fullError
+      );
 
-    return c.json(
-      {
-        status: 'accepted',
-        message: `Trend materialization started for r/${subreddit}`,
-      },
-      202
-    );
+      try {
+        await runManualMaterialization(subreddit);
+        return c.json({
+          status: 'success',
+          mode: 'manual-fallback',
+          subreddit,
+          scanId: latestScanId,
+          message: `Full trend materialization failed, but manual fallback succeeded for r/${subreddit}.`,
+        });
+      } catch (fallbackError) {
+        console.error('[API] Manual trend fallback failed from trigger:', {
+          fullError,
+          fallbackError,
+        });
+        return c.json(
+          {
+            status: 'error',
+            subreddit,
+            scanId: latestScanId,
+            message: `Trend materialization failed for r/${subreddit}.`,
+            fullError:
+              fullError instanceof Error
+                ? fullError.message
+                : String(fullError),
+            fallbackError:
+              fallbackError instanceof Error
+                ? fallbackError.message
+                : String(fallbackError),
+          },
+          500
+        );
+      }
+    }
   } catch (e) {
     return c.json({ status: 'error', message: String(e) }, 500);
   }
@@ -673,6 +838,186 @@ api.post('/migrate-subreddits', async (c) => {
     return c.json({ status: 'success' });
   } catch (e) {
     return c.json({ status: 'error' }, 500);
+  }
+});
+
+api.post('/utilities/snapshots/export-large-pools', async (c) => {
+  try {
+    const owner = await ensureOwnerAccess(c);
+    if (!owner) {
+      return c.json({ status: 'error', message: 'Forbidden' }, 403);
+    }
+    void owner;
+
+    const body = (await c.req.json().catch(() => ({}))) as {
+      minPoolSize?: number;
+      subreddit?: string;
+    };
+
+    const minPoolSize = Math.max(1, Math.floor(body.minPoolSize ?? 900));
+    const subredditFilter = (body.subreddit || DATA_SUBREDDIT || '').trim();
+
+    const scanCountStr = await redis.get('global:scan_counter');
+    const scanCount = scanCountStr ? parseInt(scanCountStr, 10) : 0;
+    if (!Number.isFinite(scanCount) || scanCount <= 0) {
+      return c.json({ status: 'success', count: 0, exports: [] });
+    }
+
+    const snapshots: AnalyticsSnapshot[] = [];
+
+    for (let scanId = 1; scanId <= scanCount; scanId++) {
+      const [meta, stats] = await Promise.all([
+        redis.hGetAll(`run:${scanId}:meta`),
+        redis.hGetAll(`run:${scanId}:stats`),
+      ]);
+
+      if (!meta?.subreddit) {
+        continue;
+      }
+
+      if (
+        subredditFilter &&
+        meta.subreddit.toLowerCase() !== subredditFilter.toLowerCase()
+      ) {
+        continue;
+      }
+
+      const poolSize = Number.parseInt(stats?.pool_size || '0', 10) || 0;
+      if (poolSize < minPoolSize) {
+        continue;
+      }
+
+      const snapshot = await retriever.getSnapshotById(scanId);
+      if (!snapshot) {
+        continue;
+      }
+
+      snapshots.push(snapshot);
+    }
+
+    return c.json({
+      status: 'success',
+      fileName: `snapshot-bundle-${safeSubredditName(subredditFilter || DATA_SUBREDDIT)}-min-${minPoolSize}.json`,
+      snapshots,
+    });
+  } catch (error) {
+    return c.json({ status: 'error', message: String(error) }, 500);
+  }
+});
+
+api.post('/utilities/snapshots/export-by-scan-ids', async (c) => {
+  try {
+    const owner = await ensureOwnerAccess(c);
+    if (!owner) {
+      return c.json({ status: 'error', message: 'Forbidden' }, 403);
+    }
+    void owner;
+
+    const body = (await c.req.json().catch(() => ({}))) as {
+      scanIds?: number[];
+    };
+
+    const rawIds = Array.isArray(body.scanIds) ? body.scanIds : [];
+    const scanIds = Array.from(
+      new Set(
+        rawIds
+          .map((value) => Math.floor(Number(value)))
+          .filter((value) => Number.isFinite(value) && value > 0)
+      )
+    );
+
+    if (scanIds.length === 0) {
+      return c.json(
+        {
+          status: 'error',
+          message: 'No valid scanIds supplied',
+        },
+        400
+      );
+    }
+
+    const snapshots: AnalyticsSnapshot[] = [];
+
+    for (const scanId of scanIds) {
+      const snapshot = await retriever.getSnapshotById(scanId);
+      if (!snapshot) {
+        continue;
+      }
+
+      snapshots.push(snapshot);
+    }
+
+    return c.json({
+      status: 'success',
+      fileName: `snapshot-bundle-${scanIds.length}-exports.json`,
+      snapshots,
+    });
+  } catch (error) {
+    return c.json({ status: 'error', message: String(error) }, 500);
+  }
+});
+
+api.post('/utilities/snapshots/import-json-files', async (c) => {
+  try {
+    const owner = await ensureOwnerAccess(c);
+    if (!owner) {
+      return c.json({ status: 'error', message: 'Forbidden' }, 403);
+    }
+
+    const body = (await c.req.json().catch(() => ({}))) as unknown;
+    const snapshots = Array.isArray(body)
+      ? body
+      : body && typeof body === 'object' && Array.isArray((body as { snapshots?: unknown[] }).snapshots)
+        ? (body as { snapshots: unknown[] }).snapshots
+        : [];
+    if (snapshots.length === 0) {
+      return c.json(
+        {
+          status: 'error',
+          message: 'No snapshots supplied for import',
+        },
+        400
+      );
+    }
+
+    const imported: Array<{
+      scanId: number;
+      subreddit: string;
+      scanDate: string;
+      poolSize: number;
+    }> = [];
+
+    const failed = 0;
+
+    for (const snapshot of snapshots) {
+      const snapshotCandidate = snapshot as AnalyticsSnapshot;
+
+      if (!snapshotCandidate?.meta?.subreddit || !snapshotCandidate.meta.scanDate) {
+        continue;
+      }
+
+      if (!Array.isArray(snapshotCandidate.analysisPool)) {
+        continue;
+      }
+
+      const scanId = await normalizer.normalizeSnapshot(snapshotCandidate);
+      imported.push({
+        scanId,
+        subreddit: snapshotCandidate.meta.subreddit,
+        scanDate: snapshotCandidate.meta.scanDate,
+        poolSize: snapshotCandidate.analysisPool.length,
+      });
+    }
+
+    return c.json({
+      status: imported.length > 0 ? 'success' : 'error',
+      importedCount: imported.length,
+      failedCount: failed,
+      imported,
+      importedBy: owner,
+    });
+  } catch (error) {
+    return c.json({ status: 'error', message: String(error) }, 500);
   }
 });
 

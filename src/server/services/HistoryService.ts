@@ -55,7 +55,7 @@ export class HistoryService {
           ) {
             h.status = 'timeout';
             h.details = h.details
-              ? `${h.details} (System detected stall/timeout after 45m)`
+              ? `${h.details} (System detected stall/timeout)`
               : 'Job stalled or reached platform timeout.';
             h.endTime = h.startTime + TIMEOUT_THRESHOLD_MS;
           }
