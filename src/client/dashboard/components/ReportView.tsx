@@ -1,3 +1,4 @@
+import { getWebViewMode, requestExpandedMode } from '@devvit/web/client';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Area,
@@ -16,7 +17,8 @@ import {
   getPostDetailIcon,
   type IconContext,
 } from '../utils/iconMappings';
-import { DAYS, formatPostListDateTime } from '../utils/reportFormatting';
+import { DAYS, formatPostListDateTime, formatScanDate } from '../utils/reportFormatting';
+import { markStartup } from '../utils/startupMarkers';
 import { ActivityView } from './ActivityView';
 import { BestPostingTimesChangeChart } from './BestPostingTimesChangeChart';
 import { CommunityGrowthChart } from './CommunityGrowthChart';
@@ -34,6 +36,7 @@ import { EntityTitle } from './ui/entity-title';
 import { Icon } from './ui/icon';
 import { NonIdealState } from './ui/non-ideal-state';
 import { Tabs, TabsContent } from './ui/tabs';
+import { Tooltip } from './ui/tooltip';
 import { UsersView } from './UsersView';
 
 type ReportTab =
@@ -150,7 +153,127 @@ function ReportView({
   onPrint,
   officialAccounts: liveOfficialAccounts = [],
 }: ReportViewProps = {}) {
+  const EXPANDED_TAB_STORAGE_KEY = 'modscope:launch-intent';
+  const EXPANDED_TAB_SESSION_KEY = 'modscope:launch-intent:session';
+  const EXPANDED_TAB_COOKIE_KEY = 'modscope_launch_intent';
+  const EXPANDED_TAB_INTENT_MAX_AGE_MS = 10000;
+  const INLINE_COMPACT_MAX_WIDTH = 640;
+  const INLINE_ALLOWED_TABS: ReportTab[] = ['overview'];
+  const VALID_REPORT_TABS: ReportTab[] = [
+    'overview',
+    'timing',
+    'posts',
+    'users',
+    'content',
+    'activity',
+    'trends',
+  ];
+  const entrypointHint =
+    typeof window !== 'undefined' ? window.__MODSCOPE_ENTRYPOINT__ : undefined;
+  const isExpandedEntrypoint = entrypointHint === 'expanded';
+
+  const resolveWebViewMode = (): 'inline' | 'expanded' => {
+    try {
+      const mode = getWebViewMode();
+      if (mode === 'inline' || mode === 'expanded') {
+        return mode;
+      }
+    } catch {
+      // fall back to global context when webview mode isn't ready yet
+    }
+
+    const globalMode = (globalThis as any)?.devvit?.webViewMode;
+    if (
+      globalMode === 'expanded' ||
+      globalMode === 'IMMERSIVE_MODE' ||
+      globalMode === 2
+    ) {
+      return 'expanded';
+    }
+
+    return 'inline';
+  };
+
+  const readLaunchIntent = (): { tab: ReportTab; ts: number } | null => {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+
+    const cookieEntry = document.cookie
+      .split('; ')
+      .find((entry) => entry.startsWith(`${EXPANDED_TAB_COOKIE_KEY}=`));
+
+    const rawIntent =
+      localStorage.getItem(EXPANDED_TAB_STORAGE_KEY) ||
+      sessionStorage.getItem(EXPANDED_TAB_SESSION_KEY) ||
+      (cookieEntry ? decodeURIComponent(cookieEntry.split('=').slice(1).join('=')) : null);
+
+    const clearAllIntentStores = () => {
+      localStorage.removeItem(EXPANDED_TAB_STORAGE_KEY);
+      sessionStorage.removeItem(EXPANDED_TAB_SESSION_KEY);
+      document.cookie = `${EXPANDED_TAB_COOKIE_KEY}=; Max-Age=0; Path=/; SameSite=Lax`;
+    };
+
+    if (!rawIntent) {
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(rawIntent) as { tab?: string; ts?: number };
+      const parsedTab = parsed?.tab;
+      const parsedTs = parsed?.ts;
+      const isFreshIntent =
+        typeof parsedTs === 'number' &&
+        Date.now() - parsedTs <= EXPANDED_TAB_INTENT_MAX_AGE_MS;
+      const isValidTab = VALID_REPORT_TABS.includes(parsedTab as ReportTab);
+
+      if (!isFreshIntent || !isValidTab) {
+        clearAllIntentStores();
+        return null;
+      }
+
+      return {
+        tab: parsedTab as ReportTab,
+        ts: parsedTs,
+      };
+    } catch {
+      clearAllIntentStores();
+      return null;
+    }
+  };
+
+  const consumeLaunchIntent = (): { tab: ReportTab; ts: number } | null => {
+    const intent = readLaunchIntent();
+    if (!intent) {
+      return null;
+    }
+
+    localStorage.removeItem(EXPANDED_TAB_STORAGE_KEY);
+    sessionStorage.removeItem(EXPANDED_TAB_SESSION_KEY);
+    document.cookie = `${EXPANDED_TAB_COOKIE_KEY}=; Max-Age=0; Path=/; SameSite=Lax`;
+    return intent;
+  };
+
   const [activeTab, setActiveTab] = useState<ReportTab>('overview');
+  const [hasExpandedLaunchIntent, setHasExpandedLaunchIntent] =
+    useState<boolean>(false);
+  const [webViewMode, setWebViewMode] = useState<'inline' | 'expanded'>(() => {
+    if (isPrintMode) {
+      return 'expanded';
+    }
+
+    return resolveWebViewMode();
+  });
+  const [viewportSize, setViewportSize] = useState<{ width: number; height: number }>(() => ({
+    width: typeof window !== 'undefined' ? window.innerWidth : 0,
+    height: typeof window !== 'undefined' ? window.innerHeight : 0,
+  }));
+  const [isCoarsePointer, setIsCoarsePointer] = useState<boolean>(() => {
+    if (typeof window === 'undefined' || !('matchMedia' in window)) {
+      return false;
+    }
+    return window.matchMedia('(pointer: coarse)').matches;
+  });
   const { settings, updateSettings } = useSettings();
   const analytics = propData;
   const excludeOfficial = settings?.settings?.excludeOfficial;
@@ -217,6 +340,275 @@ function ReportView({
 
   // Activity tab state - for toggling chart series visibility
   const [hiddenSeries, setHiddenSeries] = useState<Record<string, boolean>>({});
+
+  const consumeServerLaunchIntent = async (): Promise<ReportTab | null> => {
+    if (!isExpandedEntrypoint) {
+      return null;
+    }
+
+    const parseTab = (value: unknown): ReportTab | null => {
+      if (typeof value !== 'string') {
+        return null;
+      }
+
+      return VALID_REPORT_TABS.includes(value as ReportTab)
+        ? (value as ReportTab)
+        : null;
+    };
+
+    try {
+      markStartup('launch-intent-peek-start', { entrypoint: 'expanded' });
+
+      let intentId =
+        typeof window !== 'undefined'
+          ? window.__MODSCOPE_LAUNCH_INTENT_ID__
+          : undefined;
+      let pendingTab =
+        typeof window !== 'undefined'
+          ? parseTab(window.__MODSCOPE_LAUNCH_INTENT_TAB__)
+          : null;
+
+      if (!intentId || !pendingTab) {
+        const pendingResponse = await fetch('/api/ui/launch-intent/pending', {
+          cache: 'no-store',
+        });
+        if (!pendingResponse.ok) {
+          return null;
+        }
+
+        const pendingPayload = (await pendingResponse.json()) as {
+          tab?: string | null;
+          intentId?: string | null;
+        };
+        pendingTab = parseTab(pendingPayload?.tab ?? undefined);
+        intentId =
+          typeof pendingPayload.intentId === 'string'
+            ? pendingPayload.intentId
+            : undefined;
+
+        if (typeof window !== 'undefined') {
+          if (intentId) {
+            window.__MODSCOPE_LAUNCH_INTENT_ID__ = intentId;
+          } else {
+            delete window.__MODSCOPE_LAUNCH_INTENT_ID__;
+          }
+
+          if (pendingTab) {
+            window.__MODSCOPE_LAUNCH_INTENT_TAB__ = pendingTab;
+          } else {
+            delete window.__MODSCOPE_LAUNCH_INTENT_TAB__;
+          }
+        }
+      }
+
+      markStartup('launch-intent-peek-complete', { entrypoint: 'expanded' });
+
+      if (!intentId || !pendingTab) {
+        return null;
+      }
+
+      markStartup('launch-intent-consume-start', { entrypoint: 'expanded' });
+
+      const response = await fetch(
+        `/api/ui/launch-intent?intentId=${encodeURIComponent(intentId)}`,
+        {
+          cache: 'no-store',
+        }
+      );
+      if (!response.ok) {
+        return null;
+      }
+
+      const payload = (await response.json()) as { tab?: string | null };
+      const tab = parseTab(payload?.tab ?? undefined);
+
+      if (typeof window !== 'undefined') {
+        delete window.__MODSCOPE_LAUNCH_INTENT_ID__;
+        delete window.__MODSCOPE_LAUNCH_INTENT_TAB__;
+      }
+
+      markStartup('launch-intent-consume-complete', {
+        entrypoint: 'expanded',
+      });
+
+      return tab;
+    } catch {
+      return null;
+    }
+  };
+
+  const persistServerLaunchIntent = (tab: ReportTab): void => {
+    const payload = JSON.stringify({ tab });
+    const beaconBody = new Blob([payload], { type: 'application/json' });
+
+    if (navigator.sendBeacon?.('/api/ui/launch-intent', beaconBody)) {
+      return;
+    }
+
+    void fetch('/api/ui/launch-intent', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: payload,
+      keepalive: true,
+    })
+      .then(async (response) => {
+        if (!response.ok || typeof window === 'undefined') {
+          return;
+        }
+
+        const bodyJson = (await response.json().catch(() => null)) as
+          | { intentId?: string | null }
+          | null;
+        if (typeof bodyJson?.intentId === 'string' && bodyJson.intentId) {
+          window.__MODSCOPE_LAUNCH_INTENT_ID__ = bodyJson.intentId;
+          window.__MODSCOPE_LAUNCH_INTENT_TAB__ = tab;
+        }
+      })
+      .catch(() => {
+        // Fall back to local handoff only when server intent persistence fails.
+      });
+  };
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || isPrintMode || !isExpandedEntrypoint) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const hydrateFromServerIntent = async () => {
+      const serverTab = await consumeServerLaunchIntent();
+      if (cancelled || !serverTab) {
+        return;
+      }
+
+      setWebViewMode('expanded');
+      setActiveTab(serverTab);
+      setHasExpandedLaunchIntent(false);
+    };
+
+    const syncWebViewMode = () => {
+      setWebViewMode(resolveWebViewMode());
+    };
+    const syncViewport = () => {
+      setViewportSize({ width: window.innerWidth, height: window.innerHeight });
+      if ('matchMedia' in window) {
+        setIsCoarsePointer(window.matchMedia('(pointer: coarse)').matches);
+      }
+    };
+
+    window.addEventListener('focus', syncWebViewMode);
+    window.addEventListener('pageshow', syncWebViewMode);
+    window.addEventListener('resize', syncViewport);
+    document.addEventListener('visibilitychange', syncWebViewMode);
+    syncWebViewMode();
+    syncViewport();
+    void hydrateFromServerIntent();
+
+    const delayedSync = window.setTimeout(syncWebViewMode, 150);
+    const lateSync = window.setTimeout(syncWebViewMode, 600);
+    const delayedIntentHydration = window.setTimeout(() => {
+      void hydrateFromServerIntent();
+    }, 220);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener('focus', syncWebViewMode);
+      window.removeEventListener('pageshow', syncWebViewMode);
+      window.removeEventListener('resize', syncViewport);
+      document.removeEventListener('visibilitychange', syncWebViewMode);
+      window.clearTimeout(delayedSync);
+      window.clearTimeout(lateSync);
+      window.clearTimeout(delayedIntentHydration);
+    };
+  }, [isExpandedEntrypoint, isPrintMode]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || isPrintMode) {
+      setHasExpandedLaunchIntent(false);
+      return;
+    }
+
+    const launchIntent = readLaunchIntent();
+    setHasExpandedLaunchIntent(webViewMode === 'inline' && !!launchIntent);
+  }, [webViewMode, isPrintMode]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || isPrintMode || webViewMode !== 'expanded') {
+      return;
+    }
+
+    const intent = consumeLaunchIntent();
+    if (!intent) {
+      return;
+    }
+
+    setActiveTab(intent.tab);
+    setHasExpandedLaunchIntent(false);
+  }, [webViewMode, isPrintMode]);
+
+  useEffect(() => {
+    if (
+      typeof window === 'undefined' ||
+      isPrintMode ||
+      webViewMode !== 'expanded' ||
+      activeTab !== 'overview'
+    ) {
+      return;
+    }
+
+    const pendingIntent = readLaunchIntent();
+    if (!pendingIntent) {
+      return;
+    }
+
+    const fallbackSync = window.setTimeout(() => {
+      const lateIntent = consumeLaunchIntent();
+      if (!lateIntent) {
+        return;
+      }
+
+      setActiveTab(lateIntent.tab);
+      setHasExpandedLaunchIntent(false);
+    }, 220);
+
+    return () => {
+      window.clearTimeout(fallbackSync);
+    };
+  }, [activeTab, webViewMode, isPrintMode]);
+
+  const isInlineConstrained =
+    !isPrintMode && webViewMode === 'inline' && !hasExpandedLaunchIntent;
+  const useCompactInlineOverview =
+    isInlineConstrained &&
+    (isCoarsePointer ||
+      viewportSize.width <= INLINE_COMPACT_MAX_WIDTH);
+
+  const handleTabChange = (tab: ReportTab, event?: React.MouseEvent) => {
+    if (
+      isInlineConstrained &&
+      !INLINE_ALLOWED_TABS.includes(tab) &&
+      !isPrintMode
+    ) {
+      if (event) {
+        const intentPayload = JSON.stringify({ tab, ts: Date.now() });
+        localStorage.setItem(
+          EXPANDED_TAB_STORAGE_KEY,
+          intentPayload
+        );
+        sessionStorage.setItem(EXPANDED_TAB_SESSION_KEY, intentPayload);
+        document.cookie = `${EXPANDED_TAB_COOKIE_KEY}=${encodeURIComponent(intentPayload)}; Max-Age=15; Path=/; SameSite=Lax`;
+        persistServerLaunchIntent(tab);
+        setHasExpandedLaunchIntent(true);
+        requestExpandedMode(event as unknown as PointerEvent, 'expanded');
+      }
+      return;
+    }
+
+    setActiveTab(tab);
+  };
 
   // Calculate dynamic activity heatmap with quantile thresholds
   const heatmapResult = useMemo(() => {
@@ -891,7 +1283,7 @@ function ReportView({
             <EntityTitle
               icon="mono-trend.png"
               title="ModScope Analytics"
-              subtitle={`r/${analytics.meta?.subreddit || 'Unknown'} • ${analytics.meta?.scanDate || 'Unknown Date'}`}
+              subtitle={`r/${analytics.meta?.subreddit || 'Unknown'} • ${formatScanDate(analytics.meta?.scanDate)}`}
               className="p-1"
               actions={
                 <div className="flex items-center gap-4">
@@ -925,7 +1317,7 @@ function ReportView({
 
           <Tabs
             value={activeTab}
-            onValueChange={(v) => setActiveTab(v as ReportTab)}
+            onValueChange={(v) => handleTabChange(v as ReportTab)}
             className="report-tabs-wrapper flex-1 flex flex-col min-h-0 overflow-hidden"
           >
             {/* Tab Bar - top on mobile, bottom on desktop via CSS order */}
@@ -935,10 +1327,11 @@ function ReportView({
             >
               {tabs.map((t) => {
                 const isActive = activeTab === t.tab;
-                return (
+                const opensFullscreen = isInlineConstrained && t.tab !== 'overview';
+
+                const tabButton = (
                   <button
-                    key={t.tab}
-                    onClick={() => setActiveTab(t.tab)}
+                    onClick={(e) => handleTabChange(t.tab, e)}
                     className={`
                                             relative px-3 py-1 text-xs font-medium transition-all
                                             border-t border-l border-r rounded-t-lg mt-auto mb-0 mx-0.5
@@ -960,6 +1353,11 @@ function ReportView({
                     }
                   >
                     {t.label}
+                    {opensFullscreen && (
+                      <span className="ml-1 opacity-70" aria-hidden="true">
+                        ↗
+                      </span>
+                    )}
                     {isActive && (
                       <div
                         className="absolute bottom-[-1px] left-0 right-0 h-[1px]"
@@ -967,6 +1365,16 @@ function ReportView({
                       />
                     )}
                   </button>
+                );
+
+                if (!opensFullscreen) {
+                  return <React.Fragment key={t.tab}>{tabButton}</React.Fragment>;
+                }
+
+                return (
+                  <Tooltip key={t.tab} content="Open Full Screen" side="top">
+                    {tabButton}
+                  </Tooltip>
                 );
               })}
             </div>
@@ -987,6 +1395,7 @@ function ReportView({
                           ? { ...analytics, trendData: trendsData }
                           : { ...analytics, trendData: undefined }
                       }
+                      compactInline={useCompactInlineOverview}
                       trendPrecisionNotice={trendPrecisionNotice}
                       iconContext={iconContext}
                       excludeOfficial={excludeOfficial}
@@ -1910,7 +2319,7 @@ function ReportView({
                 {/* Footer */}
                 <div className="mt-8 pt-0.5 border-t-2 border-slate-200 flex justify-between items-center text-[9px] text-slate-400">
                   <div>
-                    Generated by ModScope Analytics Engagement Engine v1.5.5
+                    Generated by ModScope Analytics Engagement Engine v1.6
                   </div>
                   <div className="flex gap-4">
                     <span>© 2026 ModScope Analytics</span>

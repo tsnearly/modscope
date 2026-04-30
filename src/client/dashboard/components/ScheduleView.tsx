@@ -195,8 +195,8 @@ function ScheduleView({
       } else if (hasScrolledRef.current) {
         const isAtBottom =
           tableElement.scrollHeight -
-            tableElement.scrollTop -
-            tableElement.clientHeight <
+          tableElement.scrollTop -
+          tableElement.clientHeight <
           100;
         if (isAtBottom) {
           requestAnimationFrame(() => {
@@ -307,7 +307,7 @@ function ScheduleView({
       // Generate description
       const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       let desc = '';
-      
+
       switch (customFrequencyType) {
         case 'hourly': {
           const { minute } = parseTimeTo24Hour(startTime);
@@ -681,7 +681,7 @@ function ScheduleView({
     if (job.config?.daysOfWeek) {
       setDaysOfWeek(job.config.daysOfWeek);
     }
-    
+
     // Restore custom frequency settings if present
     if (job.config?.customFrequencyType) {
       setCustomFrequencyType(job.config.customFrequencyType as CustomFrequencyType);
@@ -739,7 +739,7 @@ function ScheduleView({
       let finalName = name;
       if (!finalName || finalName.trim() === '') {
         const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-        
+
         switch (scheduleType) {
           case 'daily':
             finalName = `Daily Snapshot at ${startTime}`;
@@ -905,7 +905,7 @@ function ScheduleView({
   return (
     <div className="schedule-view h-full flex flex-col bg-[var(--color-bg)] overflow-hidden max-h-full">
       <EntityTitle
-        icon="lucide:calendar-clock"
+        icon="scheduler-tasks.png"
         iconColor="var(--color-text)"
         title="Automated Snapshot Scheduling"
         subtitle="Configure analysis frequency and review performance audit logs"
@@ -931,7 +931,7 @@ function ScheduleView({
               <CardHeader className="bg-muted/50 border-b border-border">
                 <CardTitle className="text-lg flex items-center gap-2">
                   <Icon
-                    name="mono-planner.png"
+                    name="scheduler-configuration.png"
                     size={20}
                     color="var(--color-primary)"
                   />
@@ -956,25 +956,25 @@ function ScheduleView({
                       value="daily"
                       label="Daily Snapshots (Recommended)"
                       description="Provides high-resolution tracking of daily peaks and weekly rhythms."
-                      icon="lucide:calendar"
+                      icon="scheduler-daily.png"
                     />
                     <RadioItem
                       value="12h"
                       label="Every 12 Hours"
                       description="For extremely active communities where the front page churns rapidly."
-                      icon="lucide:clock"
+                      icon="scheduler-12hours.png"
                     />
                     <RadioItem
                       value="weekly"
                       label="Weekly Snapshots"
                       description="Long-term trend analysis for smaller communities. Low Reddit impact."
-                      icon="lucide:calendar-days"
+                      icon="scheduler-week.png"
                     />
                     <RadioItem
                       value="custom"
                       label="Custom Schedule"
                       description="Full control over recurrence patterns, intervals, and specific cron timing."
-                      icon="lucide:settings"
+                      icon="scheduler-schedule.png"
                     />
                   </RadioGroup>
 
@@ -1246,7 +1246,7 @@ function ScheduleView({
                 <CardTitle className="text-lg flex items-center gap-2 justify-between">
                   <div className="flex items-center gap-2">
                     <Icon
-                      name="mono-schedule.png"
+                      name="scheduler-trending.png"
                       size={20}
                       color="var(--color-primary)"
                     />
@@ -1328,7 +1328,7 @@ function ScheduleView({
             <CardHeader className="pb-3 border-b border-border bg-muted/50 flex-shrink-0">
               <CardTitle className="text-lg flex items-center gap-2">
                 <Icon
-                  name="mono-historical.png"
+                  name="scheduler-jobhistory.png"
                   size={16}
                   color="var(--color-primary)"
                 />
@@ -1438,14 +1438,13 @@ function ScheduleView({
                         </TableCell>
                         <TableCell className="py-2.5 text-right">
                           <span
-                            className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${
-                              h.status === 'success' || h.status === 'completed'
+                            className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${h.status === 'success' || h.status === 'completed'
                                 ? 'bg-background text-[#78C12A]'
                                 : h.status === 'running' ||
-                                    h.status === 'pending'
+                                  h.status === 'pending'
                                   ? 'bg-background text-[#0797EA]'
                                   : 'bg-background text-[#F24318]'
-                            }`}
+                              }`}
                           >
                             {h.status}
                           </span>

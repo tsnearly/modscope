@@ -27,10 +27,121 @@ triggers.post('/on-app-install', async (c) => {
   const SUBREDDIT = getSubreddit();
   try {
     const post = await createPost(SUBREDDIT);
+
+    // Capture installed version so the next check-for-updates doesn't
+    // immediately notify about the version just installed.
+    const currentVersion = context.appVersion ?? 'unknown';
+    await redis.set(`lastNotifiedVersion:${SUBREDDIT}`, currentVersion);
+
     return c.json({ status: 'success', postId: post.id });
   } catch (error) {
     console.error('[TRIGGER] on-app-install failed:', error);
     return c.json({ status: 'error', message: 'Failed to create post' }, 500);
+  }
+});
+
+/**
+ * Trigger: App Upgrade
+ * Re-hydrates snapshot-worker jobs from jobs:active into the scheduler
+ * because Devvit resets scheduled tasks on app update.
+ */
+triggers.post('/on-app-upgrade', async (c) => {
+  const subreddit = getSubreddit();
+  try {
+    const activeJobIds = await redis.zRange('jobs:active', 0, -1);
+
+    // Pull scheduler state once, outside the loop
+    const scheduledJobs = await scheduler.listJobs();
+    const scheduledIds = new Set(scheduledJobs.map((j: any) => j.id));
+
+    let rehydrated = 0;
+    let removed = 0;
+    let skipped = 0;
+    let limitHit = false;
+
+    for (const entry of activeJobIds) {
+      if (limitHit) {
+        skipped++;
+        continue;
+      }
+
+      const jobId =
+        typeof entry === 'string' ? entry : (entry as any)?.member;
+      if (!jobId) continue;
+
+      const jobHash = await redis.hGetAll(`job:${jobId}`);
+      if (!jobHash || jobHash.status !== 'active') {
+        await redis.zRem('jobs:active', [jobId]);
+        removed++;
+        continue;
+      }
+
+      // Skip expired one-time jobs
+      if (jobHash.cron === 'once' && jobHash.nextRun) {
+        const runTime = parseInt(jobHash.nextRun, 10);
+        if (Date.now() > runTime) {
+          await redis.zRem('jobs:active', [jobId]);
+          await redis.hSet(`job:${jobId}`, { status: 'expired' });
+          removed++;
+          continue;
+        }
+      }
+
+      // Still present in scheduler — nothing to do
+      if (scheduledIds.has(jobId)) continue;
+
+      // Build scheduler config
+      const config: any = {
+        name: 'snapshot-worker',
+        data: { subreddit, scheduleType: jobHash.scheduleType || 'custom' },
+      };
+      if (jobHash.cron && jobHash.cron !== 'once') {
+        config.cron = jobHash.cron;
+      } else if (jobHash.nextRun) {
+        config.runAt = new Date(parseInt(jobHash.nextRun, 10));
+      } else {
+        config.runAt = new Date(Date.now() + 15 * 60 * 1000);
+      }
+
+      try {
+        // Try to cancel the old ID first to free scheduler quota
+        await scheduler.cancelJob(jobId).catch(() => {});
+
+        const newJobId = await scheduler.runJob(config);
+        await redis.hSet(`job:${newJobId}`, {
+          ...jobHash,
+          id: newJobId,
+          status: 'active',
+        });
+        await redis.zRem('jobs:active', [jobId]);
+        await redis.zAdd('jobs:active', {
+          member: newJobId,
+          score: Date.now(),
+        });
+        scheduledIds.add(newJobId);
+        rehydrated++;
+      } catch (schedError: any) {
+        const msg = String(schedError.message ?? schedError);
+        if (msg.includes('limit exceeded')) {
+          console.warn(
+            `[TRIGGER] Cron limit reached during rehydration; skipping remaining jobs.`
+          );
+          limitHit = true;
+          skipped++;
+          // Continue iterating just to count skipped items
+        } else {
+          throw schedError;
+        }
+      }
+    }
+
+    console.log(
+      `[TRIGGER] on-app-upgrade for r/${subreddit}: rehydrated=${rehydrated}, removed=${removed}, skipped=${skipped}`
+    );
+    return c.json({ status: 'success', rehydrated, removed, skipped });
+  } catch (error) {
+    console.error('[TRIGGER] on-app-upgrade failed:', error);
+    return c.json({ status: 'error', message: String(error) }, 500);
   }
 });
 

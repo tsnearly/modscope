@@ -70,9 +70,11 @@ export class NormalizationService {
     ]);
 
     // 2. Store lists and pool via ZSETs to bypass size limits
-    // We store the analysis pool as individual JSON members in a ZSET.
-    // This ensures we can handle thousands of posts without hitting individual key limits.
-    const poolKey = `scan:${scanId}:pool:json`;
+    // We store the analysis pool as individual JSON members in ZSETs.
+    // The canonical pool key is kept in sync with the legacy :pool:json key so
+    // older readers continue to work while the trend pipeline uses the canonical path.
+    const canonicalPoolKey = `scan:${scanId}:pool`;
+    const legacyPoolKey = `scan:${scanId}:pool:json`;
     if (snapshot.analysisPool && snapshot.analysisPool.length > 0) {
       console.log(
         `[NORMALIZATION] Storing ${snapshot.analysisPool.length} posts in ZSET...`
@@ -86,7 +88,10 @@ export class NormalizationService {
             score: i + idx,
             member: JSON.stringify(post),
           }));
-        await this.redis.zAdd(poolKey, ...batch);
+        await Promise.all([
+          this.redis.zAdd(canonicalPoolKey, ...batch),
+          this.redis.zAdd(legacyPoolKey, ...batch),
+        ]);
       }
     }
 
@@ -200,7 +205,15 @@ export class NormalizationService {
       ]);
 
       // 2. Remove per-scan TS data from posts
-      const poolMembers = await this.redis.zRange(`scan:${scanId}:pool`, 0, -1);
+      const [canonicalPoolMembers, legacyPoolMembers] = await Promise.all([
+        this.redis.zRange(`scan:${scanId}:pool`, 0, -1),
+        this.redis.zRange(`scan:${scanId}:pool:json`, 0, -1),
+      ]);
+
+      const poolMembers = Array.from(
+        new Set([...canonicalPoolMembers, ...legacyPoolMembers])
+      );
+
       for (const member of poolMembers) {
         const postKey =
           typeof member === 'string'
@@ -233,8 +246,8 @@ export class NormalizationService {
         this.redis.del(`run:${scanId}:stats`),
         this.redis.del(`scan:${scanId}:data`),
         this.redis.del(`scan:${scanId}:lists`),
-        this.redis.del(`scan:${scanId}:pool:json`),
         this.redis.del(`scan:${scanId}:pool`),
+        this.redis.del(`scan:${scanId}:pool:json`),
         this.redis.del(`scan:${scanId}:list:t`),
         this.redis.del(`scan:${scanId}:list:d`),
         this.redis.del(`scan:${scanId}:list:e`),

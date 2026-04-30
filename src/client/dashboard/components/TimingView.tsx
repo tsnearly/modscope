@@ -186,8 +186,6 @@ export function TimingView({ heatmapResult, iconContext }: TimingViewProps) {
     <div
       style={{
         backgroundColor: 'var(--color-surface)',
-        overflowY: 'auto',
-        height: '100%',
       }}
     >
       <Chart
@@ -198,63 +196,65 @@ export function TimingView({ heatmapResult, iconContext }: TimingViewProps) {
             size={16}
           />
         }
-        height="auto"
+        height={420}
       >
-        <div className="p-3">
+        <div className="p-3 h-full">
           {heatmapResult.thresholds && renderLegend()}
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '30px repeat(24, 1fr)',
-              gap: '2px',
-              fontSize: '8px',
-              color: '#94a3b8',
-            }}
-          >
-            <div></div>
-            {Array.from({ length: 24 }).map((_, i) => (
-              <div key={i} style={{ textAlign: 'center' }}>
-                {i}
-              </div>
-            ))}
-            {DAYS.map((day, d) => (
-              <React.Fragment key={d}>
-                <div style={{ textAlign: 'right', paddingRight: '4px' }}>
-                  {day}
+          <div style={{ width: '100%', maxWidth: '1000px', margin: '0 auto' }}>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '30px repeat(24, minmax(0, 1fr))',
+                gap: '2px',
+                fontSize: '8px',
+                color: '#94a3b8',
+              }}
+            >
+              <div></div>
+              {Array.from({ length: 24 }).map((_, i) => (
+                <div key={i} style={{ textAlign: 'center' }}>
+                  {i}
                 </div>
-                {Array.from({ length: 24 }, (_, h) => {
-                  const data = heatmapData[`${d}-${h}`] || {
-                    intensity: 0,
-                    count: 0,
-                  };
-                  const dayLabel = FULL_DAYS[d] || DAYS[d] || 'Unknown day';
-                  const hourLabel = formatHourLabel(h);
-                  return (
-                    <Tooltip
-                      key={h}
-                      delayDuration={80}
-                      content={
-                        <span className="whitespace-pre-line">
-                          {`${dayLabel} - ${hourLabel}\n${data.count} post${data.count !== 1 ? 's' : ''}`}
-                        </span>
-                      }
-                    >
-                      <div
-                        style={{
-                          aspectRatio: '1',
-                          borderRadius: '2px',
-                          background: getCellColor(data.intensity),
-                          border: '1px solid var(--color-border)',
-                          opacity: 0.9,
-                          cursor: 'default',
-                        }}
-                        aria-label={`${dayLabel} - ${hourLabel}\n${data.count} post${data.count !== 1 ? 's' : ''}`}
-                      />
-                    </Tooltip>
-                  );
-                })}
-              </React.Fragment>
-            ))}
+              ))}
+              {DAYS.map((day, d) => (
+                <React.Fragment key={d}>
+                  <div style={{ textAlign: 'right', paddingRight: '4px' }}>
+                    {day}
+                  </div>
+                  {Array.from({ length: 24 }, (_, h) => {
+                    const data = heatmapData[`${d}-${h}`] || {
+                      intensity: 0,
+                      count: 0,
+                    };
+                    const dayLabel = FULL_DAYS[d] || DAYS[d] || 'Unknown day';
+                    const hourLabel = formatHourLabel(h);
+                    return (
+                      <Tooltip
+                        key={h}
+                        delayDuration={80}
+                        content={
+                          <span className="whitespace-pre-line">
+                            {`${dayLabel} - ${hourLabel}\n${data.count} post${data.count !== 1 ? 's' : ''}`}
+                          </span>
+                        }
+                      >
+                        <div
+                          style={{
+                            aspectRatio: '1',
+                            borderRadius: '2px',
+                            background: getCellColor(data.intensity),
+                            border: '1px solid var(--color-border)',
+                            opacity: 0.9,
+                            cursor: 'default',
+                          }}
+                          aria-label={`${dayLabel} - ${hourLabel}\n${data.count} post${data.count !== 1 ? 's' : ''}`}
+                        />
+                      </Tooltip>
+                    );
+                  })}
+                </React.Fragment>
+              ))}
+            </div>
           </div>
         </div>
       </Chart>

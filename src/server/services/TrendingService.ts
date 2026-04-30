@@ -64,31 +64,11 @@ export class TrendingService {
     avgEngagement: number;
     pointCount: number;
   } | null> {
-    const tsEntries = await this.redis.zRange(
-      `post:${utcId}:ts:engagement`,
-      0,
-      -1
+    const points = await this.getEngagementTimeSeriesForPost(
+      utcId,
+      windowStart,
+      windowEnd
     );
-    if (!tsEntries || tsEntries.length === 0) {
-      return null;
-    }
-
-    const points: Array<{ ts: number; value: number }> = [];
-    for (const entry of tsEntries) {
-      const memberVal =
-        typeof entry === 'string' ? entry : (entry as any)?.member;
-      if (!memberVal) continue;
-
-      const colon = memberVal.lastIndexOf(':');
-      if (colon <= 0) continue;
-
-      const ts = Number(memberVal.slice(0, colon));
-      const value = Number(memberVal.slice(colon + 1));
-      if (!Number.isFinite(ts) || !Number.isFinite(value)) continue;
-      if (ts < windowStart || ts > windowEnd) continue;
-
-      points.push({ ts, value });
-    }
 
     if (points.length === 0) {
       return null;
@@ -115,6 +95,42 @@ export class TrendingService {
         : 0;
 
     return { avgVelocity, avgEngagement, pointCount: points.length };
+  }
+
+  private async getEngagementTimeSeriesForPost(
+    utcId: string,
+    windowStart: number,
+    windowEnd: number
+  ): Promise<Array<{ ts: number; value: number }>> {
+    const tsEntries = await this.redis.zRange(
+      `post:${utcId}:ts:engagement`,
+      0,
+      -1
+    );
+
+    if (!tsEntries || tsEntries.length === 0) {
+      return [];
+    }
+
+    const points: Array<{ ts: number; value: number }> = [];
+    for (const entry of tsEntries) {
+      const memberVal =
+        typeof entry === 'string' ? entry : (entry as any)?.member;
+      if (!memberVal) continue;
+
+      const colon = memberVal.lastIndexOf(':');
+      if (colon <= 0) continue;
+
+      const ts = Number(memberVal.slice(0, colon));
+      const value = Number(memberVal.slice(colon + 1));
+      if (!Number.isFinite(ts) || !Number.isFinite(value)) continue;
+      if (ts < windowStart || ts > windowEnd) continue;
+
+      points.push({ ts, value });
+    }
+
+    points.sort((a, b) => a.ts - b.ts);
+    return points;
   }
 
   /**
@@ -781,9 +797,9 @@ export class TrendingService {
         return;
       }
 
-      // Build daily buckets keyed by post creation date so each day in the
-      // analysis window reflects average engagement and engagement velocity
-      // of posts created that day.
+      // Build daily buckets keyed by observation date so each day in the
+      // analysis window reflects the actual ts:engagement values captured for
+      // that day, not just the post's creation date.
       const dailyBuckets = new Map<
         string,
         {
@@ -797,7 +813,7 @@ export class TrendingService {
       const seenPostKeys = new Set<string>();
       const uniquePosts = new Map<
         string,
-        { utcId: string; dayKey: string; fallbackEngagement: number }
+        { utcId: string; fallbackEngagement: number }
       >();
 
       // Set window based on configured analysis period, not scan availability.
@@ -829,38 +845,8 @@ export class TrendingService {
               }
               seenPostKeys.add(postKey);
 
-              const createdUtcMs = Number(post.created_utc) * 1000;
-              if (
-                !Number.isFinite(createdUtcMs) ||
-                createdUtcMs < windowStart ||
-                createdUtcMs > windowEnd
-              ) {
-                continue;
-              }
-
-              const dayKey =
-                new Date(createdUtcMs).toISOString().split('T')[0] ?? '';
-              if (!dayKey) continue;
-
-              if (!dailyBuckets.has(dayKey)) {
-                dailyBuckets.set(dayKey, {
-                  postCount: 0,
-                  engagementSum: 0,
-                  engagementSamples: 0,
-                  velocityPoints: [],
-                  commentsSum: 0,
-                });
-              }
-
-              const bucket = dailyBuckets.get(dayKey);
-              if (!bucket) continue;
-
-              bucket.postCount += 1;
-              bucket.commentsSum += Number(post.comments || 0);
-
               uniquePosts.set(postKey, {
                 utcId,
-                dayKey,
                 fallbackEngagement: Number(
                   post.engagement_score ?? post.score ?? 0
                 ),
@@ -885,25 +871,84 @@ export class TrendingService {
         const batch = uniquePostEntries.slice(i, i + chunkSize);
         for (const entry of batch) {
           try {
-            const bucket = dailyBuckets.get(entry.dayKey);
-            if (!bucket) continue;
-
-            const velocityStats = await this.calculateAverageVelocityForPost(
+            const points = await this.getEngagementTimeSeriesForPost(
               entry.utcId,
               windowStart,
               windowEnd
             );
 
-            if (velocityStats) {
-              bucket.engagementSum += velocityStats.avgEngagement;
-              bucket.engagementSamples += 1;
-              if (Number.isFinite(velocityStats.avgVelocity)) {
-                bucket.velocityPoints.push(velocityStats.avgVelocity);
+            if (points.length === 0) {
+              const fallbackTimestamp = windowEnd;
+              const fallbackDayKey =
+                new Date(fallbackTimestamp).toISOString().split('T')[0] ?? '';
+              if (!fallbackDayKey) {
+                continue;
               }
-            } else {
-              // Fallback to point-in-time score when no TS data exists yet.
-              bucket.engagementSum += entry.fallbackEngagement;
+              const fallbackBucket =
+                dailyBuckets.get(fallbackDayKey) ||
+                (() => {
+                  const bucket = {
+                    postCount: 0,
+                    engagementSum: 0,
+                    engagementSamples: 0,
+                    velocityPoints: [],
+                    commentsSum: 0,
+                  };
+                  dailyBuckets.set(fallbackDayKey, bucket);
+                  return bucket;
+                })();
+
+              fallbackBucket.postCount += 1;
+              fallbackBucket.engagementSum += entry.fallbackEngagement;
+              fallbackBucket.engagementSamples += 1;
+              continue;
+            }
+
+            const velocities: number[] = [];
+            for (let index = 1; index < points.length; index++) {
+              const current = points[index];
+              const previous = points[index - 1];
+              if (!current || !previous) continue;
+              const deltaHours = (current.ts - previous.ts) / 3_600_000;
+              if (deltaHours <= 0) continue;
+              velocities.push((current.value - previous.value) / deltaHours);
+            }
+
+            const avgVelocity =
+              velocities.length > 0
+                ? velocities.reduce((sum, value) => sum + value, 0) /
+                  velocities.length
+                : 0;
+
+            const dayKeys = new Set<string>();
+            for (const point of points) {
+              const dayKey = new Date(point.ts).toISOString().split('T')[0];
+              if (!dayKey) continue;
+
+              dayKeys.add(dayKey);
+
+              if (!dailyBuckets.has(dayKey)) {
+                dailyBuckets.set(dayKey, {
+                  postCount: 0,
+                  engagementSum: 0,
+                  engagementSamples: 0,
+                  velocityPoints: [],
+                  commentsSum: 0,
+                });
+              }
+
+              const bucket = dailyBuckets.get(dayKey);
+              if (!bucket) continue;
+
+              bucket.postCount += 1;
+              bucket.engagementSum += point.value;
               bucket.engagementSamples += 1;
+            }
+
+            for (const dayKey of dayKeys) {
+              const bucket = dailyBuckets.get(dayKey);
+              if (!bucket) continue;
+              bucket.velocityPoints.push(avgVelocity);
             }
           } catch (e) {
             console.warn(`[TRENDS] Failed to extract velocity: ${e}`);
@@ -1111,7 +1156,9 @@ export class TrendingService {
           const analysisPool = await this.getAnalysisPool(scan.scanId);
 
           const uniquePosts = Array.from(
-            new Map(analysisPool.map((post) => [post.url, post])).values()
+            new Map(
+              analysisPool.map((post) => [this.resolvePostIdentityKey(post), post])
+            ).values()
           );
 
           for (const post of uniquePosts) {
@@ -1212,6 +1259,8 @@ export class TrendingService {
     if (data.length === 0) {
       return;
     }
+
+    await this.redis.del(zsetKey);
 
     // Batch write flair distributions as ZSET members in JSON format
     const chunkSize = 100;
@@ -1641,171 +1690,23 @@ export class TrendingService {
 
       if (retainedScans.length === 0) return;
 
-      const stopWords = new Set([
-        'an',
-        'at',
-        'as',
-        'a',
-        'and',
-        'for',
-        'with',
-        'got',
-        'here',
-        'from',
-        'about',
-        'quiz',
-        'trivia',
-        'knowledge',
-        'games',
-        'game',
-        'questions',
-        'question',
-        'answers',
-        'answer',
-        'test',
-        'challenge',
-        'round',
-        'results',
-        'score',
-        'random',
-        'general',
-        'discussion',
-        'opinion',
-        'help',
-        'easy',
-        'medium',
-        'harder',
-        'easier',
-        'hardest',
-        'easiest',
-        'hard',
-        'advanced',
-        'beginner',
-        'levels',
-        'level',
-        'short',
-        'long',
-        'large',
-        'small',
-        'tiny',
-        'today',
-        'modern',
-        'classic',
-        'forgotten',
-        'popular',
-        'famous',
-        'edition',
-        'version',
-        'parts',
-        'part',
-        'series',
-        'episode',
-        'your',
-        'you',
-        'but',
-        'not',
-        'have',
-        'has',
-        'had',
-        'does',
-        'do',
-        'did',
-        'is',
-        'if',
-        'know',
-        'was',
-        'were',
-        'what',
-        'where',
-        'while',
-        'when',
-        'until',
-        'new',
-        'fun',
-        'lets',
-        'this',
-        'these',
-        'those',
-        'there',
-        'their',
-        'they',
-        'them',
-        'how',
-        'find',
-        'enjoy',
-        'let',
-        'been',
-        'being',
-        'be',
-        'are',
-        'all',
-        'guess',
-        'can',
-        'could',
-        'should',
-        'would',
-        'may',
-        'might',
-        'must',
-        'my',
-        'mine',
-        'me',
-        'we',
-        'us',
-        'ours',
-        'our',
-        'he',
-        'him',
-        'his',
-        'she',
-        'hers',
-        'her',
-        'its',
-        'it',
-        'into',
-        'in',
-        'by',
-        'to',
-        'off',
-        'of',
-        'or',
-        'so',
-        'that',
-        'one',
-        'on',
-        'will',
-        'shall',
-        'who',
-        'which',
-        'out',
-        'over',
-        'under',
-        'up',
-        'down',
-        'day',
-        'now',
-        'todays',
-        'name',
-        'play',
-        'start',
-        'top',
-        'old',
-        'quick',
-        'basic',
-        'lowest',
-        'weird',
-        'odd',
-        'pointless',
-        'some',
-        'than',
-        'then',
-        'get',
-        'because',
-        'the',
-        'gooo',
-        'go',
-        'dropped',
-      ]);
+      const stopwords = require('stopwords-en'); // array of stopwords
+      const additional = [
+        'quiz',       'trivia',    'knowledge', 'games',
+        'game',       'questions', 'question',  'answers',
+        'answer',     'challenge', 'score',     'random',
+        'discussion', 'opinion',   'easy',      'medium',
+        'harder',     'easier',    'hardest',   'easiest',
+        'hard',       'advanced',  'beginner',  'levels',
+        'level',      'short',     'tiny',      'modern',
+        'classic',    'forgotten', 'popular',   'famous',
+        'edition',    'version',   'series',    'episode',
+        'fun',        'enjoy',     'guess',     'day',
+        'todays',     'play',      'start',     'quick',
+        'basic',      'lowest',    'weird',     'odd',
+        'pointless',  'gooo',      'dropped'
+      ]
+
 
       const globalWordCloud: Record<string, number> = {};
       const combinedPostsByKey = new Map<string, PostData>();
@@ -1855,6 +1756,7 @@ export class TrendingService {
             new Map(pool.map((p) => [p.url, p])).values()
           );
 
+          const combined = stopwords.concat(additional);
           for (const post of uniquePosts) {
             // Word cloud
             const text = (post.title || '')
@@ -1865,7 +1767,7 @@ export class TrendingService {
               if (
                 word &&
                 word.length > 2 &&
-                !stopWords.has(word) &&
+                !combined.has(word) &&
                 isNaN(Number(word))
               ) {
                 scanWordCloud[word] = (scanWordCloud[word] || 0) + 1;
@@ -2382,101 +2284,78 @@ export class TrendingService {
       }
     }
 
-    // Fallback/supplement: global timeline for any holes in index coverage
-    const timelineEntries = await this.redis.zRange(
-      'global:snapshots:timeline',
-      cutoffTimestamp,
-      '+inf',
-      { by: 'score' }
-    );
+    if (retainedScanMap.size === 0) {
+      // Legacy compatibility path for older snapshot fixtures and historical
+      // installs that only populated the global timeline.
+      const timelineEntries = await this.redis.zRange(
+        'global:snapshots:timeline',
+        cutoffTimestamp,
+        '+inf',
+        { by: 'score' }
+      );
 
-    const timelineResults = await this.executeBatched(
-      timelineEntries as any[],
-      50,
-      async (entry: any) => {
-        const member = typeof entry === 'string' ? entry : entry?.member;
-        if (!member) return null;
-        const scanId = parseInt(member, 10);
-        if (Number.isNaN(scanId) || retainedScanMap.has(scanId)) return null;
+      const timelineResults = await this.executeBatched(
+        timelineEntries as any[],
+        50,
+        async (entry: any) => {
+          const member = typeof entry === 'string' ? entry : entry?.member;
+          if (!member) return null;
+          const scanId = parseInt(member, 10);
+          if (Number.isNaN(scanId) || retainedScanMap.has(scanId)) return null;
 
-        const meta = await this.redis.hGetAll(`run:${scanId}:meta`);
-        if (meta.subreddit !== subreddit) return null;
+          const meta = await this.redis.hGetAll(`run:${scanId}:meta`);
+          if (meta.subreddit !== subreddit) return null;
 
-        const entryScore = typeof entry === 'object' ? entry.score : undefined;
-        const metaTimestamp = meta.scan_date
-          ? new Date(meta.scan_date).getTime()
-          : Date.now();
+          const entryScore = typeof entry === 'object' ? entry.score : undefined;
+          const metaTimestamp = meta.scan_date
+            ? new Date(meta.scan_date).getTime()
+            : Date.now();
 
-        return { scanId, timestamp: (entryScore ?? metaTimestamp) as number };
-      },
-      'Timeline Verification'
-    );
+          return {
+            scanId,
+            timestamp: (entryScore ?? metaTimestamp) as number,
+          };
+        },
+        'Timeline Verification'
+      );
 
-    for (const res of timelineResults) {
-      if (res && typeof res === 'object') {
-        const r = res as { scanId: number; timestamp: number };
-        retainedScanMap.set(r.scanId, r);
+      for (const res of timelineResults) {
+        if (res && typeof res === 'object') {
+          const r = res as { scanId: number; timestamp: number };
+          retainedScanMap.set(r.scanId, r);
+        }
       }
-    }
 
-    const earliestRetainedTimestamp =
-      retainedScanMap.size > 0
-        ? Math.min(
-            ...Array.from(retainedScanMap.values()).map((s) => s.timestamp)
-          )
-        : Number.POSITIVE_INFINITY;
+      if (retainedScanMap.size === 0) {
+        const scanCountStr = await this.redis.get('global:scan_counter');
+        const scanCount = scanCountStr ? parseInt(scanCountStr, 10) : 0;
 
-    // Fallback/self-heal path:
-    // If timeline is empty/sparse OR only contains very recent scans relative to
-    // the retention cutoff, scan run metadata directly so older valid snapshots
-    // still contribute to forecasts. Backfill timeline entries while doing so.
-    const shouldSupplementFromMetadata =
-      retainedScanMap.size < 3 ||
-      earliestRetainedTimestamp > cutoffTimestamp + 12 * 60 * 60 * 1000;
+        if (scanCount > 0) {
+          const scanIds = Array.from({ length: scanCount }, (_, i) => i + 1);
+          const supplementResults = await this.executeBatched(
+            scanIds,
+            30,
+            async (scanId) => {
+              const meta = await this.redis.hGetAll(`run:${scanId}:meta`);
+              if (!meta || meta.subreddit !== subreddit) return null;
 
-    if (shouldSupplementFromMetadata) {
-      const scanCountStr = await this.redis.get('global:scan_counter');
-      const scanCount = scanCountStr ? parseInt(scanCountStr, 10) : 0;
+              const scanDateStr = meta.scan_date || meta.proc_date;
+              if (!scanDateStr) return null;
 
-      if (scanCount > 0) {
-        console.log(
-          `[TRENDS] Timeline returned ${retainedScanMap.size} retained scans for r/${subreddit} (earliest=${Number.isFinite(earliestRetainedTimestamp) ? new Date(earliestRetainedTimestamp).toISOString() : 'none'}); supplementing via metadata sweep up to #${scanCount}.`
-        );
+              const scanTimestamp = new Date(scanDateStr).getTime();
+              if (Number.isNaN(scanTimestamp) || scanTimestamp < cutoffTimestamp)
+                return null;
 
-        const scanIds = Array.from(
-          { length: scanCount },
-          (_, i) => i + 1
-        ).filter((id) => !retainedScanMap.has(id));
-        const supplementResults = await this.executeBatched(
-          scanIds,
-          30,
-          async (scanId) => {
-            const meta = await this.redis.hGetAll(`run:${scanId}:meta`);
-            if (!meta || meta.subreddit !== subreddit) return null;
+              return { scanId, timestamp: scanTimestamp };
+            },
+            'Metadata Supplement Sweep'
+          );
 
-            const scanDateStr = meta.scan_date || meta.proc_date;
-            if (!scanDateStr) return null;
-
-            const scanTimestamp = new Date(scanDateStr).getTime();
-            if (Number.isNaN(scanTimestamp) || scanTimestamp < cutoffTimestamp)
-              return null;
-
-            return { scanId, timestamp: scanTimestamp };
-          },
-          'Metadata Supplement Sweep'
-        );
-
-        for (const res of supplementResults) {
-          if (res && typeof res === 'object') {
-            const r = res as { scanId: number; timestamp: number };
-            retainedScanMap.set(r.scanId, r);
-            // Non-blocking backfill
-            this.redis
-              .zAdd('global:snapshots:timeline', {
-                score: r.timestamp,
-                member: r.scanId.toString(),
-              })
-              .catch(() => {});
+          for (const res of supplementResults) {
+            if (res && typeof res === 'object') {
+              const r = res as { scanId: number; timestamp: number };
+              retainedScanMap.set(r.scanId, r);
+            }
           }
         }
       }

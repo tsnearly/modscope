@@ -8,6 +8,9 @@ import { Tooltip } from './ui/tooltip';
 type PostingHeatmapCell = {
   dayHour: string;
   delta: number;
+  countA?: number;
+  countB?: number;
+  velocity?: number;
   dayOfWeek?: number;
   hour?: number;
 };
@@ -61,21 +64,60 @@ function formatHourLabel(hour: number): string {
 }
 
 function formatHeatmapTooltipLine(
-  dayOfWeek: number,
-  hour: number,
-  delta: number
+  cell: PostingHeatmapCell,
+  fallbackDayOfWeek: number,
+  fallbackHour: number
 ): string {
+  const dayOfWeek = cell.dayOfWeek ?? fallbackDayOfWeek;
+  const hour = cell.hour ?? fallbackHour;
   const dayName = FULL_DAYS[dayOfWeek] || 'Unknown day';
   const hourLabel = formatHourLabel(hour);
   const direction =
-    delta > 0 ? 'Increased' : delta < 0 ? 'Decreased' : 'No Change';
-  const magnitude = formatDeltaValue(delta);
+    cell.delta > 0
+      ? 'Increased'
+      : cell.delta < 0
+        ? 'Decreased'
+        : 'No Change';
+  const magnitude = formatDeltaValue(cell.delta);
 
-  if (delta === 0) {
+  if (cell.delta === 0) {
+    if (
+      typeof cell.countA === 'number' ||
+      typeof cell.countB === 'number' ||
+      typeof cell.velocity === 'number'
+    ) {
+      return [
+        `${dayName} - ${hourLabel}`,
+        `Recent: ${cell.countA ?? 0}`,
+        `Historical: ${cell.countB ?? 0}`,
+        'Delta: 0 posts',
+        `Velocity: ${formatDeltaValue(cell.velocity ?? 0)} posts/day`,
+      ].join('\n');
+    }
+
     return `${dayName} - ${hourLabel}\nNo Change`;
   }
 
-  return `${dayName} - ${hourLabel}\n${direction} ${magnitude} post${Math.abs(delta) === 1 ? '' : 's'}`;
+  const lines = [`${dayName} - ${hourLabel}`];
+
+  if (
+    typeof cell.countA === 'number' ||
+    typeof cell.countB === 'number' ||
+    typeof cell.velocity === 'number'
+  ) {
+    lines.push(`Recent: ${cell.countA ?? 0}`);
+    lines.push(`Historical: ${cell.countB ?? 0}`);
+    lines.push(
+      `Delta: ${direction} ${magnitude} post${Math.abs(cell.delta) === 1 ? '' : 's'}`
+    );
+    lines.push(`Velocity: ${formatDeltaValue(cell.velocity ?? 0)} posts/day`);
+    return lines.join('\n');
+  }
+
+  lines.push(
+    `${direction} ${magnitude} post${Math.abs(cell.delta) === 1 ? '' : 's'}`
+  );
+  return lines.join('\n');
 }
 
 function convertUTCBucketToLocal(
@@ -414,11 +456,7 @@ export function PostingActivityHeatmapChart({
                     content={
                       <span className="whitespace-pre-line">
                         {cell
-                          ? formatHeatmapTooltipLine(
-                              cell.dayOfWeek ?? dayIndex,
-                              cell.hour ?? hourIndex,
-                              cell.delta
-                            )
+                          ? formatHeatmapTooltipLine(cell, dayIndex, hourIndex)
                           : `${FULL_DAYS[dayIndex] || 'Unknown day'} - ${formatHourLabel(hourIndex)}\nNo Data`}
                       </span>
                     }
@@ -436,11 +474,7 @@ export function PostingActivityHeatmapChart({
                       }}
                       aria-label={
                         cell
-                          ? formatHeatmapTooltipLine(
-                              cell.dayOfWeek ?? dayIndex,
-                              cell.hour ?? hourIndex,
-                              cell.delta
-                            )
+                          ? formatHeatmapTooltipLine(cell, dayIndex, hourIndex)
                           : `${FULL_DAYS[dayIndex] || 'Unknown day'} - ${formatHourLabel(hourIndex)}\nNo Data`
                       }
                     />

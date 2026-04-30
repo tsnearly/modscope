@@ -5,6 +5,8 @@ import {
   scheduler,
   type RedditClient,
   type RedisClient,
+  type ScheduledCronJob,
+  type ScheduledJob
 } from '@devvit/web/server';
 import { Hono } from 'hono';
 import type { AnalyticsSnapshot } from '../../shared/types/api';
@@ -64,10 +66,69 @@ const resilientTrendService: TrendMaterializer = {
 
 const OWNER_USERNAME = 'SeeTigerLearn';
 const MODERATOR_CACHE_TTL_MS = 60 * 1000;
+const UI_LAUNCH_INTENT_TTL_MS = 15000;
+const UI_LAUNCH_INTENT_MAX_AGE_MS = 10000;
+const UI_LAUNCH_TABS = new Set([
+  'overview',
+  'timing',
+  'posts',
+  'users',
+  'content',
+  'activity',
+  'trends',
+]);
 const moderatorCache = new Map<
   string,
   { usernames: Set<string>; expiresAt: number }
 >();
+
+const getLaunchIntentRedisKey = (): string => {
+  const subreddit = safeSubredditName(context.subredditName || 'unknown');
+  const username = (context.username || 'anonymous').toLowerCase();
+  return `ui:launch-intent:${subreddit}:${username}`;
+};
+
+type LaunchIntentRecord = {
+  tab: string;
+  ts: number;
+  intentId: string;
+};
+
+const createLaunchIntentId = (): string => {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+  } catch {
+    // Ignore and use timestamp fallback.
+  }
+
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+};
+
+const parseLaunchIntent = (rawIntent: string): LaunchIntentRecord | null => {
+  try {
+    const parsed = JSON.parse(rawIntent) as {
+      tab?: string;
+      ts?: number;
+      intentId?: string;
+    };
+
+    const tab = String(parsed.tab || '').toLowerCase();
+    const ts = parsed.ts;
+    const intentId = String(parsed.intentId || '').trim();
+    const isFreshIntent =
+      typeof ts === 'number' && Date.now() - ts <= UI_LAUNCH_INTENT_MAX_AGE_MS;
+
+    if (!isFreshIntent || !UI_LAUNCH_TABS.has(tab) || !intentId) {
+      return null;
+    }
+
+    return { tab, ts, intentId };
+  } catch {
+    return null;
+  }
+};
 
 const isOwnerUser = (username: string | null | undefined): boolean => {
   return (username || '').toLowerCase() === OWNER_USERNAME.toLowerCase();
@@ -268,6 +329,12 @@ api.get('/init', async (c) => {
       console.warn('[INIT] getOfficialAccounts failed:', oaError);
     }
 
+    const jobs: (ScheduledJob | ScheduledCronJob)[] = await scheduler.listJobs();
+    console.log(`[INIT] Found ${jobs.length} scheduled jobs`);
+    for (const job of jobs) {
+      console.log(`- Job ID: ${job.id}, Name: ${job.name}, Data: ${job.data}, Cron: ${(job as ScheduledCronJob).cron || 'N/A'}`); // Log cron if it's a cron job
+    }
+
     const jobsRaw = await (scheduler.listJobs() as any);
     const enrichedJobs = await Promise.all(
       (jobsRaw || []).map(async (job: any) => {
@@ -319,6 +386,8 @@ api.get('/init', async (c) => {
 api.get('/jobs', async (c) => {
   try {
     const jobsRaw = await (scheduler.listJobs() as any);
+    console.log(`[LIST] Found ${jobsRaw.length} scheduled jobs`);
+
     const enrichedJobs = await Promise.all(
       (jobsRaw || []).map(async (job: any) => {
         try {
@@ -448,8 +517,8 @@ api.post('/jobs', async (c) => {
     if (runAt) jobConfig.runAt = runAt;
     else jobConfig.cron = cron;
 
-    jobId = await scheduler.runJob(jobConfig as any);
-    await redis.hSet(`job:${jobId}`, {
+jobId = await scheduler.runJob(jobConfig as any);
+    const jobHash: Record<string, string> = {
       id: jobId!,
       name,
       cron: cron || 'once',
@@ -457,8 +526,13 @@ api.post('/jobs', async (c) => {
       createdAt: Date.now().toString(),
       status: 'active',
       config: JSON.stringify(body),
-    });
+    };
+    if (runAt) {
+      jobHash.nextRun = runAt.getTime().toString();
+    }
+    await redis.hSet(`job:${jobId}`, jobHash);
     await redis.zAdd('jobs:active', { member: jobId!, score: Date.now() });
+    console.log(`[JOBS] Added job ${name} with id ${jobId}`);
 
     return c.json({
       status: 'success',
@@ -466,6 +540,7 @@ api.post('/jobs', async (c) => {
     });
   } catch (error) {
     if (jobId) await scheduler.cancelJob(jobId);
+    console.error('[JOBS] Failed to add job:', error);
     return c.json({ status: 'error', message: String(error) }, 500);
   }
 });
@@ -569,6 +644,78 @@ api.delete('/snapshots/:scanId', async (c) => {
   }
 });
 
+api.post('/ui/launch-intent', async (c) => {
+  try {
+    const body = (await c.req.json().catch(() => ({}))) as { tab?: string };
+    const tab = String(body.tab || '').toLowerCase();
+    if (!UI_LAUNCH_TABS.has(tab)) {
+      return c.json(
+        { status: 'error', message: 'Invalid launch tab' },
+        400
+      );
+    }
+
+    const intentId = createLaunchIntentId();
+    const intent = JSON.stringify({ tab, ts: Date.now(), intentId });
+    await storage.set(getLaunchIntentRedisKey(), intent, {
+      expiration: new Date(Date.now() + UI_LAUNCH_INTENT_TTL_MS),
+    });
+    return c.json({ status: 'success', intentId });
+  } catch (error) {
+    return c.json({ status: 'error', message: String(error) }, 500);
+  }
+});
+
+api.get('/ui/launch-intent', async (c) => {
+  try {
+    const key = getLaunchIntentRedisKey();
+    const rawIntent = await storage.get(key);
+    if (!rawIntent) {
+      return c.json({ status: 'success', tab: null, intentId: null });
+    }
+
+    const parsed = parseLaunchIntent(rawIntent);
+    if (!parsed) {
+      await storage.del(key);
+      return c.json({ status: 'success', tab: null, intentId: null });
+    }
+
+    const requestedIntentId = c.req.query('intentId')?.trim();
+    if (!requestedIntentId || requestedIntentId !== parsed.intentId) {
+      return c.json({ status: 'success', tab: null, intentId: null });
+    }
+
+    await storage.del(key);
+    return c.json({ status: 'success', tab: parsed.tab, intentId: parsed.intentId });
+  } catch (error) {
+    return c.json({ status: 'error', message: String(error) }, 500);
+  }
+});
+
+api.get('/ui/launch-intent/pending', async (c) => {
+  try {
+    const key = getLaunchIntentRedisKey();
+    const rawIntent = await storage.get(key);
+    if (!rawIntent) {
+      return c.json({ status: 'success', tab: null, intentId: null });
+    }
+
+    const parsed = parseLaunchIntent(rawIntent);
+    if (!parsed) {
+      await storage.del(key);
+      return c.json({ status: 'success', tab: null, intentId: null });
+    }
+
+    return c.json({
+      status: 'success',
+      tab: parsed.tab,
+      intentId: parsed.intentId,
+    });
+  } catch (error) {
+    return c.json({ status: 'error', message: String(error) }, 500);
+  }
+});
+
 /**
  * UI Bridge: Register WebView
  */
@@ -621,7 +768,7 @@ api.get('/trends', async (c) => {
 
 api.get('/history', async (c) => {
   try {
-    const historyRaw = await redis.zRange('jobs:history', -80, -1);
+    const historyRaw = await redis.zRange('jobs:history', -50, -1);
     const now = Date.now();
     const expiration = 45 * 60 * 1000; // 45 minutes
 

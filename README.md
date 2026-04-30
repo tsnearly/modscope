@@ -112,7 +112,7 @@ ModScope doesn't just count upvotes — it evaluates the _quality_ of engagement
 - **Creator Participation Bonus**: If the original poster is actively replying in their own thread, ModScope can award up to 25 bonus points. This is especially valuable in Support/Help communities where OP engagement signals a resolved question.
 - **Excluding Noise**: You can configure ModScope to ignore mod accounts, admin accounts, and known bot usernames so that automated sticky posts or megathreads don't skew your community's organic data.
 
-### Custom Scoring Settings
+### Custom Scoring Settings <a name="custom-scoring-settings"></a>
 
 When using the **Custom** preset, you can directly adjust:
 
@@ -153,7 +153,17 @@ _Note: ModScope runs entirely within the Devvit ecosystem. It requires no extern
 
 ## Changelog
 
-### v0.9.8 [Currently Testing]
+### v0.9.9 [Development]
+
+**Dashboard Launch**
+
+- Modified inline vs expanded view logic to eliminate scrolling that violates Reddit's policy; clicking on tabs that launch an expanded view are shown with a designation next to them, and retain the context for the destination so that the new expanded window can continue where the user left off.
+
+**Trending Service**
+
+- Further correction in the trending service so that it fully aligns with the specifications for multi-day snapshot processing and producing more accurate trending analysis datasets.
+
+### v0.9.8
 
 **Report Date and Time Standardization**
 
@@ -192,9 +202,13 @@ _Note: ModScope runs entirely within the Devvit ecosystem. It requires no extern
 **Report Configuration & New Trend Forecasting Reports**
 
 - **Comprehensive Report Settings:** Implemented granular report configuration controls allowing moderators to individually toggle all report sections (Overview, Timing, Posts, Users, Content, Activity) and specific trend charts (Subscribers, Engagement, Content Mix, Posting Patterns, Best Post Times) from the Config view.
+
 - **Subscriber Growth Tracking:** Implemented a new historical trend chart using retained snapshots to map community subscriber growth dynamically based on a user-defined analysis window.
+
 - **Content Evolution:** Added a 30-day staked area chart isolating shifts in the distribution of the community's top 5 most popular post flairs.
+
 - **Engagement Tracking:** Built a unified engagement score visualizer to spot spikes in community activity and a 24-hour comparative relationship chart for engagement to sheer votes.
+
 - **Posting Pattern Heatmap:** Designed an hourly 7-day comparative heatmap that splits the recent analysis pool in half to elegantly visualize specific days and times where posting frequency is actively increasing or decreasing.
 
 - **Interactive Legend Support:** Added clickable legend functionality to the various charts, allowing users to toggle visibility of select data series independently.

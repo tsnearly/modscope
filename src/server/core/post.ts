@@ -33,6 +33,12 @@ export const createPost = async (subredditName: string) => {
   const newPost = await reddit.submitCustomPost({
     title: 'ModScope — Mod Analytics Dashboard',
     subredditName,
+    styles: {
+      "backgroundColor": "#D7DADCAA",
+      "backgroundColorDark": "#1A1A1BCC",
+      "border": "1px solid #343536",
+      "borderRadius": "8px",
+    }
   });
 
   // 3. Apply mod-only attributes

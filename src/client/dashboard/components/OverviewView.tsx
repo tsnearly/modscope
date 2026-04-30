@@ -25,6 +25,7 @@ interface OverviewMetric {
 
 interface OverviewViewProps {
   analytics: AnalyticsSnapshot;
+  compactInline?: boolean;
   trendPrecisionNotice: ReactNode;
   iconContext: IconContext;
   excludeOfficial?: boolean;
@@ -71,6 +72,7 @@ function localizeTrendDayHour(day: string, hour: number) {
 
 export function OverviewView({
   analytics,
+  compactInline = false,
   trendPrecisionNotice,
   iconContext,
   excludeOfficial,
@@ -462,9 +464,57 @@ export function OverviewView({
     },
   ];
 
+  const inlineBestTime = bestTimes[0]
+    ? `${bestTimes[0].day} ${bestTimes[0].hour_fmt}`
+    : 'Unavailable';
+
+  if (compactInline) {
+    return (
+      <div className="flex flex-col gap-3 overflow-hidden">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 mb-2">
+          {metricBoxes.map((metric, idx) => (
+            <TooltipProvider key={idx} delayDuration={200}>
+              <TooltipRoot>
+                <TooltipTrigger asChild>
+                  <div className="bg-card p-1.5 rounded shadow-sm border border-border text-center flex flex-col justify-center h-[48px] cursor-default">
+                    <div className="text-[8px] font-bold text-muted-foreground uppercase tracking-wider truncate">
+                      {metric.label}
+                    </div>
+                    <div
+                      className={`text-sm font-black leading-tight ${metric.color} truncate`}
+                    >
+                      {metric.value}
+                    </div>
+                  </div>
+                </TooltipTrigger>
+                {metric.title && (
+                  <TooltipPortal>
+                    <TooltipContent
+                      side="top"
+                      align="center"
+                      sideOffset={6}
+                      className={tooltipContentClass}
+                    >
+                      {metric.title}
+                      <TooltipArrow className="fill-black" />
+                    </TooltipContent>
+                  </TooltipPortal>
+                )}
+              </TooltipRoot>
+            </TooltipProvider>
+          ))}
+        </div>
+
+        <div className="rounded-md border border-border bg-card px-3 py-2 text-sm font-medium text-foreground">
+          Best Time: <span className="font-bold">{inlineBestTime}</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div style={{ overflowY: 'auto', height: '100%' }}>
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 mb-4">
+    <div className="flex flex-col gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 mb-0">
         {metricBoxes.map((metric, idx) => (
           <TooltipProvider key={idx} delayDuration={200}>
             <TooltipRoot>

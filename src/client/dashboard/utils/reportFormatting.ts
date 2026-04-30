@@ -49,3 +49,32 @@ export const formatPostListDateTime = (utcSeconds: number): string => {
 
   return `${month} ${day}, ${year} @ ${hour12}:${minutes}${ampm}`;
 };
+
+export const formatScanDate = (dateStr: string | undefined): string => {
+  if (!dateStr) {
+    return 'Unknown Date';
+  }
+  try {
+    // Assume the passed string represents UTC if it lacks a timezone indicator
+    const d = new Date(
+      dateStr.includes(' ') && !dateStr.includes('Z')
+        ? dateStr.replace(' ', 'T') + 'Z'
+        : dateStr
+    );
+    if (isNaN(d.getTime())) {
+      return dateStr;
+    }
+
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    const time = d.toLocaleTimeString(undefined, {
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+    return `${mm}/${dd}/${yyyy} ${time}`;
+  } catch {
+    return dateStr;
+  }
+};

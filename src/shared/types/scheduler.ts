@@ -3,7 +3,9 @@ export interface JobDefinition {
   name: string;
   cron: string;
   nextRun?: string;
-  type: 'recurring' | 'one-time';
+  scheduleType: string;
+  createdAt: string;
+  status: string;
 }
 
 export interface JobHistoryEntry {

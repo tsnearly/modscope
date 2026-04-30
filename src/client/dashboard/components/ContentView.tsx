@@ -126,7 +126,7 @@ export function ContentView({ analytics, iconContext }: ContentViewProps) {
     if (numUnique <= 1) {
       return 'var(--heatmap-9)';
     }
-    const intensity = Math.floor((rank / (numUnique - 1)) * 9);
+    const intensity = Math.floor((rank / (numUnique - 1)) * 8) + 1;
     return `var(--heatmap-${intensity})`;
   };
 
@@ -254,7 +254,7 @@ export function ContentView({ analytics, iconContext }: ContentViewProps) {
                       flex: 1,
                       background: 'var(--color-bg)',
                       height: '12px',
-                      borderRadius: '3px',
+                      borderRadius: '4px',
                       overflow: 'hidden',
                       cursor: 'help',
                     }}
@@ -325,7 +325,7 @@ export function ContentView({ analytics, iconContext }: ContentViewProps) {
                       flex: 1,
                       background: 'var(--color-bg)',
                       height: '12px',
-                      borderRadius: '3px',
+                      borderRadius: '4px',
                       overflow: 'hidden',
                       cursor: 'help',
                     }}

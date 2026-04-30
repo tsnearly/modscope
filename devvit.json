@@ -14,10 +14,11 @@
     "entrypoints": {
       "default": {
         "inline": true,
-        "entry": "dashboard.html"
+        "entry": "dashboard-inline.html"
       },
       "expanded": {
-        "entry": "dashboard.html"
+        "entry": "dashboard-expanded.html",
+        "height": "tall"
       }
     }
   },
@@ -49,7 +50,8 @@
     ]
   },
   "triggers": {
-    "onAppInstall": "/internal/triggers/on-app-install"
+    "onAppInstall": "/internal/triggers/on-app-install",
+    "onAppUpgrade": "/internal/triggers/on-app-upgrade"
   },
   "scheduler": {
     "tasks": {

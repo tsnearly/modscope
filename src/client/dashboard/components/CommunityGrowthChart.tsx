@@ -386,12 +386,10 @@ export function CommunityGrowthChart({
                   minTickGap={22}
                   height={42}
                   tickMargin={10}
-                  axisLine={{ stroke: 'var(--color-border)', strokeWidth: 1 }}
-                  tickLine={{ stroke: 'var(--color-border)', strokeWidth: 1 }}
-                  tick={{ fontSize: 8, fill: 'var(--text-secondary)' }}
+                  tick={{ fontSize: 8, fill: 'var(--text-primary)' }}
                 />
                 <YAxis
-                  tick={{ fontSize: 8, fill: 'var(--color-text)' }}
+                  tick={{ fontSize: 8, fill: 'var(--text-primary)' }}
                   tickFormatter={(value) => Number(value).toLocaleString()}
                 />
                 <RechartsTooltip content={<GrowthTooltip />} />

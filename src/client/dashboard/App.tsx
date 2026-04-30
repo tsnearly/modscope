@@ -1,5 +1,6 @@
 import {
   context as devvitContext,
+  getWebViewMode,
   requestExpandedMode,
 } from '@devvit/web/client';
 import * as React from 'react';
@@ -23,8 +24,13 @@ import { Tooltip } from './components/ui/tooltip';
 import './styles/main.css';
 import { cn } from './utils/cn';
 import { getIconPath } from './utils/iconMappings';
+import { markStartup, type StartupEntrypoint } from './utils/startupMarkers';
 
 type View = 'report' | 'snapshots' | 'config' | 'schedule' | 'about';
+
+interface AppProps {
+  startupModeHint?: StartupEntrypoint;
+}
 
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
@@ -78,8 +84,42 @@ class ErrorBoundary extends React.Component<
   }
 }
 
-export const App = () => {
+export const App = ({ startupModeHint = 'inline' }: AppProps) => {
   useTheme(); // Initialize and apply theme on mount
+  const EXPANDED_TAB_STORAGE_KEY = 'modscope:launch-intent';
+  const EXPANDED_TAB_SESSION_KEY = 'modscope:launch-intent:session';
+  const EXPANDED_TAB_COOKIE_KEY = 'modscope_launch_intent';
+  const EXPANDED_TAB_INTENT_MAX_AGE_MS = 10000;
+
+  const resolveWebViewMode = (): 'inline' | 'expanded' => {
+    if (startupModeHint === 'expanded') {
+      return 'expanded';
+    }
+
+    try {
+      const mode = getWebViewMode();
+      if (mode === 'inline' || mode === 'expanded') {
+        return mode;
+      }
+    } catch {
+      // fall back to global context when webview mode isn't ready yet
+    }
+
+    const globalMode = (globalThis as any)?.devvit?.webViewMode;
+    if (
+      globalMode === 'expanded' ||
+      globalMode === 'IMMERSIVE_MODE' ||
+      globalMode === 2
+    ) {
+      return 'expanded';
+    }
+
+    return 'inline';
+  };
+
+  const [webViewMode, setWebViewMode] = useState<'inline' | 'expanded'>(() =>
+    resolveWebViewMode()
+  );
   const [activeView, setActiveView] = useState<View>('report');
   const [, setSelectedSnapshotId] = useState<number | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
@@ -100,7 +140,129 @@ export const App = () => {
   const [showSplash, setShowSplash] = useState(true);
 
   useEffect(() => {
+    markStartup('app-mounted', { entrypoint: startupModeHint });
+  }, [startupModeHint]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    let cancelled = false;
+
+    const peekServerLaunchIntent = async () => {
+      if (startupModeHint !== 'inline') {
+        return;
+      }
+
+      markStartup('launch-intent-peek-start', {
+        entrypoint: startupModeHint,
+      });
+
+      try {
+        const response = await fetch('/api/ui/launch-intent/pending', {
+          cache: 'no-store',
+        });
+        if (!response.ok || cancelled) {
+          return;
+        }
+
+        const payload = (await response.json()) as { tab?: string | null };
+        if (payload?.tab && !cancelled) {
+          setWebViewMode('expanded');
+        }
+      } catch {
+        // Ignore transient launch-intent peek failures.
+      } finally {
+        markStartup('launch-intent-peek-complete', {
+          entrypoint: startupModeHint,
+        });
+      }
+    };
+
+    const syncInlineConstraint = () => {
+      let mode = resolveWebViewMode();
+
+      setWebViewMode(mode);
+
+      const cookieEntry = document.cookie
+        .split('; ')
+        .find((entry) => entry.startsWith(`${EXPANDED_TAB_COOKIE_KEY}=`));
+
+      const rawIntent =
+        localStorage.getItem(EXPANDED_TAB_STORAGE_KEY) ||
+        sessionStorage.getItem(EXPANDED_TAB_SESSION_KEY) ||
+        (cookieEntry
+          ? decodeURIComponent(cookieEntry.split('=').slice(1).join('='))
+          : null);
+
+      if (rawIntent) {
+        try {
+          const parsed = JSON.parse(rawIntent) as { ts?: number };
+          const isFreshIntent =
+            typeof parsed?.ts === 'number' &&
+            Date.now() - parsed.ts <= EXPANDED_TAB_INTENT_MAX_AGE_MS;
+          if (isFreshIntent) {
+            mode = 'expanded';
+          } else {
+            localStorage.removeItem(EXPANDED_TAB_STORAGE_KEY);
+            sessionStorage.removeItem(EXPANDED_TAB_SESSION_KEY);
+            document.cookie = `${EXPANDED_TAB_COOKIE_KEY}=; Max-Age=0; Path=/; SameSite=Lax`;
+          }
+        } catch {
+          localStorage.removeItem(EXPANDED_TAB_STORAGE_KEY);
+          sessionStorage.removeItem(EXPANDED_TAB_SESSION_KEY);
+          document.cookie = `${EXPANDED_TAB_COOKIE_KEY}=; Max-Age=0; Path=/; SameSite=Lax`;
+        }
+      }
+
+      const isCoarsePointer =
+        'matchMedia' in window && window.matchMedia('(pointer: coarse)').matches;
+      const isInlineConstrained =
+        mode === 'inline' && (isCoarsePointer || window.innerWidth <= 640);
+
+      document.documentElement.setAttribute('data-webview-mode', mode);
+      document.documentElement.setAttribute(
+        'data-inline-constrained',
+        isInlineConstrained ? 'true' : 'false'
+      );
+    };
+
+    window.addEventListener('focus', syncInlineConstraint);
+    window.addEventListener('pageshow', syncInlineConstraint);
+    window.addEventListener('resize', syncInlineConstraint);
+    document.addEventListener('visibilitychange', syncInlineConstraint);
+    syncInlineConstraint();
+    void peekServerLaunchIntent();
+
+    const delayedSync = window.setTimeout(syncInlineConstraint, 150);
+    const lateSync = window.setTimeout(syncInlineConstraint, 600);
+    const delayedPeek =
+      startupModeHint === 'inline'
+        ? window.setTimeout(() => {
+            void peekServerLaunchIntent();
+          }, 120)
+        : null;
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener('focus', syncInlineConstraint);
+      window.removeEventListener('pageshow', syncInlineConstraint);
+      window.removeEventListener('resize', syncInlineConstraint);
+      document.removeEventListener('visibilitychange', syncInlineConstraint);
+      window.clearTimeout(delayedSync);
+      window.clearTimeout(lateSync);
+      if (delayedPeek !== null) {
+        window.clearTimeout(delayedPeek);
+      }
+      document.documentElement.removeAttribute('data-webview-mode');
+      document.documentElement.removeAttribute('data-inline-constrained');
+    };
+  }, [startupModeHint]);
+
+  useEffect(() => {
     const loadData = async () => {
+      markStartup('init-load-start', { entrypoint: startupModeHint });
       // Here we could also fetch other settings to initialize the app state
 
       try {
@@ -159,10 +321,11 @@ export const App = () => {
       await new Promise((resolve) => setTimeout(resolve, 2000));
       setIsLoading(false);
       setShowSplash(false);
+      markStartup('init-load-complete', { entrypoint: startupModeHint });
     };
 
     loadData();
-  }, []);
+  }, [startupModeHint]);
 
   const fetchSnapshots = async () => {
     try {
@@ -483,6 +646,7 @@ export const App = () => {
       )}
 
       <div
+        id="app-root"
         className="app-container"
         style={{
           display: 'flex',
@@ -537,30 +701,32 @@ export const App = () => {
           </div>
 
           {/* Expand into full-screen post — right side of toolbar */}
-          <Tooltip content="Open Full Screen" side="bottom">
-            <button
-              className="fullscreen-btn"
-              aria-label="Open full screen"
-              onClick={(e) => {
-                requestExpandedMode(e as unknown as PointerEvent, 'expanded');
-              }}
-            >
-              {/* Expand icon */}
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
+          {webViewMode !== 'expanded' && (
+            <Tooltip content="Open Full Screen" side="bottom">
+              <button
+                className="fullscreen-btn"
+                aria-label="Open full screen"
+                onClick={(e) => {
+                  requestExpandedMode(e as unknown as PointerEvent, 'expanded');
+                }}
               >
-                <path d="M3 8V5a2 2 0 0 1 2-2h3" />
-                <path d="M16 3h3a2 2 0 0 1 2 2v3" />
-                <path d="M21 16v3a2 2 0 0 1-2 2h-3" />
-                <path d="M8 21H5a2 2 0 0 1-2-2v-3" />
-              </svg>
-            </button>
-          </Tooltip>
+                {/* Expand icon */}
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M3 8V5a2 2 0 0 1 2-2h3" />
+                  <path d="M16 3h3a2 2 0 0 1 2 2v3" />
+                  <path d="M21 16v3a2 2 0 0 1-2 2h-3" />
+                  <path d="M8 21H5a2 2 0 0 1-2-2v-3" />
+                </svg>
+              </button>
+            </Tooltip>
+          )}
         </div>
 
         {/* Content Area - Scrollable */}

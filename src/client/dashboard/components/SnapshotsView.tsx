@@ -1,8 +1,8 @@
-import { useEffect, useState, useCallback } from 'react';
-import { context as devvitContext } from '@devvit/web/client';
+import { useCallback, useEffect, useState } from 'react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { EntityTitle } from './ui/entity-title';
+import { NonIdealState } from './ui/non-ideal-state';
 import {
   Table,
   TableBody,
@@ -12,7 +12,6 @@ import {
   TableRow,
 } from './ui/table';
 import { Tooltip } from './ui/tooltip';
-import { NonIdealState } from './ui/non-ideal-state';
 
 interface Snapshot {
   scanId: number;
