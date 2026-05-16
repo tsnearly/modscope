@@ -34,12 +34,19 @@ export function OwnerUtilitiesSection() {
   const [bundleText, setBundleText] = useState('');
   const [scanIdsText, setScanIdsText] = useState('');
   const [copyStatus, setCopyStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [trendScanIdText, setTrendScanIdText] = useState('');
 
   const handleSeedTrends = async () => {
     setSeedStatus('loading');
     setSeedMessage('');
     try {
-      const res = await fetch('/api/trigger-trends', { method: 'POST' });
+      const bodyPayload = trendScanIdText ? JSON.stringify({ scanId: Number(trendScanIdText) }) : undefined;
+      const fetchOptions: RequestInit = { method: 'POST' };
+      if (bodyPayload) {
+        fetchOptions.headers = { 'Content-Type': 'application/json' };
+        fetchOptions.body = bodyPayload;
+      }
+      const res = await fetch('/api/trigger-trends', fetchOptions);
       const body = await res.json().catch(() => ({}));
       if (res.ok) {
         setSeedStatus('success');
@@ -225,13 +232,21 @@ export function OwnerUtilitiesSection() {
       className="mt-3 pt-3 border-t border-border"
     >
       <div className="rounded border border-border p-2.5 flex flex-col gap-2">
-        <button
-          onClick={handleSeedTrends}
-          disabled={seedStatus === 'loading'}
-          className="text-xs px-3 py-1.5 rounded bg-primary text-primary-foreground hover:opacity-80 disabled:opacity-40 transition-opacity w-full text-left"
-        >
-          {seedStatus === 'loading' ? 'Seeding trends...' : 'Seed Trends (Playtest)'}
-        </button>
+        <div className="flex gap-2">
+          <input
+            value={trendScanIdText}
+            onChange={(event) => setTrendScanIdText(event.target.value)}
+            placeholder="Scan ID (optional)"
+            className="w-32 rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
+          />
+          <button
+            onClick={handleSeedTrends}
+            disabled={seedStatus === 'loading'}
+            className="text-xs px-3 py-1.5 rounded bg-primary text-primary-foreground hover:opacity-80 disabled:opacity-40 transition-opacity flex-1 text-left"
+          >
+            {seedStatus === 'loading' ? 'Seeding trends...' : 'Seed Trends (Playtest)'}
+          </button>
+        </div>
 
         <button
           onClick={handleExportLargePoolSnapshots}

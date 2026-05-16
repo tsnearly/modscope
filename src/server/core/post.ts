@@ -36,8 +36,6 @@ export const createPost = async (subredditName: string) => {
     styles: {
       "backgroundColor": "#D7DADCAA",
       "backgroundColorDark": "#1A1A1BCC",
-      "border": "1px solid #343536",
-      "borderRadius": "8px",
     }
   });
 

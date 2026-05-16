@@ -1,0 +1,114 @@
+/* ModScope Upvoted Theme */
+/* A spiritual nod to the world's front page — warm, punchy, community-fired. */
+
+[data-theme='upvoted'] {
+  /* Core Palette */
+  --color-primary: #ff4650;        /* signal red — the upvote energy */
+  --color-secondary: #ff8a80;      /* faded guava — softened echo of primary */
+  --color-accent: #e8e0d8;         /* warm parchment — Reddit's off-white warmth */
+  --color-text: #1a1a1b;           /* near-black — Reddit's own dark ink */
+  --color-text-muted: #878a8c;     /* meta gray — subdued thread text */
+  --color-bg: #dae0e6;             /* cool silver-blue — the classic Reddit page wash */
+  --color-surface: #ffffff;        /* card white — post and comment surfaces */
+  --color-error: #cc1100;          /* deep alarm red */
+  --color-border: #ccc5bb;         /* warm taupe border */
+
+  /* Derived semantic variables */
+  --tab-active-bg: var(--color-accent);
+  --tab-active-border: var(--color-primary);
+  --tab-active-text: var(--color-text);
+  --tab-bg: var(--color-surface);
+  --tab-border: var(--color-border);
+  --tab-text: var(--color-text-muted);
+  --tab-hover: var(--color-primary);
+
+  --btn-primary-bg: var(--color-primary);
+  --btn-primary-text: #ffffff;
+  --btn-primary-hover: #e03040;
+  --btn-primary-active: #c4222e;
+
+  --nav-bg: var(--color-surface);
+  --nav-border: var(--color-border);
+  --nav-item-text: var(--color-text-muted);
+  --nav-item-hover: var(--color-primary);
+  --nav-item-active-bg: #fff0f0;
+  --nav-item-active-text: var(--color-primary);
+
+  --text-primary: var(--color-text);
+  --text-secondary: var(--color-text);
+  --text-muted: var(--color-text-muted);
+
+  --card-bg: var(--color-surface);
+  --card-border: var(--color-border);
+  --card-header-text: var(--color-text);
+  --card-body-text: var(--color-text);
+
+  --border-default: var(--color-border);
+  --border-strong: #a8a09a;
+  --border-subtle: #dedbd6;
+
+  --bg-surface: var(--color-surface);
+  --bg-card: var(--color-surface);
+
+  /* Chart & Visualization Colors */
+  --chart-primary: var(--color-primary);
+  --chart-secondary: var(--color-secondary);
+  --chart-tertiary: #ff9f80;       /* warm coral */
+  --chart-light: #ffd5cc;          /* blush tint */
+  --chart-accent: #c5b9ad;         /* warm stone */
+  --chart-highlight: #cc1100;
+
+  /* Heatmap gradient — blush to signal red */
+  --heatmap-0: #fde8e8;
+  --heatmap-1: #fdc8c4;
+  --heatmap-2: #fca8a0;
+  --heatmap-3: #fb8880;
+  --heatmap-4: #f96860;
+  --heatmap-5: #f75850;
+  --heatmap-6: #f54848;
+  --heatmap-7: #f03840;
+  --heatmap-8: #e82838;
+  --heatmap-9: #ff4650;
+
+  --spacing-xs: 2px;
+  --spacing-sm: 4px;
+  --spacing-md: 8px;
+  --spacing-lg: 12px;
+  --spacing-xl: 16px;
+
+  --radius-sm: 2px;               /* Reddit is squarer than Clockwork */
+  --radius-md: 4px;
+  --radius-lg: 8px;
+
+  --shadow-sm: 0 1px 3px rgba(26, 26, 27, 0.08);
+  --shadow-md: 0 2px 8px rgba(26, 26, 27, 0.12);
+  --shadow-lg: 0 4px 16px rgba(26, 26, 27, 0.18);
+
+  /* Schedule View Semantics */
+  --summary-bg: var(--color-bg);
+  --summary-text: var(--color-text);
+  --summary-header-text: var(--color-primary);
+  --summary-border: var(--color-border);
+  --primary-contrast-text: #ffffff;
+
+  /* Shadcn/Tailwind Variables (HSL format) */
+  --background: 205 18% 88%;        /* dae0e6 — the page wash */
+  --foreground: 0 1% 10%;           /* 1a1a1b */
+  --card: 0 0% 100%;
+  --card-foreground: 0 1% 10%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 0 1% 10%;
+  --primary: 357 100% 64%;          /* ff4650 */
+  --primary-foreground: 0 0% 100%;
+  --secondary: 357 100% 75%;        /* ff8a80 */
+  --secondary-foreground: 357 100% 30%;
+  --muted: 30 12% 88%;              /* e8e0d8 */
+  --muted-foreground: 200 2% 54%;   /* 878a8c */
+  --accent: 30 18% 88%;
+  --accent-foreground: 357 100% 45%;
+  --destructive: 357 100% 40%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 30 10% 78%;             /* ccc5bb */
+  --input: 30 10% 78%;
+  --ring: 357 100% 64%;
+}

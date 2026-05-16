@@ -1,188 +1,142 @@
 import type { RedisClient } from '@devvit/web/server';
-import { AnalyticsSnapshot } from '../../shared/types/api';
+import { AnalyticsSnapshot, PostData } from '../../shared/types/api';
+import { redisKey, TREND_CHUNK_POOL_HYDRATE } from '../../shared/core/constants';
+import { resolvePostUtcId, buildPostShardWrites } from '../../shared/utils/post-utils';
 import { TrendingService } from './TrendingService';
 
+/**
+ * Persists a completed `AnalyticsSnapshot` into Redis and handles the
+ * corresponding deletion / reset operations.
+ *
+ * Key design decisions:
+ *  - All Redis key strings come from `redisKey` — nothing is hard-coded here.
+ *  - Chunked writes use the shared `TREND_CHUNK_POOL_HYDRATE` constant.
+ *  - Per-post shard writes are delegated to `buildPostShardWrites` from post-utils.
+ */
 export class NormalizationService {
-  private redis: RedisClient;
-  private trendService: TrendingService;
+  private readonly trendService: TrendingService;
 
-  constructor(redis: RedisClient) {
-    this.redis = redis;
+  constructor(private readonly redis: RedisClient) {
     this.trendService = new TrendingService(redis);
   }
 
-  async normalizeSnapshot(snapshot: AnalyticsSnapshot): Promise<number> {
-    const sub = snapshot.meta.subreddit;
-    const date = snapshot.meta.scanDate;
-    const indexKey = `index:snapshots:${sub}:${date}`;
+  // ── Public: normalizeSnapshot ─────────────────────────────────────────────
 
+  async normalizeSnapshot(snapshot: AnalyticsSnapshot): Promise<number> {
+    const sub      = snapshot.meta.subreddit;
+    const date     = snapshot.meta.scanDate;
+    const indexKey = redisKey.snapshotIndex(sub, date);
+
+    // Idempotency guard — skip exact duplicates, overwrite stale index entries
     const existingIdStr = await this.redis.get(indexKey);
     if (existingIdStr) {
-      const meta = await this.redis.hGetAll(`run:${existingIdStr}:meta`);
-      if (!meta || !meta.subreddit) {
-        console.log('[BOOTSTRAP] Stale index detected. Overwriting.');
+      const existingMeta = await this.redis.hGetAll(redisKey.scanMeta(parseInt(existingIdStr, 10)));
+      if (!existingMeta?.subreddit) {
+        console.log('[NORMALIZATION] Stale index detected. Overwriting.');
         await this.redis.del(indexKey);
       } else {
-        console.log(`[BOOTSTRAP] Skipping duplicate snapshot for ${sub}`);
-        return parseInt(existingIdStr);
+        console.log(`[NORMALIZATION] Skipping duplicate snapshot for r/${sub}.`);
+        return parseInt(existingIdStr, 10);
       }
     }
 
-    const scanId = await this.redis.incrBy('global:scan_counter', 1);
-    console.log(
-      `[NORMALIZATION] Ingesting scan #${scanId} for r/${sub} (${date})`
-    );
-
+    const scanId             = await this.redis.incrBy(redisKey.scanCounter(), 1);
     const scanTimestampScore = snapshot.meta.scanDate
       ? new Date(snapshot.meta.scanDate).getTime()
       : Date.now();
 
+    console.log(`[NORMALIZATION] Ingesting scan #${scanId} for r/${sub} (${date})`);
+
+    // ── Step 1: Write scan-level metadata, stats, and global timeline entry ──
+
     await Promise.all([
-      this.redis.hSet(`run:${scanId}:meta`, {
-        subreddit: snapshot.meta.subreddit || 'unknown',
-        scan_date: snapshot.meta.scanDate || '',
-        proc_date: new Date().toISOString(),
-        official_account: snapshot.meta.officialAccount || '',
+      this.redis.hSet(redisKey.scanMeta(scanId), {
+        subreddit:         snapshot.meta.subreddit        || 'unknown',
+        scan_date:         snapshot.meta.scanDate         || '',
+        proc_date:         new Date().toISOString(),
+        official_account:  snapshot.meta.officialAccount  || '',
         official_accounts: JSON.stringify(snapshot.meta.officialAccounts || []),
       }),
-      this.redis.hSet(`run:${scanId}:stats`, {
-        subscribers: (snapshot.stats.subscribers || '0').toString(),
-        active: (snapshot.stats.active || '0').toString(),
-        rules_count: (snapshot.stats.rules_count || 0).toString(),
-        posts_per_day: (snapshot.stats.posts_per_day || 0).toString(),
-        comments_per_day: (snapshot.stats.comments_per_day || 0).toString(),
-        avg_engagement: (snapshot.stats.avg_engagement || 0).toString(),
-        avg_score: (snapshot.stats.avg_score || 0).toString(),
-        score_velocity: (snapshot.stats.score_velocity || 0).toString(),
-        comment_velocity: (snapshot.stats.comment_velocity || 0).toString(),
-        combined_velocity: (snapshot.stats.combined_velocity || 0).toString(),
-        created: snapshot.stats.created || '',
-        pool_size: snapshot.analysisPool
-          ? snapshot.analysisPool.length.toString()
-          : '0',
+      this.redis.hSet(redisKey.scanStats(scanId), {
+        subscribers:       String(snapshot.stats.subscribers      || 0),
+        active:            String(snapshot.stats.active           || 0),
+        rules_count:       String(snapshot.stats.rules_count      || 0),
+        posts_per_day:     String(snapshot.stats.posts_per_day    || 0),
+        comments_per_day:  String(snapshot.stats.comments_per_day || 0),
+        avg_engagement:    String(snapshot.stats.avg_engagement   || 0),
+        avg_score:         String(snapshot.stats.avg_score        || 0),
+        score_velocity:    String(snapshot.stats.score_velocity   || 0),
+        comment_velocity:  String(snapshot.stats.comment_velocity || 0),
+        combined_velocity: String(snapshot.stats.combined_velocity|| 0),
+        created:           snapshot.stats.created                 || '',
+        pool_size:         String(snapshot.analysisPool?.length   ?? 0),
       }),
-      // Register in the timeline ZSet so the purge routine can use zRangeByScore
-      // instead of sweeping every scan ID from 1 to maxId.
-      this.redis.zAdd('global:snapshots:timeline', {
-        score: scanTimestampScore,
+      // Register in the global timeline so the purge routine can use
+      // zRangeByScore instead of sweeping every scan ID from 1 to maxId.
+      this.redis.zAdd(redisKey.snapshotsTimeline(), {
+        score:  scanTimestampScore,
         member: scanId.toString(),
       }),
     ]);
 
-    // 2. Store lists and pool via ZSETs to bypass size limits
-    // We store the analysis pool as individual JSON members in ZSETs.
-    // The canonical pool key is kept in sync with the legacy :pool:json key so
-    // older readers continue to work while the trend pipeline uses the canonical path.
-    const canonicalPoolKey = `scan:${scanId}:pool`;
-    const legacyPoolKey = `scan:${scanId}:pool:json`;
+    // ── Step 2: Store analysis pool in ZSETs (chunked to avoid thread blocking) ─
+
     if (snapshot.analysisPool && snapshot.analysisPool.length > 0) {
-      console.log(
-        `[NORMALIZATION] Storing ${snapshot.analysisPool.length} posts in ZSET...`
-      );
-      // Add in chunks to avoid blocking the thread too long
-      const CHUNK = 50;
-      for (let i = 0; i < snapshot.analysisPool.length; i += CHUNK) {
+      console.log(`[NORMALIZATION] Storing ${snapshot.analysisPool.length} posts in ZSETs...`);
+
+      for (let i = 0; i < snapshot.analysisPool.length; i += TREND_CHUNK_POOL_HYDRATE) {
         const batch = snapshot.analysisPool
-          .slice(i, i + CHUNK)
-          .map((post, idx) => ({
-            score: i + idx,
-            member: JSON.stringify(post),
-          }));
+          .slice(i, i + TREND_CHUNK_POOL_HYDRATE)
+          .map((post, idx) => ({ score: i + idx, member: JSON.stringify(post) }));
+
+        // Keep canonical and legacy pool keys in sync for backward compatibility
         await Promise.all([
-          this.redis.zAdd(canonicalPoolKey, ...batch),
-          this.redis.zAdd(legacyPoolKey, ...batch),
+          this.redis.zAdd(redisKey.scanPool(scanId),     ...batch),
+          this.redis.zAdd(redisKey.scanPoolJson(scanId), ...batch),
         ]);
       }
     }
 
-    // Store lists (we keep these as a JSON blob because they are usually small - max 600 refs)
-    await this.redis.set(
-      `scan:${scanId}:lists`,
-      JSON.stringify(snapshot.lists || {})
-    );
+    // ── Step 3: Persist post lists and scan summary ───────────────────────────
 
-    // Write scan summary for TrendingService Phase 1 to retrieve timestamps
-    await this.redis.hSet(`scan:${scanId}:summary`, {
-      completedAt: scanTimestampScore.toString(),
-      startedAt: scanTimestampScore.toString(),
-      subreddit: sub,
-    });
+    await Promise.all([
+      // Lists stored as a JSON blob (small, max ~600 refs)
+      this.redis.set(redisKey.scanLists(scanId), JSON.stringify(snapshot.lists || {})),
+      // Summary hash used by TrendingService Phase 1 to retrieve timestamps
+      this.redis.hSet(redisKey.scanSummary(scanId), {
+        completedAt: scanTimestampScore.toString(),
+        startedAt:   scanTimestampScore.toString(),
+        subreddit:   sub,
+      }),
+    ]);
 
-    // Write per-post data shards (static, metrics) and time-series entries for TrendingService phases 2 & 3
+    // ── Step 4: Write per-post static/metrics shards and time-series ZSETs ──
+
     if (snapshot.analysisPool && snapshot.analysisPool.length > 0) {
-      console.log(
-        `[NORMALIZATION] Writing per-post data shards and time-series entries...`
-      );
-      const tsChunk = 50;
-      for (let i = 0; i < snapshot.analysisPool.length; i += tsChunk) {
-        const posts = snapshot.analysisPool.slice(i, i + tsChunk);
-        const tsWrites: Promise<any>[] = [];
+      console.log(`[NORMALIZATION] Writing per-post data shards and time-series entries...`);
+
+      for (let i = 0; i < snapshot.analysisPool.length; i += TREND_CHUNK_POOL_HYDRATE) {
+        const posts  = snapshot.analysisPool.slice(i, i + TREND_CHUNK_POOL_HYDRATE);
+        const writes: Array<Promise<unknown>> = [];
 
         for (const post of posts) {
-          const utcId =
-            (post as { utcId?: string }).utcId ||
-            post.id ||
-            `post_${post.url?.replace(/\//g, '_')}`;
-
-          // Write static shard (immutable fields)
-          tsWrites.push(
-            this.redis.hSet(`post:${utcId}:static`, {
-              flair: post.flair || 'none',
-              created_utc: (post.created_utc || 0).toString(),
-              author: post.author || '[deleted]',
-              is_self: (!!post.is_self).toString(),
-              title: post.title || '',
-            })
-          );
-
-          // Write metrics shard (cumulative aggregates)
-          tsWrites.push(
-            this.redis.hSet(`post:${utcId}:metrics`, {
-              score_sum: (post.score || 0).toString(),
-              comments_sum: (post.comments || 0).toString(),
-              engagement_sum: (
-                post.engagement_score ||
-                post.score ||
-                0
-              ).toString(),
-              samples: '1',
-            })
-          );
-
-          // Write time-series entries: member is "{scanTimestamp}:{value}" and score is scanTimestamp
-          const tsScore = scanTimestampScore;
-          const tsScoreMember = `${tsScore}:${post.score || 0}`;
-          const tsCommentsMember = `${tsScore}:${post.comments || 0}`;
-          const tsEngagementMember = `${tsScore}:${post.engagement_score || post.score || 0}`;
-
-          tsWrites.push(
-            this.redis.zAdd(`post:${utcId}:ts:score`, {
-              score: tsScore,
-              member: tsScoreMember,
-            })
-          );
-          tsWrites.push(
-            this.redis.zAdd(`post:${utcId}:ts:comments`, {
-              score: tsScore,
-              member: tsCommentsMember,
-            })
-          );
-          tsWrites.push(
-            this.redis.zAdd(`post:${utcId}:ts:engagement`, {
-              score: tsScore,
-              member: tsEngagementMember,
-            })
-          );
+          const utcId = resolvePostUtcId(post as PostData & { utcId?: string });
+          writes.push(...buildPostShardWrites(
+            this.redis,
+            post as PostData & { utcId?: string },
+            utcId,
+            scanTimestampScore
+          ));
         }
 
-        if (tsWrites.length > 0) {
-          await Promise.all(tsWrites);
-        }
+        if (writes.length > 0) await Promise.all(writes);
       }
     }
 
+    // ── Step 5: Update per-subreddit latest pointer and day-indexed entry ────
+
     await Promise.all([
-      this.redis.set(`sub:${sub}:latest_scan`, scanId.toString()),
+      this.redis.set(redisKey.latestScan(sub), scanId.toString()),
       this.redis.set(indexKey, scanId.toString()),
     ]);
 
@@ -190,120 +144,95 @@ export class NormalizationService {
     return scanId;
   }
 
+  // ── Public: deleteSnapshot ────────────────────────────────────────────────
+
   async deleteSnapshot(scanId: number): Promise<void> {
-    const meta = await this.redis.hGetAll(`run:${scanId}:meta`);
-    if (meta && meta.subreddit && meta.scan_date) {
-      const scanDate = meta.scan_date;
-      const subreddit = meta.subreddit;
-      const scanTimestamp = new Date(scanDate).getTime();
+    const meta = await this.redis.hGetAll(redisKey.scanMeta(scanId));
+    if (!meta?.subreddit || !meta?.scan_date) return;
 
-      // 1. Remove from global timeline and per-subreddit index FIRST
-      // This ensures getRetainedScans will not pick it up during cleanup recomputations
+    const subreddit     = meta.subreddit;
+    const scanDate      = meta.scan_date;
+    const scanTimestamp = new Date(scanDate).getTime();
+
+    // Step 1: Remove from global timeline and day index FIRST so that
+    //         getRetainedScans does not re-encounter this scan during cleanup.
+    await Promise.all([
+      this.redis.zRem(redisKey.snapshotsTimeline(), [scanId.toString()]),
+      this.redis.del(redisKey.snapshotIndex(subreddit, scanDate)),
+    ]);
+
+    // Step 2: Remove per-post time-series entries for every post in the pool
+    const [canonicalMembers, legacyMembers] = await Promise.all([
+      this.redis.zRange(redisKey.scanPool(scanId),     0, -1),
+      this.redis.zRange(redisKey.scanPoolJson(scanId), 0, -1),
+    ]);
+
+    const poolMembers = Array.from(new Set([...canonicalMembers, ...legacyMembers]));
+
+    for (const raw of poolMembers) {
+      const postKey = typeof raw === 'string' ? raw : (raw as { member: string }).member;
+      if (!postKey) continue;
       await Promise.all([
-        this.redis.zRem('global:snapshots:timeline', [scanId.toString()]),
-        this.redis.del(`index:snapshots:${subreddit}:${scanDate}`),
+        this.redis.zRemRangeByScore(redisKey.postTsScore(postKey),      scanTimestamp, scanTimestamp),
+        this.redis.zRemRangeByScore(redisKey.postTsComments(postKey),   scanTimestamp, scanTimestamp),
+        this.redis.zRemRangeByScore(redisKey.postTsEngagement(postKey), scanTimestamp, scanTimestamp),
       ]);
-
-      // 2. Remove per-scan TS data from posts
-      const [canonicalPoolMembers, legacyPoolMembers] = await Promise.all([
-        this.redis.zRange(`scan:${scanId}:pool`, 0, -1),
-        this.redis.zRange(`scan:${scanId}:pool:json`, 0, -1),
-      ]);
-
-      const poolMembers = Array.from(
-        new Set([...canonicalPoolMembers, ...legacyPoolMembers])
-      );
-
-      for (const member of poolMembers) {
-        const postKey =
-          typeof member === 'string'
-            ? member
-            : (member as { member: string }).member;
-        if (postKey) {
-          await Promise.all([
-            this.redis.zRemRangeByScore(
-              `post:${postKey}:ts:score`,
-              scanTimestamp,
-              scanTimestamp
-            ),
-            this.redis.zRemRangeByScore(
-              `post:${postKey}:ts:comments`,
-              scanTimestamp,
-              scanTimestamp
-            ),
-            this.redis.zRemRangeByScore(
-              `post:${postKey}:ts:engagement`,
-              scanTimestamp,
-              scanTimestamp
-            ),
-          ]);
-        }
-      }
-
-      // 3. Remove all scan-level keys
-      await Promise.all([
-        this.redis.del(`run:${scanId}:meta`),
-        this.redis.del(`run:${scanId}:stats`),
-        this.redis.del(`scan:${scanId}:data`),
-        this.redis.del(`scan:${scanId}:lists`),
-        this.redis.del(`scan:${scanId}:pool`),
-        this.redis.del(`scan:${scanId}:pool:json`),
-        this.redis.del(`scan:${scanId}:list:t`),
-        this.redis.del(`scan:${scanId}:list:d`),
-        this.redis.del(`scan:${scanId}:list:e`),
-        this.redis.del(`scan:${scanId}:list:r`),
-        this.redis.del(`scan:${scanId}:list:h`),
-        this.redis.del(`scan:${scanId}:list:c`),
-        this.redis.del(`run:${scanId}:analysis_pool`),
-        this.redis.del(`run:${scanId}:lists`),
-      ]);
-
-      // 4. Finally, trigger trend artifact cleanup and recomputation
-      // Now getRetainedScans will correctly see the scan as gone
-      try {
-        await this.trendService.cleanupTrendArtifacts(
-          subreddit,
-          [scanId],
-          [scanTimestamp]
-        );
-      } catch (error) {
-        console.warn(
-          `[NORMALIZATION] Trend artifact cleanup failed for scan #${scanId}:`,
-          error
-        );
-      }
-
-      // 5. Remove from global timeline
-      await this.redis.zRem('global:snapshots:timeline', [scanId.toString()]);
-
-      console.log(`[NORMALIZATION] Deleted scan #${scanId}`);
     }
+
+    // Step 3: Delete all scan-level keys (current and legacy formats)
+    await Promise.all([
+      this.redis.del(redisKey.scanMeta(scanId)),
+      this.redis.del(redisKey.scanStats(scanId)),
+      this.redis.del(redisKey.scanData(scanId)),
+      this.redis.del(redisKey.scanLists(scanId)),
+      this.redis.del(redisKey.scanPool(scanId)),
+      this.redis.del(redisKey.scanPoolJson(scanId)),
+      this.redis.del(redisKey.scanListTop(scanId)),
+      this.redis.del(redisKey.scanListDiscussed(scanId)),
+      this.redis.del(redisKey.scanListEngaged(scanId)),
+      this.redis.del(redisKey.scanListRising(scanId)),
+      this.redis.del(redisKey.scanListHot(scanId)),
+      this.redis.del(redisKey.scanListControversial(scanId)),
+      this.redis.del(redisKey.runAnalysisPool(scanId)),
+      this.redis.del(redisKey.runLists(scanId)),
+    ]);
+
+    // Step 4: Trigger trend artifact cleanup (non-fatal if it fails)
+    try {
+      await this.trendService.cleanupTrendArtifacts(subreddit, [scanId], [scanTimestamp]);
+    } catch (error) {
+      console.warn(`[NORMALIZATION] Trend artifact cleanup failed for scan #${scanId}:`, error);
+    }
+
+    // Step 5: Final redundant timeline removal (guards against race conditions)
+    await this.redis.zRem(redisKey.snapshotsTimeline(), [scanId.toString()]);
+
+    console.log(`[NORMALIZATION] Deleted scan #${scanId}`);
   }
 
-  async resetStorage(): Promise<void> {
-    const scanCountStr = await this.redis.get('global:scan_counter');
-    const scanCount = scanCountStr ? parseInt(scanCountStr) : 0;
+  // ── Public: resetStorage ──────────────────────────────────────────────────
 
-    // Collect all subreddits seen so we can wipe their latest_scan pointers
+  async resetStorage(): Promise<void> {
+    const scanCountStr = await this.redis.get(redisKey.scanCounter());
+    const scanCount    = scanCountStr ? parseInt(scanCountStr, 10) : 0;
+
+    // Collect subreddits first so we can wipe their latest-scan pointers
     const subreddits = new Set<string>();
     for (let i = 1; i <= scanCount; i++) {
       const meta = await this.redis
-        .hGetAll(`run:${i}:meta`)
+        .hGetAll(redisKey.scanMeta(i))
         .catch(() => ({}) as Record<string, string>);
-      if (meta?.subreddit) {
-        subreddits.add(meta.subreddit);
-      }
+      if (meta?.subreddit) subreddits.add(meta.subreddit);
       await this.deleteSnapshot(i);
     }
 
-    // Delete latest_scan pointers for every subreddit we wiped
-    for (const sub of subreddits) {
-      await this.redis.del(`sub:${sub}:latest_scan`);
-    }
+    await Promise.all([
+      ...[...subreddits].map((sub) => this.redis.del(redisKey.latestScan(sub))),
+      this.redis.del(redisKey.scanCounter()),
+    ]);
 
-    await this.redis.del('global:scan_counter');
     console.log(
-      `[STORAGE] Reset complete. Cleared pointers for: ${[...subreddits].join(', ') || 'none'}`
+      `[NORMALIZATION] Reset complete. Cleared pointers for: ${[...subreddits].join(', ') || 'none'}`
     );
   }
 }

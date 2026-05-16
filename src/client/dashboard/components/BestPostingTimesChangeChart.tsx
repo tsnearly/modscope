@@ -1,8 +1,9 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { getDataGroupingIcon } from '../utils/iconMappings';
 import { Chart } from './ui/chart';
 import { Icon } from './ui/icon';
 import { NonIdealState } from './ui/non-ideal-state';
+import { MS_PER_DAY } from '../../../shared/core/constants';
 
 type BestTimesTimelinePoint = {
   timestamp: number;
@@ -32,14 +33,18 @@ type TrendsData = {
     timeline: BestTimesTimelinePoint[];
     changeSummary: ChangeSummary;
   };
+  globalBestPostingTimes?: any[];
 };
 
 type BestPostingTimesChangeChartProps = {
   trendsData: TrendsData;
   iconContext: 'screen' | 'printed';
   isPrintMode?: boolean;
-  trendAnalysisDays?: number;
+  snapshotTimestamp?: number | undefined;
 };
+
+type WindowRange = '30' | '60' | '90';
+type CompareMode = '2' | '3';
 
 /**
  * Localizes a UTC bucket string (e.g., "Mon-08") to the user's browser timezone day/hour.
@@ -72,12 +77,6 @@ function getLocalDayHour(dayHour: string): { dayShort: string; hour: number } {
   };
 }
 
-function formatHour(h: number): string {
-  const period = h >= 12 ? 'PM' : 'AM';
-  const displayHour = h === 0 ? 12 : h > 12 ? h - 12 : h;
-  return `${displayHour} ${period}`;
-}
-
 const FULL_DAY_NAMES: Record<string, string> = {
   Sun: 'Sunday',
   Mon: 'Monday',
@@ -88,19 +87,14 @@ const FULL_DAY_NAMES: Record<string, string> = {
   Sat: 'Saturday',
 };
 
-function formatDayHour(dayHour: string): string {
-  const local = getLocalDayHour(dayHour);
-  const day = FULL_DAY_NAMES[local.dayShort] || local.dayShort || 'Unknown';
-  return `${day} - ${formatHour(local.hour)}`;
-}
 
 function buildSparkPath(
   values: number[],
   width: number,
   height: number
-): { line: string; fill: string } {
+): { line: string; fill: string; points: Array<{ x: number; y: number; value: number }> } {
   if (values.length === 0) {
-    return { line: '', fill: '' };
+    return { line: '', fill: '', points: [] };
   }
 
   const max = Math.max(...values, 1);
@@ -111,7 +105,7 @@ function buildSparkPath(
     const x =
       values.length === 1 ? width : (index / (values.length - 1)) * width;
     const y = height - ((value - min) / range) * (height - 6) - 3;
-    return { x, y };
+    return { x, y, value };
   });
 
   const line = points
@@ -121,50 +115,158 @@ function buildSparkPath(
     )
     .join(' ');
   const fill = `${line} L${width},${height + 2} L0,${height + 2} Z`;
-  return { line, fill };
+  return { line, fill, points };
 }
 
 export function BestPostingTimesChangeChart({
   trendsData,
   iconContext,
-  trendAnalysisDays = 30,
+  isPrintMode,
+  snapshotTimestamp,
 }: BestPostingTimesChangeChartProps) {
-  const bestPostingTimesData = trendsData.bestPostingTimesChange;
-  const cardToneClasses = {
-    rising: {
-      shell: 'bg-emerald-50/60 border-emerald-100',
-      title: 'text-emerald-700',
-      value: 'text-emerald-600',
-    },
-    falling: {
-      shell: 'bg-red-50/60 border-red-100',
-      title: 'text-red-700',
-      value: 'text-red-600',
-    },
-    stable: {
-      shell: 'bg-blue-50/60 border-blue-100',
-      title: 'text-blue-700',
-      value: 'text-blue-600',
-    },
-  } as const;
-  const { hasData, summaryCards, dayMomentum, sparkSeries } = useMemo(() => {
-    const changeSummary = bestPostingTimesData?.changeSummary;
-    const timeline = bestPostingTimesData?.timeline || [];
+  const [windowRange, setWindowRange] = useState<WindowRange>('30');
+  const [compareMode, setCompareMode] = useState<CompareMode>('2');
+  const [hiddenSparkSeries, setHiddenSparkSeries] = useState<Record<string, boolean>>({});
+  const [sparkTooltip, setSparkTooltip] = useState<{
+    x: number;
+    y: number;
+    value: number;
+    label: string;
+    index: number;
+    dateLabel?: string;
+  } | null>(null);
 
-    if (!changeSummary) {
+  const bestPostingTimesData = trendsData.bestPostingTimesChange;
+
+  const { hasData, rankedSlots, dayMomentum, sparkSeries } = useMemo(() => {
+    const rawTimeline = bestPostingTimesData?.timeline || [];
+    if (rawTimeline.length === 0) {
       return {
         hasData: false,
-        summaryCards: [],
+        rankedSlots: [],
         dayMomentum: [],
         sparkSeries: [],
       };
     }
 
-    const { risingSlots, fallingSlots, stableSlots } = changeSummary;
-    const latestTimeline = timeline[timeline.length - 1] || null;
-    const primarySlots =
-      latestTimeline?.topSlots?.slice(0, 5) || stableSlots.slice(0, 5);
-    const slotSeries = primarySlots.map((slot, index) => {
+    // 1. Filter timeline by windowRange and snapshot anchor
+    const anchorTimestamp = snapshotTimestamp || (rawTimeline.length > 0 ? rawTimeline[rawTimeline.length - 1]!.timestamp : Date.now());
+    const windowDays = parseInt(windowRange, 10);
+    const cutoffTs = anchorTimestamp - windowDays * MS_PER_DAY;
+    
+    // Filter to points between cutoff and anchor
+    const timeline = rawTimeline.filter(
+      (t) => t.timestamp >= cutoffTs && t.timestamp <= anchorTimestamp
+    );
+
+    if (timeline.length === 0) {
+      return {
+        hasData: false,
+        rankedSlots: [],
+        dayMomentum: [],
+        sparkSeries: [],
+      };
+    }
+
+    // 2. Perform comparison analysis based on compareMode
+    const segmentsCount = parseInt(compareMode, 10);
+    const segmentSize = Math.max(1, Math.floor(timeline.length / segmentsCount));
+
+    const earlyPeriod = timeline.slice(0, segmentSize);
+    const latePeriod = timeline.slice(-segmentSize);
+
+    const earlyRankings: Record<string, number[]> = {};
+    const lateRankings: Record<string, number[]> = {};
+
+    earlyPeriod.forEach((entry) => {
+      entry.topSlots.forEach((slot, index) => {
+        const ranking = earlyRankings[slot.dayHour] || [];
+        ranking.push(index + 1);
+        earlyRankings[slot.dayHour] = ranking;
+      });
+    });
+
+    latePeriod.forEach((entry) => {
+      entry.topSlots.forEach((slot, index) => {
+        const ranking = lateRankings[slot.dayHour] || [];
+        ranking.push(index + 1);
+        lateRankings[slot.dayHour] = ranking;
+      });
+    });
+
+    const risingSlots: Array<{ dayHour: string; change: number }> = [];
+    const fallingSlots: Array<{ dayHour: string; change: number }> = [];
+    const stableSlots: Array<{ dayHour: string; score: number }> = [];
+
+    const allSlots = new Set([
+      ...Object.keys(earlyRankings),
+      ...Object.keys(lateRankings),
+    ]);
+
+    for (const slot of allSlots) {
+      const earlyAvg = earlyRankings[slot]
+        ? earlyRankings[slot].reduce((sum, rank) => sum + rank, 0) /
+          earlyRankings[slot].length
+        : 11; // Assume out of top 10
+      const lateAvg = lateRankings[slot]
+        ? lateRankings[slot].reduce((sum, rank) => sum + rank, 0) /
+          lateRankings[slot].length
+        : 11;
+
+      const change = earlyAvg - lateAvg;
+
+      if (change > 0.5) {
+        risingSlots.push({ dayHour: slot, change });
+      } else if (change < -0.5) {
+        fallingSlots.push({ dayHour: slot, change });
+      } else {
+        const latestEntry = timeline[timeline.length - 1];
+        const slotData = latestEntry?.topSlots.find((s) => s.dayHour === slot);
+        if (slotData) {
+          stableSlots.push({ dayHour: slot, score: slotData.score });
+        }
+      }
+    }
+
+    risingSlots.sort((a, b) => b.change - a.change);
+    fallingSlots.sort((a, b) => a.change - b.change);
+    stableSlots.sort((a, b) => b.score - a.score);
+
+    // 3. Evaluate all global slots to find their current scores and deltas
+    const globalBest = trendsData.globalBestPostingTimes || [];
+    const priorTimeline = earlyPeriod[0] || timeline[0]!;
+    
+    const evaluatedSlots = globalBest.map((b: any) => {
+      const local = getLocalDayHour(`${b.day}-${b.hour}`);
+      const hourFmt = `${local.hour % 12 || 12} ${local.hour < 12 ? 'AM' : 'PM'}`;
+      const dayHour = `${b.day}-${b.hour.toString().padStart(2, '0')}`;
+
+      const latestEntry = timeline[timeline.length - 1];
+      const latestSlot = latestEntry?.topSlots?.find(
+        (s: any) => s.dayHour === dayHour
+      );
+      const currentScore = latestSlot?.score ?? 0;
+
+      const priorSlot = priorTimeline?.topSlots?.find(
+        (s: any) => s.dayHour === dayHour
+      );
+      const priorScore = priorSlot?.score ?? 0;
+      const delta = currentScore - priorScore;
+
+      return {
+        dayHour,
+        label: `${FULL_DAY_NAMES[local.dayShort] || local.dayShort} - ${hourFmt}`,
+        score: currentScore,
+        delta,
+      };
+    }).filter((s: any) => s.score > 0).sort((a: any, b: any) => b.score - a.score);
+
+    const ranked = evaluatedSlots.slice(0, 4);
+
+    // 4. Build sparkSeries with timestamps
+    const topSparkSlots = evaluatedSlots.slice(0, 5);
+    
+    const slotSeries = topSparkSlots.map((slot: any, index: number) => {
       const values = timeline.map((entry) => {
         const found = entry.topSlots.find(
           (candidate) => candidate.dayHour === slot.dayHour
@@ -174,14 +276,16 @@ export function BestPostingTimesChangeChart({
 
       return {
         dayHour: slot.dayHour,
-        label: formatDayHour(slot.dayHour),
+        label: slot.label,
         values,
+        timestamps: timeline.map((t) => t.timestamp),
         color: ['#1D9E75', '#378ADD', '#EF9F27', '#D85A30', '#7F77DD'][
           index % 5
-        ],
+        ]!,
       };
     });
 
+    // 5. Day-of-week momentum
     const dayTotals = new Map<
       string,
       { net: number; rising: number; falling: number; stable: number }
@@ -250,38 +354,120 @@ export function BestPostingTimesChangeChart({
       };
     });
 
-    const summary = [
-      {
-        title: 'Top Momentum',
-        kind: 'rising' as const,
-        slot:
-          risingSlots.slice().sort((a, b) => b.change - a.change)[0] || null,
-      },
-      {
-        title: 'Sharpest Decline',
-        kind: 'falling' as const,
-        slot:
-          fallingSlots
-            .slice()
-            .sort((a, b) => Math.abs(b.change) - Math.abs(a.change))[0] || null,
-      },
-      {
-        title: 'Most Stable',
-        kind: 'stable' as const,
-        slot: stableSlots.slice().sort((a, b) => b.score - a.score)[0] || null,
-      },
-    ];
-
     return {
-      hasData:
-        risingSlots.length > 0 ||
-        fallingSlots.length > 0 ||
-        stableSlots.length > 0,
-      summaryCards: summary,
+      hasData: true,
+      rankedSlots: ranked,
       dayMomentum: dayMomentumData,
       sparkSeries: slotSeries,
     };
-  }, [bestPostingTimesData]);
+  }, [bestPostingTimesData, windowRange, compareMode]);
+
+  const handleSparkHover = useCallback(
+    (
+      e: ReactMouseEvent<SVGRectElement>,
+      seriesLabel: string,
+      value: number,
+      index: number,
+      timestamp?: number
+    ) => {
+      const svg = (e.target as SVGRectElement).closest('svg');
+      if (!svg) return;
+      const rect = svg.getBoundingClientRect();
+
+      let dateLabel = `pt ${index + 1}`;
+      if (timestamp) {
+        try {
+          dateLabel = new Intl.DateTimeFormat('en-US', {
+            month: 'short',
+            day: 'numeric',
+          }).format(new Date(timestamp));
+        } catch {
+          // fallback
+        }
+      }
+
+      setSparkTooltip({
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top - 28,
+        value,
+        label: seriesLabel,
+        index,
+        dateLabel,
+      });
+    },
+    []
+  );
+
+  const handleSparkLeave = useCallback(() => {
+    setSparkTooltip(null);
+  }, []);
+
+  const renderDropdowns = () =>
+    !isPrintMode ? (
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          flexWrap: 'wrap',
+        }}
+      >
+        <label
+          style={{
+            fontSize: '11px',
+            color: 'var(--text-secondary)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '5px',
+          }}
+        >
+          <select
+            value={windowRange}
+            onChange={(e) => setWindowRange(e.target.value as WindowRange)}
+            style={{
+              fontSize: '11px',
+              padding: '3px 6px',
+              borderRadius: '6px',
+              border: '1px solid var(--border-default)',
+              background: 'var(--bg-surface)',
+              color: 'var(--text-secondary)',
+              cursor: 'pointer',
+            }}
+          >
+            <option value="30">Last 30 days</option>
+            <option value="60">Last 60 days</option>
+            <option value="90">Last 90 days</option>
+          </select>
+        </label>
+        <label
+          style={{
+            fontSize: '11px',
+            color: 'var(--text-secondary)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '5px',
+          }}
+        >
+          Compare
+          <select
+            value={compareMode}
+            onChange={(e) => setCompareMode(e.target.value as CompareMode)}
+            style={{
+              fontSize: '11px',
+              padding: '3px 6px',
+              borderRadius: '6px',
+              border: '1px solid var(--border-default)',
+              background: 'var(--bg-surface)',
+              color: 'var(--text-secondary)',
+              cursor: 'pointer',
+            }}
+          >
+            <option value="2">Recent vs prior half</option>
+            <option value="3">3 equal thirds</option>
+          </select>
+        </label>
+      </div>
+    ) : null;
 
   if (!hasData) {
     return (
@@ -305,6 +491,7 @@ export function BestPostingTimesChangeChart({
       </Chart>
     );
   }
+
   return (
     <Chart
       title="Best Posting Times Change"
@@ -314,46 +501,113 @@ export function BestPostingTimesChangeChart({
           size={16}
         />
       }
+      headerRight={renderDropdowns()}
       height="auto"
     >
       <div className="flex flex-col gap-5">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {summaryCards.map((card) => {
-            const tones = cardToneClasses[card.kind];
+        {/* Section: Top Posting Windows — Ranked */}
+        <div>
+          <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 mb-2">
+            Top posting windows — shift
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {rankedSlots.map((slot: { dayHour: string; label: string; score: number; delta: number }, idx: number) => {
+              const maxScore = Math.max(
+                ...rankedSlots.map((s: any) => s.score),
+                1
+              );
+              const pct = Math.round((slot.score / maxScore) * 100);
+              const d = Math.round(slot.delta);
+              const isUp = d > 0;
+              const isDown = d < 0;
 
-            return (
-              <div
-                key={card.title}
-                className={`rounded-xl border p-3 shadow-sm ${tones.shell}`}
-              >
+              const barColor = isUp
+                ? '#1D9E75'
+                : isDown
+                  ? '#D85A30'
+                  : '#378ADD';
+
+              return (
                 <div
-                  className={`text-[10px] font-bold uppercase tracking-tighter mb-1 ${tones.title}`}
+                  key={slot.dayHour}
+                  style={{
+                    background: 'var(--bg-surface)',
+                    border: '0.5px solid var(--border-default)',
+                    borderRadius: '10px',
+                    padding: '12px 14px',
+                  }}
                 >
-                  {card.title}
-                </div>
-                {card.slot ? (
-                  <>
-                    <div className="text-xs font-black">
-                      {formatDayHour(card.slot.dayHour)}
-                    </div>
+                  <div
+                    style={{
+                      fontSize: '13px',
+                      fontWeight: 500,
+                      color: 'var(--text-primary)',
+                      marginBottom: '2px',
+                    }}
+                  >
+                    {slot.label}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: '11px',
+                      color: 'var(--text-muted)',
+                      marginBottom: '10px',
+                    }}
+                  >
+                    Prime window · rank {idx + 1}
+                  </div>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      marginBottom: '4px',
+                    }}
+                  >
                     <div
-                      className={`text-[10px] mt-1 font-bold ${tones.value}`}
+                      style={{
+                        flex: 1,
+                        height: '20px',
+                        background: 'var(--bg-secondary)',
+                        borderRadius: '4px',
+                        overflow: 'hidden',
+                      }}
                     >
-                      {card.kind === 'falling' && 'change' in card.slot
-                        ? `-${Math.abs(card.slot.change).toFixed(1)} score shift`
-                        : 'change' in card.slot
-                          ? `+${card.slot.change.toFixed(1)} score shift`
-                          : `${card.slot.score.toFixed(1)} score`}
+                      <div
+                        style={{
+                          height: '100%',
+                          width: `${pct}%`,
+                          background: barColor,
+                          borderRadius: '4px',
+                          transition: 'width 0.4s',
+                        }}
+                      />
                     </div>
-                  </>
-                ) : (
-                  <div className="text-xs text-muted-foreground">No data</div>
-                )}
-              </div>
-            );
-          })}
+                    <div className="flex flex-col items-end min-w-[60px]">
+                      <span className="text-sm font-black text-slate-800 leading-none">
+                        {slot.score > 0 ? slot.score.toLocaleString() : 'N/A'}
+                      </span>
+                      {slot.score > 0 && (
+                        <div className="flex items-center gap-1 mt-1">
+                          <Icon
+                            name={slot.delta >= 0 ? 'mono-trend' : 'mono-trend-alt'}
+                            size={10}
+                            className={slot.delta >= 0 ? 'text-emerald-500' : 'text-red-500'}
+                          />
+                          <span className={`text-[10px] font-bold ${slot.delta >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                            {slot.delta > 0 ? '+' : ''}{slot.delta.toFixed(0)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
+        {/* Section: Day-of-week Momentum */}
         <div className="rounded-2xl border border-border/60 bg-slate-50/40 p-4">
           <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 mb-2">
             Day-of-week momentum
@@ -412,12 +666,66 @@ export function BestPostingTimesChangeChart({
           })()}
         </div>
 
+        {/* Section: Sparkline Trends */}
         <div className="rounded-2xl border border-border/60 bg-white p-4 shadow-sm">
-          <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 mb-2">
-            {trendAnalysisDays}-day window trend - top 5 slots
+          <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 mb-1">
+            {`${windowRange}-day window trend — top ${sparkSeries.length} slot${sparkSeries.length === 1 ? '' : 's'}`}
           </div>
+          <div
+            style={{
+              fontSize: '11px',
+              color: 'var(--text-muted)',
+              marginBottom: '10px',
+            }}
+          >
+            Each sparkline = one prime window's rolling activity score
+          </div>
+          {/* Legend */}
+          <div
+            style={{
+              display: 'flex',
+              gap: '14px',
+              flexWrap: 'wrap',
+              marginBottom: '12px',
+            }}
+          >
+            {sparkSeries.map((series: any) => {
+              const isHidden = hiddenSparkSeries[series.dayHour];
+              return (
+              <button
+                key={series.dayHour}
+                onClick={() => setHiddenSparkSeries(prev => ({ ...prev, [series.dayHour]: !prev[series.dayHour] }))}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  fontSize: '12px',
+                  color: 'var(--text-secondary)',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: 0,
+                  opacity: isHidden ? 0.45 : 1,
+                  textDecoration: isHidden ? 'line-through' : 'none',
+                }}
+              >
+                <span
+                  style={{
+                    width: '8px',
+                    height: '8px',
+                    borderRadius: '2px',
+                    background: series.color,
+                    display: 'inline-block',
+                    border: isHidden ? '1px solid var(--border-default)' : 'none',
+                  }}
+                />
+                {series.label}
+              </button>
+            )})}
+          </div>
+          {/* Sparklines */}
           <div className="space-y-3">
-            {sparkSeries.map((series) => {
+            {sparkSeries.filter((series: any) => !hiddenSparkSeries[series.dayHour]).map((series: any) => {
               const width = 280;
               const height = 40;
               const path = buildSparkPath(series.values, width, height);
@@ -425,26 +733,87 @@ export function BestPostingTimesChangeChart({
 
               return (
                 <div key={series.dayHour} className="flex items-center gap-3">
-                  <div className="w-28 shrink-0 text-xs text-slate-600 font-medium">
-                    {series.label}
-                  </div>
-                  <div className="flex-1 min-w-0">
+                  <div
+                    className="flex-1 min-w-0"
+                    style={{ position: 'relative' }}
+                  >
                     <svg
                       width="100%"
                       viewBox={`0 0 ${width} ${height + 2}`}
                       preserveAspectRatio="none"
                       className="block h-10"
+                      onMouseLeave={handleSparkLeave}
                     >
                       <path d={path.fill} fill={series.color} opacity="0.12" />
                       <path
                         d={path.line}
                         fill="none"
                         stroke={series.color}
-                        strokeWidth="1.75"
-                        strokeLinejoin="round"
+                        strokeWidth="1.5"
                         strokeLinecap="round"
+                        strokeLinejoin="round"
                       />
+                      {/* Invisible hover targets for tooltips */}
+                      {path.points.map((pt, i) => (
+                        <rect
+                          key={i}
+                          x={pt.x - 6}
+                          y={0}
+                          width={12}
+                          height={height + 2}
+                          fill="transparent"
+                          onMouseEnter={(e) =>
+                            handleSparkHover(
+                              e,
+                              series.label,
+                              pt.value,
+                              i,
+                              series.timestamps?.[i]
+                            )
+                          }
+                          onMouseMove={(e) =>
+                            handleSparkHover(
+                              e,
+                              series.label,
+                              pt.value,
+                              i,
+                              series.timestamps?.[i]
+                            )
+                          }
+                          onMouseLeave={handleSparkLeave}
+                          style={{ cursor: 'crosshair' }}
+                        />
+                      ))}
                     </svg>
+                    {/* Lightweight sparkline tooltip */}
+                    {sparkTooltip &&
+                      sparkTooltip.label === series.label && (
+                        <div
+                          style={{
+                            position: 'absolute',
+                            left: `${sparkTooltip.x}px`,
+                            top: `${sparkTooltip.y}px`,
+                            transform: 'translateX(-50%)',
+                            background: 'rgba(255,255,255,0.95)',
+                            border: '1px solid rgba(0,0,0,0.08)',
+                            borderRadius: '6px',
+                            padding: '3px 7px',
+                            fontSize: '10px',
+                            color: 'var(--text-secondary)',
+                            pointerEvents: 'none',
+                            whiteSpace: 'nowrap',
+                            boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+                            zIndex: 10,
+                          }}
+                        >
+                          <span style={{ fontWeight: 600 }}>
+                            {sparkTooltip.value.toFixed(1)}
+                          </span>
+                          <span style={{ opacity: 0.6, marginLeft: '4px' }}>
+                            {sparkTooltip.dateLabel || `pt ${sparkTooltip.index + 1}`}
+                          </span>
+                        </div>
+                      )}
                   </div>
                   <div className="w-12 text-right text-xs font-black text-slate-700">
                     {latestValue.toFixed(1)}
@@ -456,8 +825,11 @@ export function BestPostingTimesChangeChart({
         </div>
 
         <div className="text-[10px] text-muted-foreground border-t border-border pt-3 italic leading-relaxed text-center">
-          Directional shifts compare the latest timeline against the earlier
-          half of the {trendAnalysisDays}-day window.
+          Directional shifts compare{' '}
+          {compareMode === '2'
+            ? 'the latest timeline against the earlier half'
+            : 'across 3 equal thirds'}{' '}
+          of the {windowRange}-day window.
         </div>
       </div>
     </Chart>

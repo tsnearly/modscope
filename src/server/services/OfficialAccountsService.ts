@@ -1,4 +1,5 @@
 import type { RedditClient } from '@devvit/web/server';
+import { BOT_LIST } from '../../shared/core/constants';
 
 export async function getOfficialAccounts(
   reddit: RedditClient,
@@ -7,13 +8,10 @@ export async function getOfficialAccounts(
   const official: string[] = [];
   try {
     const subreddit = await reddit.getSubredditByName(subredditName);
+    const normalizedSubName = subredditName
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
     const moderators = await subreddit.getModerators().all();
-
-    if (moderators && moderators.length > 0) {
-      const patterns = ['bot', 'automod', subredditName.toLowerCase()];
-      const normalizedSubName = subredditName
-        .toLowerCase()
-        .replace(/[^a-z0-9]/g, '');
 
       for (let i = 0; i < moderators.length; i++) {
         try {
@@ -35,7 +33,7 @@ export async function getOfficialAccounts(
           const normalizedModName = modName.replace(/[^a-z0-9]/g, '');
 
           if (
-            patterns.some((p) => modName.includes(p)) ||
+            BOT_LIST.some((p) => modName.includes(p)) ||
             normalizedModName.includes(normalizedSubName)
           ) {
             if (!official.includes(username)) {
@@ -48,9 +46,8 @@ export async function getOfficialAccounts(
             modError
           );
         }
-      }
     }
-  } catch (error) {
+ } catch (error) {
     console.error(
       `[OfficialAccounts] Error fetching moderators for r/${subredditName}:`,
       error

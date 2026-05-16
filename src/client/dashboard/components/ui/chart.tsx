@@ -3,6 +3,7 @@ import React from 'react';
 interface ChartProps {
   title?: React.ReactNode;
   icon?: React.ReactNode;
+  headerRight?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
   height?: number | string;
@@ -11,6 +12,7 @@ interface ChartProps {
 export function Chart({
   title,
   icon,
+  headerRight,
   children,
   className = '',
   height = 320,
@@ -23,7 +25,7 @@ export function Chart({
         minHeight: typeof height === 'number' ? `${height}px` : height,
       }}
     >
-      {(title || icon) && (
+      {(title || icon || headerRight) && (
         <div className="flex flex-row items-center gap-2 mb-2 pb-2 border-b border-border px-1">
           {icon && (
             <span className="inline-flex flex-shrink-0 text-muted-foreground">
@@ -34,6 +36,11 @@ export function Chart({
             <h3 className="text-sm font-bold text-card-foreground m-0 leading-tight">
               {title}
             </h3>
+          )}
+          {headerRight && (
+            <div className="ml-auto flex-shrink-0">
+              {headerRight}
+            </div>
           )}
         </div>
       )}

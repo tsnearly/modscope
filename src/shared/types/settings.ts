@@ -281,7 +281,8 @@ export type ThemeId =
   | 'amber'
   | 'nocturne'
   | 'springtime'
-  | 'rosemeadow';
+  | 'rosemeadow'
+  | 'upvoted';
 
 export interface ThemeDefinition {
   id: ThemeId;
@@ -296,6 +297,7 @@ export const THEMES: ThemeDefinition[] = [
   { id: 'nocturne', label: 'Nocturne' },
   { id: 'springtime', label: 'Springtime' },
   { id: 'rosemeadow', label: 'Rose Meadow' },
+  { id: 'upvoted', label: 'Upvoted' },
 ];
 
 export interface UserSettings {
@@ -311,6 +313,18 @@ export const DEFAULT_STORAGE_SETTINGS: StorageSettings = {
   snapshotFrequency: 'daily',
   retentionDays: 180, // 30-365 by 30
 };
+
+export interface ReportingSchedule {
+  id: string;
+  name: string;
+  scheduleType: 'daily' | 'weekly' | 'monthly';
+  recipients: string;
+  enabled: boolean;
+  hour: number;
+  minute: number;
+  dayOfWeek?: number | number[]; // 0-6 (Sun-Sat)
+  dayOfMonth?: number; // 1-31
+}
 
 export interface ReportSettings {
   showOverview: boolean;
@@ -331,6 +345,7 @@ export interface ReportSettings {
   showHot: boolean;
   showControversial: boolean;
   trendAnalysisDays: number;
+  reportingSchedules: ReportingSchedule[];
 }
 
 export const DEFAULT_REPORT_SETTINGS: ReportSettings = {
@@ -352,6 +367,7 @@ export const DEFAULT_REPORT_SETTINGS: ReportSettings = {
   showHot: true,
   showControversial: true,
   trendAnalysisDays: 90,
+  reportingSchedules: [],
 };
 
 export interface PresetSettings {

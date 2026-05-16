@@ -81,3 +81,4 @@ export * from './tooltip';
 export * from './chart';
 export * from './section';
 export * from './non-ideal-state';
+export * from './toast';

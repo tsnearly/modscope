@@ -1,8 +1,8 @@
+import { useMemo, useState } from 'react';
 import {
     Area,
     AreaChart,
     CartesianGrid,
-    Legend,
     Tooltip as RechartsTooltip,
     ResponsiveContainer,
     XAxis,
@@ -11,6 +11,15 @@ import {
 import { getDataGroupingIcon, type IconContext } from '../utils/iconMappings';
 import { Chart } from './ui/chart';
 import { Icon } from './ui/icon';
+import { MS_PER_DAY } from '../../../shared/core/constants';
+
+type TimeRange = '7d' | '30d' | '90d';
+
+// Hardcoded print-mode colors matching the reference example exactly
+const PRINT_COLORS = {
+  primary: '#2563eb',
+  accent: '#e11d48',
+} as const;
 
 interface ActivityViewProps {
   activityTrendData: Array<{ date: string; posts: number; comments: number }>;
@@ -25,6 +34,7 @@ interface ActivityViewProps {
   isPrintMode: boolean;
   tabKey: string;
   compactTooltipProps: any;
+  referenceTimestamp?: number | undefined;
 }
 
 export function ActivityView({
@@ -36,131 +46,129 @@ export function ActivityView({
   isPrintMode,
   tabKey,
   compactTooltipProps,
+  referenceTimestamp,
 }: ActivityViewProps) {
+  const [activityTimeRange, setActivityTimeRange] = useState<TimeRange>('30d');
   const isPostsHidden = hiddenSeries.posts === true;
   const isCommentsHidden = hiddenSeries.comments === true;
   const isScoreHidden = hiddenSeries.score === true;
   const isEngagementHidden = hiddenSeries.engagement === true;
 
-  const renderActivityLegend = () => {
-    const items = [
-      {
-        key: 'posts',
-        label: 'Avg Posts',
-        color: 'var(--chart-primary)',
-        hidden: isPostsHidden,
-      },
-      {
-        key: 'comments',
-        label: 'Avg Comments',
-        color: 'var(--chart-accent)',
-        hidden: isCommentsHidden,
-      },
-    ];
+  // Filter activity data by selected time range
+  const filteredActivityData = useMemo(() => {
+    if (!activityTrendData || activityTrendData.length === 0) return [];
 
-    return (
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'center',
-          gap: '14px',
-          flexWrap: 'wrap',
-          fontSize: '10px',
-        }}
-      >
-        {items.map((item) => (
-          <button
-            key={item.key}
-            type="button"
-            onClick={() => onToggleSeries(item.key)}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              border: 'none',
-              background: 'transparent',
-              cursor: 'pointer',
-              opacity: item.hidden ? 0.45 : 1,
-              color: 'var(--text-muted)',
-              textDecoration: item.hidden ? 'line-through' : 'none',
-            }}
-            aria-pressed={!item.hidden}
-          >
-            <span
-              style={{
-                width: '8px',
-                height: '8px',
-                borderRadius: '999px',
-                background: item.color,
-                border: `1px solid ${item.hidden ? 'var(--color-border)' : item.color}`,
-              }}
-            />
-            <span>{item.label}</span>
-          </button>
-        ))}
-      </div>
-    );
+    const daysMap: Record<TimeRange, number> = { '7d': 7, '30d': 30, '90d': 90 };
+    const daysToShow = daysMap[activityTimeRange];
+
+    // Find the latest date in data as the reference point
+    const sortedDates = activityTrendData
+      .map((d) => new Date(`${d.date}T12:00:00Z`).getTime())
+      .filter((t) => !isNaN(t))
+      .sort((a, b) => b - a);
+
+    if (sortedDates.length === 0) return activityTrendData;
+
+    const referenceDate = referenceTimestamp ?? sortedDates[0]!;
+    const cutoffMs = referenceDate - daysToShow * MS_PER_DAY;
+
+    return activityTrendData.filter((d) => {
+      const ts = new Date(`${d.date}T12:00:00Z`).getTime();
+      return !isNaN(ts) && ts >= cutoffMs && ts <= (referenceTimestamp ?? Infinity);
+    });
+  }, [activityTrendData, activityTimeRange, referenceTimestamp]);
+
+  // Resolve colors: theme-compliant for screen, hardcoded for print
+  const primaryColor = isPrintMode ? PRINT_COLORS.primary : 'var(--chart-primary)';
+  const accentColor = isPrintMode ? PRINT_COLORS.accent : 'var(--chart-accent)';
+
+  const timeRangeLabel: Record<TimeRange, string> = {
+    '7d': 'Last 7 days',
+    '30d': 'Last 30 days',
+    '90d': 'Last 3 months',
   };
 
-  const renderEngagementLegend = () => {
-    const items = [
-      {
-        key: 'score',
-        label: 'Avg Score',
-        color: 'var(--chart-primary)',
-        hidden: isScoreHidden,
-      },
-      {
-        key: 'engagement',
-        label: 'Avg Engagement',
-        color: 'var(--chart-accent)',
-        hidden: isEngagementHidden,
-      },
-    ];
+  const renderTimeRangeDropdown = (
+    value: TimeRange,
+    onChange: (v: TimeRange) => void
+  ) => (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value as TimeRange)}
+      style={{
+        fontSize: '11px',
+        padding: '4px 8px',
+        borderRadius: '6px',
+        border: '1px solid var(--border-default)',
+        background: 'var(--bg-surface)',
+        color: 'var(--text-secondary)',
+        cursor: 'pointer',
+        outline: 'none',
+      }}
+      aria-label="Select time range"
+    >
+      <option value="7d">{timeRangeLabel['7d']}</option>
+      <option value="30d">{timeRangeLabel['30d']}</option>
+      <option value="90d">{timeRangeLabel['90d']}</option>
+    </select>
+  );
 
-    return (
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'center',
-          gap: '14px',
-          flexWrap: 'wrap',
-          fontSize: '10px',
-        }}
-      >
-        {items.map((item) => (
-          <button
-            key={item.key}
-            type="button"
-            onClick={() => onToggleSeries(item.key)}
+  const renderLegend = (
+    items: Array<{ key: string; label: string; color: string; hidden: boolean }>
+  ) => (
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: 'center',
+        gap: '14px',
+        flexWrap: 'wrap',
+        fontSize: '10px',
+      }}
+    >
+      {items.map((item) => (
+        <button
+          key={item.key}
+          type="button"
+          onClick={() => onToggleSeries(item.key)}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            border: 'none',
+            background: 'transparent',
+            cursor: 'pointer',
+            opacity: item.hidden ? 0.45 : 1,
+            color: 'var(--text-muted)',
+            textDecoration: item.hidden ? 'line-through' : 'none',
+          }}
+          aria-pressed={!item.hidden}
+        >
+          <span
             style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              border: 'none',
-              background: 'transparent',
-              cursor: 'pointer',
-              opacity: item.hidden ? 0.45 : 1,
-              color: 'var(--text-muted)',
-              textDecoration: item.hidden ? 'line-through' : 'none',
+              width: '8px',
+              height: '8px',
+              borderRadius: '999px',
+              background: item.color,
+              border: `1px solid ${item.hidden ? 'var(--color-border)' : item.color}`,
             }}
-            aria-pressed={!item.hidden}
-          >
-            <span
-              style={{
-                width: '8px',
-                height: '8px',
-                borderRadius: '999px',
-                background: item.color,
-                border: `1px solid ${item.hidden ? 'var(--color-border)' : item.color}`,
-              }}
-            />
-            <span>{item.label}</span>
-          </button>
-        ))}
-      </div>
-    );
-  };
+          />
+          <span>{item.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+
+  const renderActivityLegend = () =>
+    renderLegend([
+      { key: 'posts', label: 'Avg Posts', color: primaryColor, hidden: isPostsHidden },
+      { key: 'comments', label: 'Avg Comments', color: accentColor, hidden: isCommentsHidden },
+    ]);
+
+  const renderEngagementLegend = () =>
+    renderLegend([
+      { key: 'score', label: 'Avg Score', color: primaryColor, hidden: isScoreHidden },
+      { key: 'engagement', label: 'Avg Engagement', color: accentColor, hidden: isEngagementHidden },
+    ]);
 
   return (
     <div
@@ -173,7 +181,7 @@ export function ActivityView({
       }}
     >
       <Chart
-        title="Activity Trend (30d)"
+        title="Activity Trend"
         icon={
           <Icon
             src={getDataGroupingIcon('activity_trend', iconContext)}
@@ -182,128 +190,108 @@ export function ActivityView({
         }
         className="mb-3"
         height={340}
+        headerRight={
+          !isPrintMode
+            ? renderTimeRangeDropdown(activityTimeRange, setActivityTimeRange)
+            : undefined
+        }
       >
+        <div style={{ position: 'relative', zIndex: 3, marginBottom: '8px' }}>
+          {renderActivityLegend()}
+        </div>
         <div
           style={{
             width: '100%',
-            height: '300px',
+            height: 'calc(100% - 32px)',
             minWidth: 0,
             position: 'relative',
           }}
         >
-          <ResponsiveContainer key={tabKey} width="100%" height="100%">
+          <ResponsiveContainer key={`${tabKey}-${activityTimeRange}`} width="100%" height="100%">
             <AreaChart
-              data={activityTrendData}
-              margin={{ top: 10, right: 10, left: 5, bottom: 5 }}
+              data={filteredActivityData}
+              margin={{ top: 10, right: 0, left: 0, bottom: 5 }}
             >
-              <CartesianGrid
-                strokeDasharray="3 3"
-                vertical={true}
-                stroke="rgba(8,10,12,.175)"
-                opacity={1}
-              />
+              <defs>
+                <linearGradient id="fillPosts" x1="0" y1="0" x2="0" y2="1">
+                  <stop
+                    offset="5%"
+                    stopColor={primaryColor}
+                    stopOpacity={0.8}
+                  />
+                  <stop
+                    offset="95%"
+                    stopColor={primaryColor}
+                    stopOpacity={0.1}
+                  />
+                </linearGradient>
+                <linearGradient id="fillComments" x1="0" y1="0" x2="0" y2="1">
+                  <stop
+                    offset="5%"
+                    stopColor={accentColor}
+                    stopOpacity={0.8}
+                  />
+                  <stop
+                    offset="95%"
+                    stopColor={accentColor}
+                    stopOpacity={0.1}
+                  />
+                </linearGradient>
+              </defs>
+              <CartesianGrid vertical={false} stroke="rgba(8,10,12,.1)" />
               <XAxis
                 dataKey="date"
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+                minTickGap={32}
                 tickFormatter={(dateStr) => {
                   try {
                     return new Intl.DateTimeFormat('en-US', {
                       month: 'short',
                       day: 'numeric',
                     }).format(new Date(`${dateStr}T12:00:00Z`));
-                  } catch (e) {
-                    console.error('DateTimeFormat: ', e);
+                  } catch {
                     return dateStr;
                   }
                 }}
-                interval={3}
-                tick={{ fontSize: 8, fill: 'var(--text-primary)' }}
-                height={42}
+                tick={{ fontSize: 9, fill: 'var(--text-muted)' }}
               />
-              <YAxis
-                yAxisId="left"
-                orientation="left"
-                tick={{ fontSize: 9 }}
-                tickCount={6}
-                stroke="var(--color-text)"
-                width={40}
-                label={{
-                  value: 'Posts',
-                  angle: -90,
-                  position: 'insideLeft',
-                  style: { fontSize: 9, fill: 'var(--text-primary)' },
-                }}
-              />
-              <YAxis
-                yAxisId="right"
-                orientation="right"
-                tick={{ fontSize: 9 }}
-                tickCount={6}
-                stroke="var(--color-text)"
-                width={40}
-                label={{
-                  value: 'Comments',
-                  angle: 90,
-                  position: 'insideRight',
-                  style: { fontSize: 9, fill: 'var(--text-primary)' },
-                }}
-              />
+              <YAxis hide domain={[0, 'auto']} />
               <RechartsTooltip {...compactTooltipProps} />
-              <Legend
-                content={renderActivityLegend}
-                verticalAlign="top"
-                align="center"
-                wrapperStyle={{
-                  fontSize: '10px',
-                  paddingBottom: '8px',
-                }}
-              />
               <Area
-                yAxisId="left"
-                type="monotone"
-                dataKey="posts"
-                stroke="var(--chart-primary)"
-                fill="var(--chart-primary)"
-                opacity={0.15}
-                strokeWidth={2.25}
-                name="Avg Posts"
-                isAnimationActive={!isPrintMode}
-                dot={{
-                  r: 2,
-                  fill: 'var(--chart-primary)',
-                  stroke: '#fff',
-                  strokeWidth: 1,
-                }}
-                activeDot={{
-                  r: 2,
-                  fill: '#fff',
-                  stroke: 'var(--chart-primary)',
-                  strokeWidth: 1,
-                }}
-                hide={isPostsHidden}
-              />
-              <Area
-                yAxisId="right"
                 type="monotone"
                 dataKey="comments"
-                stroke="var(--chart-accent)"
-                fill="var(--chart-accent)"
-                opacity={0.5}
-                strokeWidth={2.25}
+                stroke={accentColor}
+                fill="url(#fillComments)"
+                strokeWidth={2}
                 name="Avg Comments"
                 isAnimationActive={!isPrintMode}
-                dot={{
-                  r: 2,
-                  fill: 'var(--chart-accent)',
-                  stroke: '#fff',
-                  strokeWidth: 1,
-                }}
+                dot={false}
                 activeDot={{
-                  r: 2,
+                  r: 3,
                   fill: '#fff',
-                  stroke: 'var(--chart-accent)',
-                  strokeWidth: 1,
+                  stroke: accentColor,
+                  strokeWidth: 1.5,
                 }}
                 hide={isCommentsHidden}
+              />
+              <Area
+                type="monotone"
+                dataKey="posts"
+                stroke={primaryColor}
+                fill="url(#fillPosts)"
+                strokeWidth={2}
+                name="Avg Posts"
+                isAnimationActive={!isPrintMode}
+                dot={false}
+                activeDot={{
+                  r: 3,
+                  fill: '#fff',
+                  stroke: primaryColor,
+                  strokeWidth: 1.5,
+                }}
+                hide={isPostsHidden}
               />
             </AreaChart>
           </ResponsiveContainer>
@@ -320,10 +308,13 @@ export function ActivityView({
         }
         height={340}
       >
+        <div style={{ position: 'relative', zIndex: 3, marginBottom: '8px' }}>
+          {renderEngagementLegend()}
+        </div>
         <div
           style={{
             width: '100%',
-            height: '300px',
+            height: 'calc(100% - 32px)',
             minWidth: 0,
             position: 'relative',
           }}
@@ -335,48 +326,45 @@ export function ActivityView({
           >
             <AreaChart
               data={engagementVsScoreData}
-              margin={{ top: 10, right: 10, left: 5, bottom: 5 }}
+              margin={{ top: 10, right: 0, left: 0, bottom: 5 }}
             >
-              <CartesianGrid
-                strokeDasharray="3 3"
-                vertical={true}
-                stroke="rgba(8,10,12,.175)"
-                opacity={1}
-              />
+              <defs>
+                <linearGradient id="fillScore" x1="0" y1="0" x2="0" y2="1">
+                  <stop
+                    offset="5%"
+                    stopColor={primaryColor}
+                    stopOpacity={0.8}
+                  />
+                  <stop
+                    offset="95%"
+                    stopColor={primaryColor}
+                    stopOpacity={0.1}
+                  />
+                </linearGradient>
+                <linearGradient id="fillEngagement" x1="0" y1="0" x2="0" y2="1">
+                  <stop
+                    offset="5%"
+                    stopColor={accentColor}
+                    stopOpacity={0.8}
+                  />
+                  <stop
+                    offset="95%"
+                    stopColor={accentColor}
+                    stopOpacity={0.1}
+                  />
+                </linearGradient>
+              </defs>
+              <CartesianGrid vertical={false} stroke="rgba(8,10,12,.1)" />
               <XAxis
                 dataKey="hour"
-                interval={2}
-                tick={{ fontSize: 8, fill: 'var(--text-primary)' }}
-                height={42}
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+                minTickGap={24}
+                tick={{ fontSize: 9, fill: 'var(--text-muted)' }}
               />
-              <YAxis
-                yAxisId="left"
-                orientation="left"
-                tick={{ fontSize: 9 }}
-                tickCount={6}
-                stroke="var(--color-text)"
-                width={40}
-                label={{
-                  value: 'Avg Score',
-                  angle: -90,
-                  position: 'insideLeft',
-                  style: { fontSize: 9, fill: 'var(--text-primary)' },
-                }}
-              />
-              <YAxis
-                yAxisId="right"
-                orientation="right"
-                tick={{ fontSize: 9 }}
-                tickCount={6}
-                stroke="var(--color-text)"
-                width={40}
-                label={{
-                  value: 'Avg Engagement',
-                  angle: 90,
-                  position: 'insideRight',
-                  style: { fontSize: 9, fill: 'var(--text-primary)' },
-                }}
-              />
+              <YAxis yAxisId="engagement" hide domain={[0, 'auto']} />
+              <YAxis yAxisId="score" hide domain={[0, 'auto']} />
               <RechartsTooltip
                 {...compactTooltipProps}
                 labelFormatter={(label) => {
@@ -389,59 +377,41 @@ export function ActivityView({
                   return label;
                 }}
               />
-              <Legend
-                content={renderEngagementLegend}
-                verticalAlign="top"
-                align="center"
-                wrapperStyle={{ fontSize: '10px', paddingBottom: '8px' }}
-              />
               <Area
-                yAxisId="left"
-                type="monotone"
-                dataKey="score"
-                stroke="var(--chart-primary)"
-                fill="var(--chart-primary)"
-                opacity={0.15}
-                strokeWidth={2.25}
-                name="Avg Score"
-                isAnimationActive={!isPrintMode}
-                dot={{
-                  r: 2,
-                  fill: 'var(--chart-primary)',
-                  stroke: '#fff',
-                  strokeWidth: 1,
-                }}
-                activeDot={{
-                  r: 2,
-                  fill: '#fff',
-                  stroke: 'var(--chart-primary)',
-                  strokeWidth: 1,
-                }}
-                hide={isScoreHidden}
-              />
-              <Area
-                yAxisId="right"
+                yAxisId="engagement"
                 type="monotone"
                 dataKey="engagement"
-                stroke="var(--chart-accent)"
-                fill="var(--chart-accent)"
-                opacity={0.5}
-                strokeWidth={2.25}
+                stroke={accentColor}
+                fill="url(#fillEngagement)"
+                strokeWidth={2}
                 name="Avg Engagement"
                 isAnimationActive={!isPrintMode}
-                dot={{
-                  r: 2,
-                  fill: 'var(--chart-accent)',
-                  stroke: '#fff',
-                  strokeWidth: 1,
-                }}
+                dot={false}
                 activeDot={{
-                  r: 2,
+                  r: 3,
                   fill: '#fff',
-                  stroke: 'var(--chart-accent)',
-                  strokeWidth: 1,
+                  stroke: accentColor,
+                  strokeWidth: 1.5,
                 }}
                 hide={isEngagementHidden}
+              />
+              <Area
+                yAxisId="score"
+                type="monotone"
+                dataKey="score"
+                stroke={primaryColor}
+                fill="url(#fillScore)"
+                strokeWidth={2}
+                name="Avg Score"
+                isAnimationActive={!isPrintMode}
+                dot={false}
+                activeDot={{
+                  r: 3,
+                  fill: '#fff',
+                  stroke: primaryColor,
+                  strokeWidth: 1.5,
+                }}
+                hide={isScoreHidden}
               />
             </AreaChart>
           </ResponsiveContainer>

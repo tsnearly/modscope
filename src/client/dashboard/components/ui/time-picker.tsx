@@ -46,7 +46,9 @@ export function TimePicker({
   }, [open, value]);
 
   // Parse time
-  const [hours, minutes] = tempTime.split(':').map(Number);
+  const [parsedHours, parsedMinutes] = (tempTime || '00:00').split(':').map(Number);
+  const hours = parsedHours ?? 0;
+  const minutes = parsedMinutes ?? 0;
   const isPM = hours >= 12;
   const displayHours = hours % 12 || 12;
 
@@ -107,7 +109,7 @@ export function TimePicker({
       return 0;
     }
     const rect = svgRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left - center; // Scale if needed, but viewBox 0 0 200 200 and explicit width should match
+    // Scale if needed, but viewBox 0 0 200 200 and explicit width should match
     // Need to account for potential scaling if CSS width != viewBox width.
     // Assuming SVG is square and rendered at natural aspect ratio.
     // Better:
@@ -271,7 +273,9 @@ export function TimePicker({
             <Clock className="mr-2 h-4 w-4 text-muted-foreground" />
             {value ? (
               (() => {
-                const [h, m] = value.split(':').map(Number);
+                const [h_raw, m_raw] = (value || '00:00').split(':').map(Number);
+                const h = h_raw ?? 0;
+                const m = m_raw ?? 0;
                 const suffix = h >= 12 ? 'PM' : 'AM';
                 const displayH = h % 12 || 12;
                 return `${displayH.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')} ${suffix}`;

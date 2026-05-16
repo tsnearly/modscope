@@ -1,0 +1,913 @@
+
+ RUN  v4.0.15 /Volumes/Expansion/dev/modscope
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure total execution time for trend forecasting
+[TRENDS] Starting materialization for r/testsubreddit scan #1000 at 2026-05-08T16:32:28.114Z
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure total execution time for trend forecasting
+[TRENDS] Metadata and settings read completed in 1ms
+[TRENDS] Metadata for scan #1000: {"scan_date":"2026-05-08T16:32:28.094Z","subreddit":"testsubreddit"}
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure total execution time for trend forecasting
+[TRENDS] Configuration: retentionDays=180, analysisPoolSize=30, trendAnalysisDays=90
+[TRENDS] Per-subreddit index walk: Processing 181 items in 4 batches of 50
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure total execution time for trend forecasting
+[TRENDS] Per-subreddit index walk: Batch 1/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure total execution time for trend forecasting
+[TRENDS] Per-subreddit index walk: Batch 2/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure total execution time for trend forecasting
+[TRENDS] Per-subreddit index walk: Batch 3/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure total execution time for trend forecasting
+[TRENDS] Per-subreddit index walk: Batch 4/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure total execution time for trend forecasting
+[TRENDS] Timeline Verification: Processing 0 items in 0 batches of 50
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure total execution time for trend forecasting
+[TRENDS] Retained scans selected for r/testsubreddit: 0
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure total execution time for trend forecasting
+[TRENDS] Retained scans retrieval completed in 162ms
+[TRENDS] Retained scans count: 0
+[TRENDS] No retained scans found for r/testsubreddit
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure total execution time for trend forecasting
+Total trend forecasting execution time: 165.54ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure execution time for each major stage
+[TRENDS] Starting materialization for r/testsubreddit scan #1000 at 2026-05-08T16:32:28.300Z
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure execution time for each major stage
+Stage "Metadata and settings read" completed in -1778257947108.81ms
+[TRENDS] Metadata for scan #1000: {"scan_date":"2026-05-08T16:32:28.281Z","subreddit":"testsubreddit"}
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure execution time for each major stage
+[TRENDS] Configuration: retentionDays=180, analysisPoolSize=30, trendAnalysisDays=90
+[TRENDS] Per-subreddit index walk: Processing 181 items in 4 batches of 50
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure execution time for each major stage
+[TRENDS] Per-subreddit index walk: Batch 1/4 completed in 0ms
+
+ ✓ src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure total execution time for trend forecasting 188ms
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure execution time for each major stage
+[TRENDS] Per-subreddit index walk: Batch 2/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure execution time for each major stage
+[TRENDS] Per-subreddit index walk: Batch 3/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure execution time for each major stage
+[TRENDS] Per-subreddit index walk: Batch 4/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure execution time for each major stage
+[TRENDS] Timeline Verification: Processing 0 items in 0 batches of 50
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure execution time for each major stage
+[TRENDS] Retained scans selected for r/testsubreddit: 0
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure execution time for each major stage
+Stage "Retained scans retrieval" completed in -1778257946953.06ms
+[TRENDS] Retained scans count: 0
+[TRENDS] No retained scans found for r/testsubreddit
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure execution time for each major stage
+Stage execution times:
+  Metadata and settings read: -1778257947108.81ms
+  Retained scans retrieval: -1778257946953.06ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure performance with different analysis pool sizes
+[TRENDS] Starting materialization for r/testsubreddit scan #1010 at 2026-05-08T16:32:28.470Z
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure performance with different analysis pool sizes
+[TRENDS] Metadata and settings read completed in 15ms
+[TRENDS] Metadata for scan #1010: {"scan_date":"2026-05-08T16:32:28.468Z","subreddit":"testsubreddit"}
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure performance with different analysis pool sizes
+[TRENDS] Configuration: retentionDays=180, analysisPoolSize=30, trendAnalysisDays=90
+[TRENDS] Per-subreddit index walk: Processing 181 items in 4 batches of 50
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure performance with different analysis pool sizes
+[TRENDS] Per-subreddit index walk: Batch 1/4 completed in 9ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure performance with different analysis pool sizes
+[TRENDS] Per-subreddit index walk: Batch 2/4 completed in 0ms
+
+ ✓ src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure execution time for each major stage 176ms
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure performance with different analysis pool sizes
+[TRENDS] Per-subreddit index walk: Batch 3/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure performance with different analysis pool sizes
+[TRENDS] Per-subreddit index walk: Batch 4/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure performance with different analysis pool sizes
+[TRENDS] Timeline Verification: Processing 0 items in 0 batches of 50
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure performance with different analysis pool sizes
+[TRENDS] Retained scans selected for r/testsubreddit: 0
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure performance with different analysis pool sizes
+[TRENDS] Retained scans retrieval completed in 164ms
+[TRENDS] Retained scans count: 0
+[TRENDS] No retained scans found for r/testsubreddit
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure performance with different analysis pool sizes
+Pool size 10: 184.34ms
+[TRENDS] Starting materialization for r/testsubreddit scan #1025 at 2026-05-08T16:32:28.659Z
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure performance with different analysis pool sizes
+[TRENDS] Metadata and settings read completed in 1ms
+[TRENDS] Metadata for scan #1025: {"scan_date":"2026-05-08T16:32:28.654Z","subreddit":"testsubreddit"}
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure performance with different analysis pool sizes
+[TRENDS] Configuration: retentionDays=180, analysisPoolSize=30, trendAnalysisDays=90
+[TRENDS] Per-subreddit index walk: Processing 181 items in 4 batches of 50
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure performance with different analysis pool sizes
+[TRENDS] Per-subreddit index walk: Batch 1/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure performance with different analysis pool sizes
+[TRENDS] Per-subreddit index walk: Batch 2/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure performance with different analysis pool sizes
+[TRENDS] Per-subreddit index walk: Batch 3/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure performance with different analysis pool sizes
+[TRENDS] Per-subreddit index walk: Batch 4/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure performance with different analysis pool sizes
+[TRENDS] Timeline Verification: Processing 0 items in 0 batches of 50
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure performance with different analysis pool sizes
+[TRENDS] Retained scans selected for r/testsubreddit: 0
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure performance with different analysis pool sizes
+[TRENDS] Retained scans retrieval completed in 167ms
+[TRENDS] Retained scans count: 0
+[TRENDS] No retained scans found for r/testsubreddit
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure performance with different analysis pool sizes
+Pool size 25: 167.42ms
+[TRENDS] Starting materialization for r/testsubreddit scan #1050 at 2026-05-08T16:32:28.847Z
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure performance with different analysis pool sizes
+[TRENDS] Metadata and settings read completed in 1ms
+[TRENDS] Metadata for scan #1050: {"scan_date":"2026-05-08T16:32:28.832Z","subreddit":"testsubreddit"}
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure performance with different analysis pool sizes
+[TRENDS] Configuration: retentionDays=180, analysisPoolSize=30, trendAnalysisDays=90
+[TRENDS] Per-subreddit index walk: Processing 181 items in 4 batches of 50
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure performance with different analysis pool sizes
+[TRENDS] Per-subreddit index walk: Batch 1/4 completed in 1ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure performance with different analysis pool sizes
+[TRENDS] Per-subreddit index walk: Batch 2/4 completed in 1ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure performance with different analysis pool sizes
+[TRENDS] Per-subreddit index walk: Batch 3/4 completed in 1ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure performance with different analysis pool sizes
+[TRENDS] Per-subreddit index walk: Batch 4/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure performance with different analysis pool sizes
+[TRENDS] Timeline Verification: Processing 0 items in 0 batches of 50
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure performance with different analysis pool sizes
+[TRENDS] Retained scans selected for r/testsubreddit: 0
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure performance with different analysis pool sizes
+[TRENDS] Retained scans retrieval completed in 168ms
+[TRENDS] Retained scans count: 0
+[TRENDS] No retained scans found for r/testsubreddit
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure performance with different analysis pool sizes
+Pool size 50: 169.06ms
+Performance scaling analysis:
+  10 posts: 184.34ms (18.43ms per post)
+  25 posts: 167.42ms (6.70ms per post)
+  50 posts: 169.06ms (3.38ms per post)
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.2: Verify completion within 5-second target > should complete trend forecasting within 5 seconds for 50-post analysis pool
+[TRENDS] Starting materialization for r/testsubreddit scan #1000 at 2026-05-08T16:32:29.033Z
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.2: Verify completion within 5-second target > should complete trend forecasting within 5 seconds for 50-post analysis pool
+[TRENDS] Metadata and settings read completed in 0ms
+[TRENDS] Metadata for scan #1000: {"scan_date":"2026-05-08T16:32:29.018Z","subreddit":"testsubreddit"}
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.2: Verify completion within 5-second target > should complete trend forecasting within 5 seconds for 50-post analysis pool
+[TRENDS] Configuration: retentionDays=180, analysisPoolSize=30, trendAnalysisDays=90
+[TRENDS] Per-subreddit index walk: Processing 181 items in 4 batches of 50
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.2: Verify completion within 5-second target > should complete trend forecasting within 5 seconds for 50-post analysis pool
+[TRENDS] Per-subreddit index walk: Batch 1/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.2: Verify completion within 5-second target > should complete trend forecasting within 5 seconds for 50-post analysis pool
+[TRENDS] Per-subreddit index walk: Batch 2/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.2: Verify completion within 5-second target > should complete trend forecasting within 5 seconds for 50-post analysis pool
+[TRENDS] Per-subreddit index walk: Batch 3/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.2: Verify completion within 5-second target > should complete trend forecasting within 5 seconds for 50-post analysis pool
+[TRENDS] Per-subreddit index walk: Batch 4/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.2: Verify completion within 5-second target > should complete trend forecasting within 5 seconds for 50-post analysis pool
+[TRENDS] Timeline Verification: Processing 0 items in 0 batches of 50
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.2: Verify completion within 5-second target > should complete trend forecasting within 5 seconds for 50-post analysis pool
+[TRENDS] Retained scans selected for r/testsubreddit: 0
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.2: Verify completion within 5-second target > should complete trend forecasting within 5 seconds for 50-post analysis pool
+[TRENDS] Retained scans retrieval completed in 157ms
+[TRENDS] Retained scans count: 0
+[TRENDS] No retained scans found for r/testsubreddit
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.2: Verify completion within 5-second target > should complete trend forecasting within 5 seconds for 50-post analysis pool
+Execution time: 157.19ms (target: 5000ms)
+✅ Performance target met with 4842.81ms to spare
+
+ ✓ src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.1: Measure trend forecasting execution time with 50-post analysis pool > should measure performance with different analysis pool sizes 561ms
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.2: Verify completion within 5-second target > should handle timeout scenarios gracefully
+[TRENDS] Starting materialization for r/testsubreddit scan #1000 at 2026-05-08T16:32:29.196Z
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.2: Verify completion within 5-second target > should handle timeout scenarios gracefully
+[TRENDS] Metadata and settings read completed in 0ms
+[TRENDS] Metadata for scan #1000: {"scan_date":"2026-05-08T16:32:29.191Z","subreddit":"testsubreddit"}
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.2: Verify completion within 5-second target > should handle timeout scenarios gracefully
+[TRENDS] Configuration: retentionDays=180, analysisPoolSize=30, trendAnalysisDays=90
+[TRENDS] Per-subreddit index walk: Processing 181 items in 4 batches of 50
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.2: Verify completion within 5-second target > should handle timeout scenarios gracefully
+[TRENDS] Per-subreddit index walk: Batch 1/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.2: Verify completion within 5-second target > should handle timeout scenarios gracefully
+[TRENDS] Per-subreddit index walk: Batch 2/4 completed in 1ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.2: Verify completion within 5-second target > should handle timeout scenarios gracefully
+[TRENDS] Per-subreddit index walk: Batch 3/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.2: Verify completion within 5-second target > should handle timeout scenarios gracefully
+[TRENDS] Per-subreddit index walk: Batch 4/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.2: Verify completion within 5-second target > should handle timeout scenarios gracefully
+[TRENDS] Timeline Verification: Processing 0 items in 0 batches of 50
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.2: Verify completion within 5-second target > should handle timeout scenarios gracefully
+[TRENDS] Retained scans selected for r/testsubreddit: 0
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.2: Verify completion within 5-second target > should handle timeout scenarios gracefully
+[TRENDS] Retained scans retrieval completed in 157ms
+[TRENDS] Retained scans count: 0
+[TRENDS] No retained scans found for r/testsubreddit
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.2: Verify completion within 5-second target > should handle timeout scenarios gracefully
+Timeout check called 4 times
+
+ ✓ src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.2: Verify completion within 5-second target > should complete trend forecasting within 5 seconds for 50-post analysis pool 173ms
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.2: Verify completion within 5-second target > should measure performance under stress conditions
+[TRENDS] Starting materialization for r/testsubreddit scan #1000 at 2026-05-08T16:32:29.384Z
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.2: Verify completion within 5-second target > should measure performance under stress conditions
+[TRENDS] Metadata and settings read completed in 0ms
+[TRENDS] Metadata for scan #1000: {"scan_date":"2026-05-08T16:32:29.383Z","subreddit":"testsubreddit"}
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.2: Verify completion within 5-second target > should measure performance under stress conditions
+[TRENDS] Configuration: retentionDays=180, analysisPoolSize=30, trendAnalysisDays=90
+[TRENDS] Per-subreddit index walk: Processing 181 items in 4 batches of 50
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.2: Verify completion within 5-second target > should measure performance under stress conditions
+[TRENDS] Per-subreddit index walk: Batch 1/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.2: Verify completion within 5-second target > should measure performance under stress conditions
+[TRENDS] Per-subreddit index walk: Batch 2/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.2: Verify completion within 5-second target > should measure performance under stress conditions
+[TRENDS] Per-subreddit index walk: Batch 3/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.2: Verify completion within 5-second target > should measure performance under stress conditions
+[TRENDS] Per-subreddit index walk: Batch 4/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.2: Verify completion within 5-second target > should measure performance under stress conditions
+[TRENDS] Timeline Verification: Processing 0 items in 0 batches of 50
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.2: Verify completion within 5-second target > should measure performance under stress conditions
+[TRENDS] Retained scans selected for r/testsubreddit: 0
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.2: Verify completion within 5-second target > should measure performance under stress conditions
+[TRENDS] Retained scans retrieval completed in 157ms
+[TRENDS] Retained scans count: 0
+[TRENDS] No retained scans found for r/testsubreddit
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.2: Verify completion within 5-second target > should measure performance under stress conditions
+Stress test execution time: 157.03ms
+
+ ✓ src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.2: Verify completion within 5-second target > should handle timeout scenarios gracefully 163ms
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should profile Redis operation performance
+[TRENDS] Starting materialization for r/testsubreddit scan #1000 at 2026-05-08T16:32:29.549Z
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should profile Redis operation performance
+[TRENDS] Metadata and settings read completed in 1ms
+[TRENDS] Metadata for scan #1000: {"scan_date":"2026-05-08T16:32:29.541Z","subreddit":"testsubreddit"}
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should profile Redis operation performance
+[TRENDS] Configuration: retentionDays=180, analysisPoolSize=30, trendAnalysisDays=90
+[TRENDS] Per-subreddit index walk: Processing 181 items in 4 batches of 50
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should profile Redis operation performance
+[TRENDS] Per-subreddit index walk: Batch 1/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should profile Redis operation performance
+[TRENDS] Per-subreddit index walk: Batch 2/4 completed in 0ms
+
+ ✓ src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.2: Verify completion within 5-second target > should measure performance under stress conditions 188ms
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should profile Redis operation performance
+[TRENDS] Per-subreddit index walk: Batch 3/4 completed in 1ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should profile Redis operation performance
+[TRENDS] Per-subreddit index walk: Batch 4/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should profile Redis operation performance
+[TRENDS] Timeline Verification: Processing 0 items in 0 batches of 50
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should profile Redis operation performance
+[TRENDS] Retained scans selected for r/testsubreddit: 0
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should profile Redis operation performance
+[TRENDS] Retained scans retrieval completed in 154ms
+[TRENDS] Retained scans count: 0
+[TRENDS] No retained scans found for r/testsubreddit
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should profile Redis operation performance
+Redis Operation Performance Profile:
+  hGetAll:
+    Count: 1
+    Total: 0.05ms
+    Average: 0.05ms
+    Min: 0.05ms
+    Max: 0.05ms
+  get:
+    Count: 184
+    Total: 5.31ms
+    Average: 0.03ms
+    Min: 0.00ms
+    Max: 0.05ms
+  zRange:
+    Count: 1
+    Total: 0.12ms
+    Average: 0.12ms
+    Min: 0.12ms
+    Max: 0.12ms
+No significant bottlenecks detected
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should verify batched operations are used efficiently
+[TRENDS] Starting materialization for r/testsubreddit scan #1000 at 2026-05-08T16:32:29.716Z
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should verify batched operations are used efficiently
+[TRENDS] Metadata and settings read completed in 0ms
+[TRENDS] Metadata for scan #1000: {"scan_date":"2026-05-08T16:32:29.705Z","subreddit":"testsubreddit"}
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should verify batched operations are used efficiently
+[TRENDS] Configuration: retentionDays=180, analysisPoolSize=30, trendAnalysisDays=90
+[TRENDS] Per-subreddit index walk: Processing 181 items in 4 batches of 50
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should verify batched operations are used efficiently
+[TRENDS] Per-subreddit index walk: Batch 1/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should verify batched operations are used efficiently
+[TRENDS] Per-subreddit index walk: Batch 2/4 completed in 0ms
+
+ ✓ src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should profile Redis operation performance 164ms
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should verify batched operations are used efficiently
+[TRENDS] Per-subreddit index walk: Batch 3/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should verify batched operations are used efficiently
+[TRENDS] Per-subreddit index walk: Batch 4/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should verify batched operations are used efficiently
+[TRENDS] Timeline Verification: Processing 0 items in 0 batches of 50
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should verify batched operations are used efficiently
+[TRENDS] Retained scans selected for r/testsubreddit: 0
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should verify batched operations are used efficiently
+[TRENDS] Retained scans retrieval completed in 154ms
+[TRENDS] Retained scans count: 0
+[TRENDS] No retained scans found for r/testsubreddit
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should verify batched operations are used efficiently
+Individual operations: 0
+Batched operations: 1
+Batching efficiency: 100.0%
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should measure memory usage patterns
+[TRENDS] Starting materialization for r/testsubreddit scan #1000 at 2026-05-08T16:32:29.887Z
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should measure memory usage patterns
+[TRENDS] Metadata and settings read completed in 0ms
+[TRENDS] Metadata for scan #1000: {"scan_date":"2026-05-08T16:32:29.881Z","subreddit":"testsubreddit"}
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should measure memory usage patterns
+[TRENDS] Configuration: retentionDays=180, analysisPoolSize=30, trendAnalysisDays=90
+[TRENDS] Per-subreddit index walk: Processing 181 items in 4 batches of 50
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should measure memory usage patterns
+[TRENDS] Per-subreddit index walk: Batch 1/4 completed in 2ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should measure memory usage patterns
+[TRENDS] Per-subreddit index walk: Batch 2/4 completed in 0ms
+
+ ✓ src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should verify batched operations are used efficiently 165ms
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should measure memory usage patterns
+[TRENDS] Per-subreddit index walk: Batch 3/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should measure memory usage patterns
+[TRENDS] Per-subreddit index walk: Batch 4/4 completed in 1ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should measure memory usage patterns
+[TRENDS] Timeline Verification: Processing 0 items in 0 batches of 50
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should measure memory usage patterns
+[TRENDS] Retained scans selected for r/testsubreddit: 0
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should measure memory usage patterns
+[TRENDS] Retained scans retrieval completed in 159ms
+[TRENDS] Retained scans count: 0
+[TRENDS] No retained scans found for r/testsubreddit
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should measure memory usage patterns
+Memory usage analysis:
+  RSS delta: 0.00 MB
+  Heap used delta: 0.57 MB
+  Heap total delta: 0.00 MB
+  External delta: 0.01 MB
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should analyze operation concurrency and batching patterns
+[TRENDS] Starting materialization for r/testsubreddit scan #1000 at 2026-05-08T16:32:30.054Z
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should analyze operation concurrency and batching patterns
+[TRENDS] Metadata and settings read completed in 0ms
+[TRENDS] Metadata for scan #1000: {"scan_date":"2026-05-08T16:32:30.048Z","subreddit":"testsubreddit"}
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should analyze operation concurrency and batching patterns
+[TRENDS] Configuration: retentionDays=180, analysisPoolSize=30, trendAnalysisDays=90
+[TRENDS] Per-subreddit index walk: Processing 181 items in 4 batches of 50
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should analyze operation concurrency and batching patterns
+[TRENDS] Per-subreddit index walk: Batch 1/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should analyze operation concurrency and batching patterns
+[TRENDS] Per-subreddit index walk: Batch 2/4 completed in 0ms
+
+ ✓ src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should measure memory usage patterns 177ms
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should analyze operation concurrency and batching patterns
+[TRENDS] Per-subreddit index walk: Batch 3/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should analyze operation concurrency and batching patterns
+[TRENDS] Per-subreddit index walk: Batch 4/4 completed in 1ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should analyze operation concurrency and batching patterns
+[TRENDS] Timeline Verification: Processing 0 items in 0 batches of 50
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should analyze operation concurrency and batching patterns
+[TRENDS] Retained scans selected for r/testsubreddit: 0
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should analyze operation concurrency and batching patterns
+[TRENDS] Retained scans retrieval completed in 156ms
+[TRENDS] Retained scans count: 0
+[TRENDS] No retained scans found for r/testsubreddit
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should analyze operation concurrency and batching patterns
+Operation Timeline Analysis:
+Total operation windows: 4
+Batched windows: 4
+Batching patterns detected:
+  Window 294: hGetAll, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get
+  Window 299: get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get
+  Window 304: get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get
+  Window 310: get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, get, zRange, get
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Starting materialization for r/testsubreddit scan #1000 at 2026-05-08T16:32:30.233Z
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Metadata and settings read completed in 1ms
+[TRENDS] Metadata for scan #1000: {"scan_date":"2026-05-08T16:32:30.221Z","subreddit":"testsubreddit"}
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Configuration: retentionDays=180, analysisPoolSize=30, trendAnalysisDays=90
+[TRENDS] Per-subreddit index walk: Processing 181 items in 4 batches of 50
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Per-subreddit index walk: Batch 1/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Per-subreddit index walk: Batch 2/4 completed in 0ms
+
+ ✓ src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 17.1.3: Profile Redis operations and identify bottlenecks > should analyze operation concurrency and batching patterns 164ms
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Per-subreddit index walk: Batch 3/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Per-subreddit index walk: Batch 4/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Timeline Verification: Processing 0 items in 0 batches of 50
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Retained scans selected for r/testsubreddit: 0
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Retained scans retrieval completed in 163ms
+[TRENDS] Retained scans count: 0
+[TRENDS] No retained scans found for r/testsubreddit
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Starting materialization for r/testsubreddit scan #1001 at 2026-05-08T16:32:30.415Z
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Metadata and settings read completed in 1ms
+[TRENDS] Metadata for scan #1001: {"scan_date":"2026-05-08T16:32:30.398Z","subreddit":"testsubreddit"}
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Configuration: retentionDays=180, analysisPoolSize=30, trendAnalysisDays=90
+[TRENDS] Per-subreddit index walk: Processing 181 items in 4 batches of 50
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Per-subreddit index walk: Batch 1/4 completed in 5ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Per-subreddit index walk: Batch 2/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Per-subreddit index walk: Batch 3/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Per-subreddit index walk: Batch 4/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Timeline Verification: Processing 0 items in 0 batches of 50
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Retained scans selected for r/testsubreddit: 0
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Retained scans retrieval completed in 161ms
+[TRENDS] Retained scans count: 0
+[TRENDS] No retained scans found for r/testsubreddit
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Starting materialization for r/testsubreddit scan #1002 at 2026-05-08T16:32:30.676Z
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Metadata and settings read completed in 1ms
+[TRENDS] Metadata for scan #1002: {"scan_date":"2026-05-08T16:32:30.582Z","subreddit":"testsubreddit"}
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Configuration: retentionDays=180, analysisPoolSize=30, trendAnalysisDays=90
+[TRENDS] Per-subreddit index walk: Processing 181 items in 4 batches of 50
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Per-subreddit index walk: Batch 1/4 completed in 2ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Per-subreddit index walk: Batch 2/4 completed in 1ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Per-subreddit index walk: Batch 3/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Per-subreddit index walk: Batch 4/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Timeline Verification: Processing 0 items in 0 batches of 50
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Retained scans selected for r/testsubreddit: 0
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Retained scans retrieval completed in 166ms
+[TRENDS] Retained scans count: 0
+[TRENDS] No retained scans found for r/testsubreddit
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Starting materialization for r/testsubreddit scan #1003 at 2026-05-08T16:32:30.867Z
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Metadata and settings read completed in 1ms
+[TRENDS] Metadata for scan #1003: {"scan_date":"2026-05-08T16:32:30.848Z","subreddit":"testsubreddit"}
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Configuration: retentionDays=180, analysisPoolSize=30, trendAnalysisDays=90
+[TRENDS] Per-subreddit index walk: Processing 181 items in 4 batches of 50
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Per-subreddit index walk: Batch 1/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Per-subreddit index walk: Batch 2/4 completed in 1ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Per-subreddit index walk: Batch 3/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Per-subreddit index walk: Batch 4/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Timeline Verification: Processing 0 items in 0 batches of 50
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Retained scans selected for r/testsubreddit: 0
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Retained scans retrieval completed in 158ms
+[TRENDS] Retained scans count: 0
+[TRENDS] No retained scans found for r/testsubreddit
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Starting materialization for r/testsubreddit scan #1004 at 2026-05-08T16:32:31.035Z
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Metadata and settings read completed in 0ms
+[TRENDS] Metadata for scan #1004: {"scan_date":"2026-05-08T16:32:31.028Z","subreddit":"testsubreddit"}
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Configuration: retentionDays=180, analysisPoolSize=30, trendAnalysisDays=90
+[TRENDS] Per-subreddit index walk: Processing 181 items in 4 batches of 50
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Per-subreddit index walk: Batch 1/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Per-subreddit index walk: Batch 2/4 completed in 1ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Per-subreddit index walk: Batch 3/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Per-subreddit index walk: Batch 4/4 completed in 0ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Timeline Verification: Processing 0 items in 0 batches of 50
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Retained scans selected for r/testsubreddit: 0
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+[TRENDS] Retained scans retrieval completed in 167ms
+[TRENDS] Retained scans count: 0
+[TRENDS] No retained scans found for r/testsubreddit
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs
+Performance consistency over 5 runs:
+  Average: 166.47ms
+  Min: 161.16ms
+  Max: 172.07ms
+  Std Dev: 3.56ms
+  Coefficient of Variation: 2.1%
+
+ ✓ src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Performance Regression Tests > should maintain consistent performance across multiple runs 992ms
+ ✓ src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 14.2: Data Transformation Logic Tests > 14.2.1 Flair tally normalization with zero-fill > should initialize all flair counts to 0 for continuity 27ms
+ ✓ src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 14.2: Data Transformation Logic Tests > 14.2.1 Flair tally normalization with zero-fill > should preserve zero-fill when some flairs are missing from scan data 14ms
+ ✓ src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 14.2: Data Transformation Logic Tests > 14.2.1 Flair tally normalization with zero-fill > should handle empty flair list 7ms
+ ✓ src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 14.2: Data Transformation Logic Tests > 14.2.1 Flair tally normalization with zero-fill > should handle single flair 8ms
+ ✓ src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 14.2: Data Transformation Logic Tests > 14.2.2 Content mix recap generation with significant delta detection > should return not enough data message for less than 2 distributions 5ms
+ ✓ src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 14.2: Data Transformation Logic Tests > 14.2.2 Content mix recap generation with significant delta detection > should detect significant increase in a flair (5+ percentage points) 9ms
+ ✓ src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 14.2: Data Transformation Logic Tests > 14.2.2 Content mix recap generation with significant delta detection > should detect significant decrease in a flair (5+ percentage points) 7ms
+ ✓ src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 14.2: Data Transformation Logic Tests > 14.2.2 Content mix recap generation with significant delta detection > should return consistent message when changes are below 5 percentage points 9ms
+ ✓ src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 14.2: Data Transformation Logic Tests > 14.2.2 Content mix recap generation with significant delta detection > should handle edge case with zero posts in historical window 11ms
+ ✓ src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 14.2: Data Transformation Logic Tests > 14.2.2 Content mix recap generation with significant delta detection > should prioritize the most significant change when multiple flairs change 8ms
+ ✓ src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 14.2: Data Transformation Logic Tests > 14.2.3 Heatmap bucketing and delta computation > should initialize all 168 buckets (7 days × 24 hours) 5ms
+ ✓ src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 14.2: Data Transformation Logic Tests > 14.2.3 Heatmap bucketing and delta computation > should correctly bucket posts by day-of-week and hour in UTC 18ms
+ ✓ src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 14.2: Data Transformation Logic Tests > 14.2.3 Heatmap bucketing and delta computation > should calculate delta as recent - historical 8ms
+ ✓ src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 14.2: Data Transformation Logic Tests > 14.2.3 Heatmap bucketing and delta computation > should handle missing buckets in delta calculation 5ms
+ ✓ src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 14.2: Data Transformation Logic Tests > 14.2.3 Heatmap bucketing and delta computation > should correctly identify weekday vs weekend buckets 12ms
+ ✓ src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 14.2: Data Transformation Logic Tests > 14.2.4 Posting pattern recap generation with weekday/weekend grouping > should return consistent message when no significant shifts 17ms
+ ✓ src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 14.2: Data Transformation Logic Tests > 14.2.4 Posting pattern recap generation with weekday/weekend grouping > should detect shift toward weekends 7ms
+ ✓ src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 14.2: Data Transformation Logic Tests > 14.2.4 Posting pattern recap generation with weekday/weekend grouping > should detect shift toward weekdays 8ms
+ ✓ src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 14.2: Data Transformation Logic Tests > 14.2.4 Posting pattern recap generation with weekday/weekend grouping > should detect time of day shift (evening hours) 9ms
+ ✓ src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 14.2: Data Transformation Logic Tests > 14.2.4 Posting pattern recap generation with weekday/weekend grouping > should use 5 post threshold for significant shift detection 10ms
+ ✓ src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 14.2: Data Transformation Logic Tests > 14.2.4 Posting pattern recap generation with weekday/weekend grouping > should handle empty buckets 15ms
+ ✓ src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 14.2: Data Transformation Logic Tests > 14.2.5 Best posting times slot scoring > should initialize all 168 slots (7 days × 24 hours) 7ms
+ × src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 14.2: Data Transformation Logic Tests > 14.2.5 Best posting times slot scoring > should aggregate totalSignal and postCount 38ms
+   → expected undefined to be 60 // Object.is equality
+ × src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 14.2: Data Transformation Logic Tests > 14.2.5 Best posting times slot scoring > should return 0 for slots with no posts 9ms
+   → expected undefined to be +0 // Object.is equality
+ × src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 14.2: Data Transformation Logic Tests > 14.2.5 Best posting times slot scoring > should handle empty posts array 6ms
+   → expected undefined to be +0 // Object.is equality
+ × src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 14.2: Data Transformation Logic Tests > 14.2.5 Best posting times slot scoring > should handle single post 8ms
+   → expected undefined to be 15 // Object.is equality
+ × src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 14.2: Data Transformation Logic Tests > 14.2.5 Best posting times slot scoring > should correctly bucket posts by UTC time 7ms
+   → expected undefined to be 10 // Object.is equality
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Global Aggregates Trend forecasting Logic > should compute valid global aggregates across retained scans
+[TRENDS] Materializing global aggregates for 2 scans
+[TRENDS] Starting global aggregates calculation for 2 scans
+[TRENDS] Global Stats collection: Processing 2 items in 1 batches of 10
+[TRENDS] Global Post Pool collection: Processing 2 items in 1 batches of 5
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Global Aggregates Trend forecasting Logic > should compute valid global aggregates across retained scans
+[TRENDS] Global Stats collection: Batch 1/1 completed in 1ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Global Aggregates Trend forecasting Logic > should compute valid global aggregates across retained scans
+[TRENDS] Legacy scan data for #1000: found
+[TRENDS] Legacy scan data for #999: found
+[TRENDS] Analysis pool for global aggregates scan #1000: 2 posts
+[TRENDS] Analysis pool for global aggregates scan #999: 1 posts
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Global Aggregates Trend forecasting Logic > should compute valid global aggregates across retained scans
+[TRENDS] Global Post Pool collection: Batch 1/1 completed in 2ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Global Aggregates Trend forecasting Logic > should compute valid global aggregates across retained scans
+[TRENDS] Global aggregates materialization completed in 4ms
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Global Aggregates Trend forecasting Logic > should handle zero scans safely
+[TRENDS] Materializing global aggregates for 0 scans
+[TRENDS] Starting global aggregates calculation for 0 scans
+[TRENDS] Global Stats collection: Processing 0 items in 0 batches of 10
+[TRENDS] Global Post Pool collection: Processing 0 items in 0 batches of 5
+
+stdout | src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Global Aggregates Trend forecasting Logic > should handle zero scans safely
+[TRENDS] Global aggregates materialization completed in 1ms
+
+ × src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 14.2: Data Transformation Logic Tests > 14.2.5 Best posting times slot scoring > should aggregate multiple posts in same slot 9ms
+   → expected undefined to be 50 // Object.is equality
+ × src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Global Aggregates Trend forecasting Logic > should compute valid global aggregates across retained scans 25ms
+   → expected { post: 2 } to have property "hello"
+ × src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Global Aggregates Trend forecasting Logic > should handle zero scans safely 12ms
+   → expected '{"globalWordCloud":{},"globalBestPost…' to be null
+ ✓ src/server/services/TrendingService.test.ts > Task 14.3: Serialization Logic Tests > 14.3.1 Serializer-parser round-trip > should preserve data through serialize → Redis → parse round-trip for ZSET 2ms
+ ✓ src/server/services/TrendingService.test.ts > Task 14.3: Serialization Logic Tests > 14.3.1 Serializer-parser round-trip > should preserve data through serialize → Redis → parse round-trip for HASH 1ms
+ ✓ src/server/services/TrendingService.test.ts > Task 14.3: Serialization Logic Tests > 14.3.1 Serializer-parser round-trip > should handle empty data round-trip 0ms
+ ✓ src/server/services/TrendingService.test.ts > Task 14.3: Serialization Logic Tests > 14.3.1 Serializer-parser round-trip > should preserve floating point values through round-trip 1ms
+ ✓ src/server/services/TrendingService.test.ts > Task 14.3: Serialization Logic Tests > 14.3.1 Serializer-parser round-trip > should sort parsed ZSET data by timestamp 0ms
+ ✓ src/server/services/TrendingService.test.ts > Task 14.3: Serialization Logic Tests > 14.3.2 Malformed entry skip behavior with logging > should skip malformed ZSET members with missing colon 4ms
+ ✓ src/server/services/TrendingService.test.ts > Task 14.3: Serialization Logic Tests > 14.3.2 Malformed entry skip behavior with logging > should skip ZSET members with empty parts 1ms
+ ✓ src/server/services/TrendingService.test.ts > Task 14.3: Serialization Logic Tests > 14.3.2 Malformed entry skip behavior with logging > should skip ZSET members with invalid timestamp 2ms
+ ✓ src/server/services/TrendingService.test.ts > Task 14.3: Serialization Logic Tests > 14.3.2 Malformed entry skip behavior with logging > should skip ZSET members with invalid value 1ms
+ ✓ src/server/services/TrendingService.test.ts > Task 14.3: Serialization Logic Tests > 14.3.2 Malformed entry skip behavior with logging > should skip ZSET members with unreasonable timestamp 1ms
+ ✓ src/server/services/TrendingService.test.ts > Task 14.3: Serialization Logic Tests > 14.3.2 Malformed entry skip behavior with logging > should skip non-string ZSET members 0ms
+ ✓ src/server/services/TrendingService.test.ts > Task 14.3: Serialization Logic Tests > 14.3.2 Malformed entry skip behavior with logging > should skip malformed hash entries with empty field 1ms
+ ✓ src/server/services/TrendingService.test.ts > Task 14.3: Serialization Logic Tests > 14.3.2 Malformed entry skip behavior with logging > should skip malformed hash entries with empty value 0ms
+ ✓ src/server/services/TrendingService.test.ts > Task 14.3: Serialization Logic Tests > 14.3.2 Malformed entry skip behavior with logging > should skip hash entries with invalid value 0ms
+ ✓ src/server/services/TrendingService.test.ts > Task 14.3: Serialization Logic Tests > 14.3.2 Malformed entry skip behavior with logging > should skip negative values in flair_distribution 0ms
+ ✓ src/server/services/TrendingService.test.ts > Task 14.3: Serialization Logic Tests > 14.3.2 Malformed entry skip behavior with logging > should allow negative values in posting_heatmap 0ms
+ ✓ src/server/services/TrendingService.test.ts > Task 14.3: Serialization Logic Tests > 14.3.2 Malformed entry skip behavior with logging > should use keyValidator when provided 0ms
+ ✓ src/server/services/TrendingService.test.ts > Task 14.3: Serialization Logic Tests > 14.3.2 Malformed entry skip behavior with logging > should handle completely malformed input gracefully 0ms
+ ✓ src/server/services/TrendingService.test.ts > Task 14.3: Serialization Logic Tests > 14.3.2 Malformed entry skip behavior with logging > should log errors during parsing with try-catch 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 8 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 14.2: Data Transformation Logic Tests > 14.2.5 Best posting times slot scoring > should aggregate totalSignal and postCount
+AssertionError: expected undefined to be 60 // Object.is equality
+
+- Expected: 
+60
+
++ Received: 
+undefined
+
+ ❯ src/server/services/TrendingService.test.ts:1333:50
+    1331|         const slotScores = (service as any).calculateSlotScores(posts);
+    1332| 
+    1333|         expect(slotScores['Mon-12'].totalSignal).toBe(60);
+       |                                                  ^
+    1334|         expect(slotScores['Mon-12'].postCount).toBe(3);
+    1335|       });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/8]⎯
+
+ FAIL  src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 14.2: Data Transformation Logic Tests > 14.2.5 Best posting times slot scoring > should return 0 for slots with no posts
+AssertionError: expected undefined to be +0 // Object.is equality
+
+- Expected: 
+0
+
++ Received: 
+undefined
+
+ ❯ src/server/services/TrendingService.test.ts:1350:50
+    1348| 
+    1349|         // Slots without posts should be 0
+    1350|         expect(slotScores['Sun-12'].totalSignal).toBe(0);
+       |                                                  ^
+    1351|         expect(slotScores['Sun-12'].postCount).toBe(0);
+    1352|         expect(slotScores['Tue-12'].totalSignal).toBe(0);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/8]⎯
+
+ FAIL  src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 14.2: Data Transformation Logic Tests > 14.2.5 Best posting times slot scoring > should handle empty posts array
+AssertionError: expected undefined to be +0 // Object.is equality
+
+- Expected: 
+0
+
++ Received: 
+undefined
+
+ ❯ src/server/services/TrendingService.test.ts:1367:46
+    1365|         // All slots should be 0
+    1366|         for (const score of Object.values(slotScores)) {
+    1367|           expect((score as any).totalSignal).toBe(0);
+       |                                              ^
+    1368|           expect((score as any).postCount).toBe(0);
+    1369|         }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/8]⎯
+
+ FAIL  src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 14.2: Data Transformation Logic Tests > 14.2.5 Best posting times slot scoring > should handle single post
+AssertionError: expected undefined to be 15 // Object.is equality
+
+- Expected: 
+15
+
++ Received: 
+undefined
+
+ ❯ src/server/services/TrendingService.test.ts:1384:50
+    1382|         const slotScores = (service as any).calculateSlotScores(posts);
+    1383| 
+    1384|         expect(slotScores['Mon-12'].totalSignal).toBe(15);
+       |                                                  ^
+    1385|         expect(slotScores['Mon-12'].postCount).toBe(1);
+    1386|         // Other slots should be 0
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/8]⎯
+
+ FAIL  src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 14.2: Data Transformation Logic Tests > 14.2.5 Best posting times slot scoring > should correctly bucket posts by UTC time
+AssertionError: expected undefined to be 10 // Object.is equality
+
+- Expected: 
+10
+
++ Received: 
+undefined
+
+ ❯ src/server/services/TrendingService.test.ts:1419:50
+    1417|         const slotScores = (service as any).calculateSlotScores(posts);
+    1418| 
+    1419|         expect(slotScores['Sun-00'].totalSignal).toBe(10);
+       |                                                  ^
+    1420|         expect(slotScores['Sun-00'].postCount).toBe(1);
+    1421|         expect(slotScores['Mon-12'].totalSignal).toBe(20);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/8]⎯
+
+ FAIL  src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Task 14.2: Data Transformation Logic Tests > 14.2.5 Best posting times slot scoring > should aggregate multiple posts in same slot
+AssertionError: expected undefined to be 50 // Object.is equality
+
+- Expected: 
+50
+
++ Received: 
+undefined
+
+ ❯ src/server/services/TrendingService.test.ts:1444:50
+    1442|         const slotScores = (service as any).calculateSlotScores(posts);
+    1443| 
+    1444|         expect(slotScores['Mon-12'].totalSignal).toBe(50);
+       |                                                  ^
+    1445|         expect(slotScores['Mon-12'].postCount).toBe(5);
+    1446|       });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/8]⎯
+
+ FAIL  src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Global Aggregates Trend forecasting Logic > should compute valid global aggregates across retained scans
+AssertionError: expected { post: 2 } to have property "hello"
+ ❯ src/server/services/TrendingService.test.ts:1547:47
+    1545| 
+    1546|       // Word cloud logic verification
+    1547|       expect(savedAggregates.globalWordCloud).toHaveProperty('hello');
+       |                                               ^
+    1548|       expect(savedAggregates.globalWordCloud).toHaveProperty('post');
+    1549| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/8]⎯
+
+ FAIL  src/server/services/TrendingService.test.ts > TrendingService Performance Tests > Global Aggregates Trend forecasting Logic > should handle zero scans safely
+AssertionError: expected '{"globalWordCloud":{},"globalBestPost…' to be null
+
+- Expected: 
+null
+
++ Received: 
+"{\"globalWordCloud\":{},\"globalBestPostingTimes\":[{\"day\":\"Sun\",\"hour\":0,\"hour_fmt\":\"12 AM\",\"score\":0,\"sortWeight\":0,\"count\":0},{\"day\":\"Sun\",\"hour\":1,\"hour_fmt\":\"1 AM\",\"score\":0,\"sortWeight\":0,\"count\":0},{\"day\":\"Sun\",\"hour\":2,\"hour_fmt\":\"2 AM\",\"score\":0,\"sortWeight\":0,\"count\":0}],\"globalStats\":{\"posts_per_day\":0,\"comments_per_day\":0,\"avg_engagement\":0,\"avg_score\":0}}"
+
+ ❯ src/server/services/TrendingService.test.ts:1569:34
+    1567|         'trends:testsub:global_aggregates'
+    1568|       );
+    1569|       expect(savedAggregatesStr).toBeNull();
+       |                                  ^
+    1570|     });
+    1571|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/8]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  8 failed | 52 passed (60)
+   Start at  11:32:27
+   Duration  4.49s (transform 634ms, setup 0ms, import 696ms, tests 3.47s, environment 0ms)
+
+JSON report written to /Volumes/Expansion/dev/modscope/test-results.json

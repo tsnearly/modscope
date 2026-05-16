@@ -906,7 +906,6 @@ function ScheduleView({
     <div className="schedule-view h-full flex flex-col bg-[var(--color-bg)] overflow-hidden max-h-full">
       <EntityTitle
         icon="scheduler-tasks.png"
-        iconColor="var(--color-text)"
         title="Automated Snapshot Scheduling"
         subtitle="Configure analysis frequency and review performance audit logs"
         className="mb-2 p-4 bg-transparent border-b border-border flex-shrink-0"
@@ -933,7 +932,6 @@ function ScheduleView({
                   <Icon
                     name="scheduler-configuration.png"
                     size={20}
-                    color="var(--color-primary)"
                   />
                   Automated Snapshot Configuration
                 </CardTitle>
@@ -1248,7 +1246,6 @@ function ScheduleView({
                     <Icon
                       name="scheduler-trending.png"
                       size={20}
-                      color="var(--color-primary)"
                     />
                     Active Jobs
                   </div>
@@ -1330,7 +1327,6 @@ function ScheduleView({
                 <Icon
                   name="scheduler-jobhistory.png"
                   size={16}
-                  color="var(--color-primary)"
                 />
                 Job History & Audit Log
               </CardTitle>

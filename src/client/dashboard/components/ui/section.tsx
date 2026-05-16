@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { cn } from '../../utils/cn';
 import { Icon } from './icon';
-import { Card, CardContent } from './card';
+import { Card } from './card';
 
 export interface SectionProps extends Omit<
   React.HTMLAttributes<HTMLDivElement>,

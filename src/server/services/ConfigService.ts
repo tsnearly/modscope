@@ -4,14 +4,14 @@ import {
   CalculationSettings,
   DEFAULT_CALCULATION_SETTINGS,
 } from '../../shared/types/settings';
+import { redisKey } from '../../shared/core/constants';
 
 export class ConfigService {
-  private readonly CONFIG_KEY = 'modscope:config';
 
   constructor(private redis: RedisClient) {}
 
   async getConfig(): Promise<ConfigSettings> {
-    const configStr = await this.redis.get(this.CONFIG_KEY);
+    const configStr = await this.redis.get(redisKey.appConfig);
     if (configStr) {
       return JSON.parse(configStr);
     }
@@ -23,7 +23,7 @@ export class ConfigService {
   ): Promise<ConfigSettings> {
     const currentConfig = await this.getConfig();
     const updatedConfig = { ...currentConfig, ...newConfig };
-    await this.redis.set(this.CONFIG_KEY, JSON.stringify(updatedConfig));
+    await this.redis.set(redisKey.appConfig, JSON.stringify(updatedConfig));
     return updatedConfig;
   }
 
@@ -36,7 +36,7 @@ export class ConfigService {
       settings: { ...currentConfig.settings, ...newSettings },
       lastUpdated: Date.now(),
     };
-    await this.redis.set(this.CONFIG_KEY, JSON.stringify(updatedConfig));
+    await this.redis.set(redisKey.appConfig, JSON.stringify(updatedConfig));
     return updatedConfig;
   }
 }

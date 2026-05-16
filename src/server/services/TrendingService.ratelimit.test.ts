@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { TrendingService } from './TrendingService';
+import { MS_PER_DAY, TREND_TIMEOUT_THRESHOLD_MS } from '../../shared/core/constants';
 
 // Enhanced Mock Redis client for rate limiting and timeout testing
 class RateLimitMockRedisClient {
@@ -83,6 +84,14 @@ class RateLimitMockRedisClient {
       }
     });
   }
+
+  async zCard(key: string): Promise<number> {
+    return this.trackOperation('zCard', async () => {
+      const zset = this.data.get(key) || [];
+      return zset.length;
+    });
+  }
+
   async hGetAll(key: string): Promise<Record<string, string>> {
     return this.trackOperation('hGetAll', async () => {
       return this.data.get(key) || {};
@@ -216,7 +225,7 @@ function generateRateLimitTestData(
   // Set up timeline with multiple scans - ensure they're within retention window
   const timelineMembers = [];
   for (let i = 0; i < retentionDays; i++) {
-    const timestamp = now - i * 24 * 60 * 60 * 1000; // Each scan is 1 day apart
+    const timestamp = now - i * MS_PER_DAY; // Each scan is 1 day apart
     timelineMembers.push({ score: timestamp, member: `${scanId - i}` });
   }
   mockRedis.setData('global:snapshots:timeline', timelineMembers);
@@ -227,7 +236,7 @@ function generateRateLimitTestData(
   // Set up scan metadata and stats for each scan
   for (let i = 0; i < retentionDays; i++) {
     const currentScanId = scanId - i;
-    const timestamp = now - i * 24 * 60 * 60 * 1000;
+    const timestamp = now - i * MS_PER_DAY;
 
     mockRedis.setData(`run:${currentScanId}:meta`, {
       scan_date: new Date(timestamp).toISOString(),
@@ -432,7 +441,7 @@ describe('TrendingService Rate Limiting and Timeout Tests', () => {
     });
 
     it('should measure timeout threshold accuracy', async () => {
-      const TIMEOUT_THRESHOLD = (service as any).TIMEOUT_THRESHOLD_MS;
+      const TIMEOUT_THRESHOLD = TREND_TIMEOUT_THRESHOLD_MS;
 
       // Mock startTime to simulate long-running operation that exceeds threshold
       const mockStartTime = Date.now() - TIMEOUT_THRESHOLD - 100; // 100ms past timeout
@@ -512,16 +521,16 @@ describe('TrendingService Rate Limiting and Timeout Tests', () => {
       // Verify scaling is reasonable (not exponential)
       const timeRatios = [];
       for (let i = 1; i < results.length; i++) {
-        const ratio = results[i].time / results[i - 1].time;
+        const ratio = results[i]!.time / results[i - 1]!.time;
         timeRatios.push(ratio);
         console.log(
-          `  Time ratio ${results[i - 1].retention}→${results[i].retention} days: ${ratio.toFixed(2)}x`
+          `  Time ratio ${results[i - 1]!.retention}→${results[i]!.retention} days: ${ratio.toFixed(2)}x`
         );
       }
 
       // Time should scale reasonably (not more than 5x per doubling)
       timeRatios.forEach((ratio) => {
-        expect(ratio ?? 1).toBeLessThan(5);
+        expect(ratio).toBeLessThan(5);
       });
     });
   });
@@ -581,8 +590,9 @@ describe('TrendingService Rate Limiting and Timeout Tests', () => {
 
       (service as any).isApproachingTimeout = () => {
         if (currentStage < stages.length) {
+          const stageName = stages[currentStage] || 'unknown';
           checkpoints.push({
-            stage: stages[currentStage],
+            stage: stageName,
             timestamp: Date.now(),
           });
           currentStage++;

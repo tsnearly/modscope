@@ -230,6 +230,7 @@ export const THEMES = [
   { id: 'nocturne', label: 'Nocturne' },
   { id: 'springtime', label: 'Springtime' },
   { id: 'rosemeadow', label: 'Rose Meadow' },
+  { id: 'upvoted', label: 'Upvoted' },
 ];
 export const DEFAULT_STORAGE_SETTINGS = {
   snapshotFrequency: 'daily',

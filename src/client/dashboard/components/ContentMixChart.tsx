@@ -12,6 +12,7 @@ import { getDataGroupingIcon } from '../utils/iconMappings';
 import { Chart } from './ui/chart';
 import { Icon } from './ui/icon';
 import { NonIdealState } from './ui/non-ideal-state';
+import { MS_PER_DAY } from '../../../shared/core/constants';
 
 type ContentMixPoint = {
   timestamp: number;
@@ -28,6 +29,7 @@ type ContentMixChartProps = {
   trendAnalysisDays?: number;
   iconContext: 'screen' | 'printed';
   isPrintMode?: boolean;
+  snapshotTimestamp?: number | undefined;
 };
 
 function formatShortDate(ts: number): string {
@@ -87,6 +89,7 @@ export function ContentMixChart({
   trendAnalysisDays = 90,
   iconContext,
   isPrintMode = false,
+  snapshotTimestamp,
 }: ContentMixChartProps) {
   const [hiddenSeries, setHiddenSeries] = useState<Record<string, boolean>>({});
   const contentMixData = useMemo(
@@ -100,7 +103,6 @@ export function ContentMixChart({
       return { chartData: [], contentKeys: [] };
     }
 
-    const dayMs = 24 * 60 * 60 * 1000;
     const toUtcDayNoon = (ts: number): number => {
       const d = new Date(ts);
       return Date.UTC(
@@ -131,7 +133,7 @@ export function ContentMixChart({
       byDay.set(dayKey, existing);
     }
 
-    const now = new Date();
+    const now = snapshotTimestamp ? new Date(snapshotTimestamp) : new Date();
     const todayUtcNoon = Date.UTC(
       now.getUTCFullYear(),
       now.getUTCMonth(),
@@ -145,7 +147,7 @@ export function ContentMixChart({
       { length: trendAnalysisDays },
       (_, idx) => {
         const offset = trendAnalysisDays - 1 - idx;
-        const timestamp = todayUtcNoon - offset * dayMs;
+        const timestamp = todayUtcNoon - offset * MS_PER_DAY;
         const dayValues = byDay.get(timestamp) || {};
         const row: Record<string, string | number> = {
           timestamp,
@@ -241,7 +243,7 @@ export function ContentMixChart({
 
   return (
     <Chart
-      title="Content Mix"
+      title={`Content Mix Trend (${trendAnalysisDays}d)`}
       icon={<Icon src={getDataGroupingIcon('flair', iconContext)} size={16} />}
       height={340}
     >
@@ -276,11 +278,11 @@ export function ContentMixChart({
                 key={flair}
                 type="monotone"
                 dataKey={flair}
-                stackId="mix"
-                stroke={`hsl(${(idx * 47) % 360} 70% 45%)`}
-                strokeWidth={2.25}
+                stackId="1"
+                stroke={`hsl(${(idx * 47) % 360} 70% 40%)`}
+                strokeWidth={1}
                 fill={`hsl(${(idx * 47) % 360} 70% 55%)`}
-                fillOpacity={0.15}
+                fillOpacity={0.8}
                 isAnimationActive={!isPrintMode}
                 hide={!!hiddenSeries[flair]}
               />

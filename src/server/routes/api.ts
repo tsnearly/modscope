@@ -15,6 +15,7 @@ import {
   DEFAULT_REPORT_SETTINGS,
   DEFAULT_STORAGE_SETTINGS,
   DEFAULT_USER_SETTINGS,
+  ReportingSchedule,
 } from '../../shared/types/settings';
 import { runManualMaterialization } from '../manual_trends';
 import { DataRetrievalService } from '../services/DataRetrievalService';
@@ -26,6 +27,8 @@ import {
   type TrendMaterializer,
 } from '../services/SnapshotService';
 import { TrendingService } from '../services/TrendingService';
+import { ReportingService } from '../services/ReportingService';
+import { MS_PER_HOUR, redisKey } from '../../shared/core/constants';
 
 export const api = new Hono();
 
@@ -153,7 +156,7 @@ const safeSubredditName = (value: string): string => {
   );
 };
 
-const getModeratorUsernames = async (
+export const getModeratorUsernames = async (
   subredditName: string
 ): Promise<Set<string>> => {
   const cacheKey = subredditName.toLowerCase();
@@ -243,7 +246,7 @@ declare let DATA_SUBREDDIT: string;
 
 // Helper to filter out internal system jobs from display
 const filterInternalJobs = (jobs: any[]) => {
-  return jobs.filter((job) => job.name !== 'check-for-updates');
+  return jobs.filter((job) => job.name !== 'check-for-updates' && job.name !== 'report-worker' && !job.name.startsWith('report-worker:'));
 };
 
 let bootstrapComplete = false;
@@ -566,8 +569,8 @@ api.get('/snapshots', async (c) => {
     for (let scanId = 1; scanId <= scanCount; scanId++) {
       try {
         const [meta, stats] = await Promise.all([
-          redis.hGetAll(`run:${scanId}:meta`),
-          redis.hGetAll(`run:${scanId}:stats`),
+          redis.hGetAll(redisKey.scanMeta(scanId)),
+          redis.hGetAll(redisKey.scanStats(scanId)),
         ]);
         if (meta && (meta.scan_date || meta.proc_date)) {
           snapshots.push({
@@ -726,7 +729,7 @@ api.post('/ui/register', async (c) => {
     if (webViewId) {
       // Store the active webViewId for this subreddit in Redis (expires in 1 hour)
       await redis.set(`webview:active:${subreddit}`, webViewId, {
-        expiration: new Date(Date.now() + 3600000),
+        expiration: new Date(Date.now() + MS_PER_HOUR),
       });
       console.log(
         `[API] Registered WebView ID: ${webViewId} for r/${subreddit}`
@@ -759,6 +762,40 @@ api.post('/ui/toast', async (c) => {
 
 api.get('/trends', async (c) => {
   try {
+    // Support historical trend retrieval via ?asOf=<timestamp>
+    const asOfParam = c.req.query('asOf');
+    if (asOfParam) {
+      const asOfTs = parseInt(asOfParam, 10);
+      if (Number.isFinite(asOfTs) && asOfTs > 0) {
+        try {
+          // Find the closest materialization at or before the requested timestamp
+          const matches = await redis.zRange(
+            `trends:${DATA_SUBREDDIT}:materializations`,
+            0,
+            asOfTs,
+            { by: 'score' }
+          );
+
+          if (matches.length > 0) {
+            const lastMatch = matches[matches.length - 1];
+            const memberTs =
+              typeof lastMatch === 'string'
+                ? lastMatch
+                : (lastMatch as { member: string }).member;
+            const stored = await redis.get(
+              `trends:${DATA_SUBREDDIT}:materialized:${memberTs}`
+            );
+            if (stored) {
+              return c.json(JSON.parse(stored));
+            }
+          }
+        } catch (asOfErr) {
+          console.warn('[API] Historical trend lookup failed, falling back to latest:', asOfErr);
+        }
+      }
+    }
+
+    // Default: return current/latest trend data
     const trends = await readTrendData(DATA_SUBREDDIT);
     return c.json(trends || { subreddit: DATA_SUBREDDIT, stale: true });
   } catch (error) {
@@ -829,6 +866,32 @@ api.get('/settings', async (c) => {
   }
 });
 
+/**
+ * Helper to calculate cron expression for a reporting schedule.
+ */
+const calculateCron = (s: ReportingSchedule): string => {
+  const { hour, minute, scheduleType, dayOfWeek, dayOfMonth } = s;
+  const mm = minute || 0;
+  const hh = hour || 9;
+  switch (scheduleType) {
+    case 'daily':
+      return `${mm} ${hh} * * *`;
+    case 'weekly': {
+      let daysStr = '1';
+      if (Array.isArray(dayOfWeek) && dayOfWeek.length > 0) {
+        daysStr = [...dayOfWeek].sort((a, b) => a - b).join(',');
+      } else if (typeof dayOfWeek === 'number') {
+        daysStr = String(dayOfWeek);
+      }
+      return `${mm} ${hh} * * ${daysStr}`;
+    }
+    case 'monthly':
+      return `${mm} ${hh} ${dayOfMonth ?? 1} * *`;
+    default:
+      return `${mm} ${hh} * * *`;
+  }
+};
+
 api.post('/settings', async (c) => {
   try {
     const username = context.username;
@@ -858,13 +921,84 @@ api.post('/settings', async (c) => {
           JSON.stringify(storageSettings)
         )
       );
-    if (report)
+    if (report) {
       promises.push(
         storage.set(
           `subreddit:${DATA_SUBREDDIT}:report`,
           JSON.stringify(report)
         )
       );
+
+      // Re-synchronize multiple report worker jobs
+      promises.push(
+        (async () => {
+          try {
+            const existingJobs = await scheduler.listJobs();
+            const existingReportJobs = existingJobs.filter((j) =>
+              j.name.startsWith('report-worker')
+            );
+
+            // 1. Cancel jobs that are no longer in the list or are disabled
+            for (const job of existingReportJobs) {
+              const data = job.data as any;
+              const scheduleId = data?.scheduleId || (job.name.includes(':') ? job.name.split(':')[1] : null);
+
+              if (scheduleId) {
+                const config = report.reportingSchedules?.find(
+                  (s: any) => s.id === scheduleId
+                );
+                if (!config || !config.enabled) {
+                  await scheduler.cancelJob(job.id).catch(() => {});
+                }
+              } else if (job.name === 'report-worker') {
+                // If we can't find a scheduleId, it's a legacy or malformed job
+                await scheduler.cancelJob(job.id).catch(() => {});
+              }
+            }
+
+            // 2. Add or update enabled jobs
+            if (report.reportingSchedules) {
+              for (const config of report.reportingSchedules) {
+                if (!config.enabled) continue;
+
+                const jobName = 'report-worker';
+                const cron = calculateCron(config);
+
+                // Find existing job for THIS specific schedule ID
+                const existing = existingReportJobs.find(
+                  (j) => (j.data as any)?.scheduleId === config.id || j.name === `report-worker:${config.id}`
+                );
+
+                // If job exists and cron is unchanged, skip
+                if (existing && (existing as any).cron === cron) {
+                  continue;
+                }
+
+                // Update: cancel existing first
+                if (existing) {
+                  await scheduler.cancelJob(existing.id).catch(() => {});
+                }
+
+                // Schedule the worker with scheduleId in data
+                await scheduler.runJob({
+                  name: jobName,
+                  cron,
+                  data: {
+                    subreddit: DATA_SUBREDDIT,
+                    scheduleId: config.id,
+                  },
+                });
+                console.log(
+                  `[SETTINGS] Scheduled automated report "${config.name}" (${config.scheduleType}) for r/${DATA_SUBREDDIT}`
+                );
+              }
+            }
+          } catch (jobError) {
+            console.error('[SETTINGS] Failed to sync report jobs:', jobError);
+          }
+        })()
+      );
+    }
     await Promise.all(promises);
     return c.json({ status: 'success' });
   } catch (error) {
@@ -903,11 +1037,16 @@ api.post('/snapshot/take-now', async (c) => {
 
 api.post('/trigger-trends', async (c) => {
   try {
+    const body = await c.req.json().catch(() => ({}));
     const subreddit = context.subredditName || DATA_SUBREDDIT;
-    const latestScanRaw = await storage.get(`sub:${subreddit}:latest_scan`);
-    const latestScanId = parseInt(latestScanRaw || '0', 10);
+    
+    let targetScanId = parseInt(body.scanId, 10);
+    if (!Number.isFinite(targetScanId) || targetScanId <= 0) {
+      const latestScanRaw = await storage.get(`sub:${subreddit}:latest_scan`);
+      targetScanId = parseInt(latestScanRaw || '0', 10);
+    }
 
-    if (!Number.isFinite(latestScanId) || latestScanId <= 0) {
+    if (!Number.isFinite(targetScanId) || targetScanId <= 0) {
       return c.json(
         {
           status: 'error',
@@ -918,13 +1057,13 @@ api.post('/trigger-trends', async (c) => {
     }
 
     try {
-      await trendDataService.materializeTrends(subreddit, latestScanId);
+      await trendDataService.materializeTrends(subreddit, targetScanId);
       return c.json({
         status: 'success',
         mode: 'full',
         subreddit,
-        scanId: latestScanId,
-        message: `Trend materialization completed for r/${subreddit} (scan #${latestScanId}).`,
+        scanId: targetScanId,
+        message: `Trend materialization completed for r/${subreddit} (scan #${targetScanId}).`,
       });
     } catch (fullError) {
       console.warn(
@@ -938,7 +1077,7 @@ api.post('/trigger-trends', async (c) => {
           status: 'success',
           mode: 'manual-fallback',
           subreddit,
-          scanId: latestScanId,
+          scanId: targetScanId,
           message: `Full trend materialization failed, but manual fallback succeeded for r/${subreddit}.`,
         });
       } catch (fallbackError) {
@@ -950,7 +1089,7 @@ api.post('/trigger-trends', async (c) => {
           {
             status: 'error',
             subreddit,
-            scanId: latestScanId,
+            scanId: targetScanId,
             message: `Trend materialization failed for r/${subreddit}.`,
             fullError:
               fullError instanceof Error
@@ -972,12 +1111,12 @@ api.post('/trigger-trends', async (c) => {
 
 api.post('/migrate-subreddits', async (c) => {
   try {
-    const scanCountStr = await storage.get('global:scan_counter');
+    const scanCountStr = await storage.get(redisKey.scanCounter());
     const maxId = scanCountStr ? parseInt(scanCountStr, 10) : 0;
     for (let id = 1; id <= maxId; id++) {
-      const meta = await redis.hGetAll(`run:${id}:meta`);
+      const meta = await redis.hGetAll(redisKey.scanMeta(id));
       if (meta?.subreddit?.includes('QuizPlanetGame')) {
-        await redis.hSet(`run:${id}:meta`, {
+        await redis.hSet(redisKey.scanMeta(id), {
           subreddit: meta.subreddit.replace('QuizPlanetGame', 'modscope_dev'),
         });
       }
@@ -1014,8 +1153,8 @@ api.post('/utilities/snapshots/export-large-pools', async (c) => {
 
     for (let scanId = 1; scanId <= scanCount; scanId++) {
       const [meta, stats] = await Promise.all([
-        redis.hGetAll(`run:${scanId}:meta`),
-        redis.hGetAll(`run:${scanId}:stats`),
+        redis.hGetAll(redisKey.scanMeta(scanId)),
+        redis.hGetAll(redisKey.scanStats(scanId)),
       ]);
 
       if (!meta?.subreddit) {
@@ -1169,7 +1308,7 @@ api.post('/utilities/snapshots/import-json-files', async (c) => {
 });
 
 api.get('/debug-error', async (c) => {
-  const error = await redis.get('modscope:debug:error');
+  const error = await redis.get(redisKey.debugError());
   return c.json({ error });
 });
 
@@ -1193,5 +1332,59 @@ api.get('/diagnostics/clustering-summary', async (c) => {
     return c.json({ events, lastUpdated: new Date().toISOString() });
   } catch (error) {
     return c.json({ error: String(error) }, 500);
+  }
+});
+
+/**
+ * Build a markdown text summary from a snapshot for modmail delivery.
+ */
+
+/**
+ * Send a snapshot report summary via Reddit private message (modmail).
+ */
+api.post('/snapshots/:scanId/send-report', async (c) => {
+  try {
+    const scanId = parseInt(c.req.param('scanId'), 10);
+    if (!Number.isFinite(scanId) || scanId <= 0) {
+      return c.json({ status: 'error', message: 'Invalid scanId' }, 400);
+    }
+
+    const body = await c.req.json().catch(() => ({})) as {
+      recipient?: string;
+    };
+    const recipient = body.recipient || 'SeeTigerLearn';
+
+    const subreddit = context.subredditName || DATA_SUBREDDIT;
+    const [snapshot, reportSettingsStr] = await Promise.all([
+      retriever.getSnapshotById(scanId),
+      storage.get(`subreddit:${subreddit}:report`),
+    ]);
+
+    if (!snapshot) {
+      return c.json(
+        { status: 'error', message: `Snapshot #${scanId} not found` },
+        404
+      );
+    }
+
+    const reportSettings = reportSettingsStr
+      ? JSON.parse(reportSettingsStr)
+      : DEFAULT_REPORT_SETTINGS;
+
+    const recipients = [recipient];
+    await ReportingService.sendReport(snapshot, recipients, reportSettings);
+
+    console.log(
+      `[API] Sent snapshot #${scanId} report to ${recipient}`
+    );
+
+    return c.json({
+      status: 'success',
+      message: `Report sent to ${recipient}`,
+      scanId,
+    });
+  } catch (error) {
+    console.error('[API] Failed to send report:', error);
+    return c.json({ status: 'error', message: String(error) }, 500);
   }
 });

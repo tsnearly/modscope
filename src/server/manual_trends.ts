@@ -1,5 +1,6 @@
 import { context, redis } from '@devvit/web/server';
 import { PostData } from '../shared/types/api';
+import { redisKey } from '../shared/core/constants';
 
 /**
  * Manual Trend Seeder
@@ -45,7 +46,7 @@ async function runManualMaterialization(
       const scanId = parseInt(member, 10);
       if (isNaN(scanId)) continue;
 
-      const meta = await redis.hGetAll(`run:${scanId}:meta`);
+      const meta = await redis.hGetAll(redisKey.scanMeta(scanId));
       if (meta?.subreddit !== SUBREDDIT) continue;
 
       const ts =
@@ -68,10 +69,10 @@ async function runManualMaterialization(
 
     // --- Step 2: Write subscriber growth ZSET directly ---
     for (const scan of scans) {
-      const stats = await redis.hGetAll(`run:${scan.scanId}:stats`);
+      const stats = await redis.hGetAll(redisKey.scanStats(scan.scanId));
       const subscribers = parseInt(stats?.subscribers || '0', 10);
       if (subscribers > 0) {
-        await redis.zAdd(`trends:${SUBREDDIT}:subscriber_growth`, {
+        await redis.zAdd(redisKey.trendsSubscriberGrowth(SUBREDDIT), {
           score: scan.timestamp,
           member: `${scan.timestamp}:${subscribers}`,
         });
@@ -81,10 +82,10 @@ async function runManualMaterialization(
 
     // --- Step 3: Write engagement over time ZSET directly (from scan stats avg_engagement) ---
     for (const scan of scans) {
-      const stats = await redis.hGetAll(`run:${scan.scanId}:stats`);
+      const stats = await redis.hGetAll(redisKey.scanStats(scan.scanId));
       const avgEng = parseFloat(stats?.avg_engagement || '0');
       if (avgEng > 0) {
-        await redis.zAdd(`trends:${SUBREDDIT}:engagement_avg`, {
+        await redis.zAdd(redisKey.trendsEngagementAvg(SUBREDDIT), {
           score: scan.timestamp,
           member: `${scan.timestamp}:${avgEng.toFixed(2)}`,
         });

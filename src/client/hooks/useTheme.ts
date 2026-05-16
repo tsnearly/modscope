@@ -11,7 +11,8 @@ export type Theme =
   | 'amber'
   | 'nocturne'
   | 'springtime'
-  | 'rosemeadow';
+  | 'rosemeadow'
+  | 'upvoted';
 
 export function useTheme() {
   const [theme, setTheme] = useState<Theme>(() => {

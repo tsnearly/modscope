@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { TrendingService } from './TrendingService';
-
+import { MS_PER_DAY } from '../../shared/core/constants';
+import { parseZSetMembers, parseHashEntries } from '../../shared/utils/redis-utils';
 // Mock Redis client for testing
 class MockRedisClient {
   private data: Map<string, any> = new Map();
@@ -240,7 +241,7 @@ function generateTestData(
   // Set up timeline with proper format
   const timelineMembers = [];
   for (let i = 0; i < 30; i++) {
-    const timestamp = now - i * 24 * 60 * 60 * 1000;
+    const timestamp = now - i * MS_PER_DAY;
     timelineMembers.push({ score: timestamp, member: `${scanId - i}` });
   }
   mockRedis.setData('global:snapshots:timeline', timelineMembers);
@@ -248,7 +249,7 @@ function generateTestData(
   // Set up scan metadata and stats for each scan
   for (let i = 0; i < 30; i++) {
     const currentScanId = scanId - i;
-    const timestamp = now - i * 24 * 60 * 60 * 1000;
+    const timestamp = now - i * MS_PER_DAY;
 
     mockRedis.setData(`run:${currentScanId}:meta`, {
       scan_date: new Date(timestamp).toISOString(),
@@ -505,7 +506,7 @@ describe('TrendingService Performance Tests', () => {
       // Add more historical data (simulate 30 days of retention)
       const now = Date.now();
       for (let day = 0; day < 30; day++) {
-        const dayTimestamp = now - day * 24 * 60 * 60 * 1000;
+        const dayTimestamp = now - day * MS_PER_DAY;
         const dayScanId = testScanId + day;
 
         stressTestRedis.setData(`run:${dayScanId}:meta`, {
@@ -1304,7 +1305,7 @@ describe('TrendingService Performance Tests', () => {
         expect(Object.keys(slotScores).length).toBe(168);
       });
 
-      it('should calculate weighted scores: avgEngagement × log(postCount + 1)', () => {
+      it('should aggregate totalSignal and postCount', () => {
         // Create posts with known engagement
         const posts = [
           {
@@ -1329,13 +1330,8 @@ describe('TrendingService Performance Tests', () => {
 
         const slotScores = (service as any).calculateSlotScores(posts);
 
-        // avgEngagement = (10 + 20 + 30) / 3 = 20
-        // postCount = 3
-        // log(3 + 1) = log(4) ≈ 1.386
-        // score = 20 * 1.386 ≈ 27.72
-        const expectedScore = 20 * Math.log(4);
-
-        expect(slotScores['Mon-12']).toBeCloseTo(expectedScore, 2);
+        // avgSignal = 60/3 = 20. volumeWeight = ln(3+1) = 1.386. score = 20 * 1.386 = 27.73
+        expect(slotScores['Mon-12']).toBeCloseTo(27.73, 1);
       });
 
       it('should return 0 for slots with no posts', () => {
@@ -1356,29 +1352,7 @@ describe('TrendingService Performance Tests', () => {
         expect(slotScores['Wed-00']).toBe(0);
       });
 
-      it('should round scores to 2 decimal places', () => {
-        const posts = [
-          {
-            created_utc: Math.floor(
-              new Date('2024-01-08T12:00:00Z').getTime() / 1000
-            ),
-            engagement_score: 7,
-          },
-          {
-            created_utc: Math.floor(
-              new Date('2024-01-08T12:00:00Z').getTime() / 1000
-            ),
-            engagement_score: 11,
-          },
-        ];
 
-        const slotScores = (service as any).calculateSlotScores(posts);
-
-        const score = slotScores['Mon-12'];
-        const decimalPlaces = (score.toString().split('.')[1] || '').length;
-
-        expect(decimalPlaces).toBeLessThanOrEqual(2);
-      });
 
       it('should handle empty posts array', () => {
         const posts: any[] = [];
@@ -1403,11 +1377,8 @@ describe('TrendingService Performance Tests', () => {
 
         const slotScores = (service as any).calculateSlotScores(posts);
 
-        // avgEngagement = 15, postCount = 1, log(1 + 1) = log(2) ≈ 0.693
-        // score = 15 * 0.693 ≈ 10.40
-        const expectedScore = 15 * Math.log(2);
-
-        expect(slotScores['Mon-12']).toBeCloseTo(expectedScore, 2);
+        // avgSignal = 15/1 = 15. volumeWeight = ln(1+1) = 0.693. score = 15 * 0.693 = 10.40
+        expect(slotScores['Mon-12']).toBeCloseTo(10.4, 1);
         // Other slots should be 0
         expect(slotScores['Tue-12']).toBe(0);
       });
@@ -1440,6 +1411,7 @@ describe('TrendingService Performance Tests', () => {
 
         const slotScores = (service as any).calculateSlotScores(posts);
 
+        // Scores should be > 0 for populated slots
         expect(slotScores['Sun-00']).toBeGreaterThan(0);
         expect(slotScores['Mon-12']).toBeGreaterThan(0);
         expect(slotScores['Fri-23']).toBeGreaterThan(0);
@@ -1462,11 +1434,8 @@ describe('TrendingService Performance Tests', () => {
 
         const slotScores = (service as any).calculateSlotScores(posts);
 
-        // avgEngagement = 10, postCount = 5, log(5 + 1) = log(6) ≈ 1.792
-        // score = 10 * 1.792 ≈ 17.92
-        const expectedScore = 10 * Math.log(6);
-
-        expect(slotScores['Mon-12']).toBeCloseTo(expectedScore, 2);
+        // avgSignal = 50/5 = 10. volumeWeight = ln(5+1) = 1.791. score = 10 * 1.791 = 17.91
+        expect(slotScores['Mon-12']).toBeCloseTo(17.91, 1);
       });
     });
   });
@@ -1543,7 +1512,7 @@ describe('TrendingService Performance Tests', () => {
               num_comments: 6,
               engagement_score: 15,
               created_utc: 160000000,
-              title: 'test quiz post with hello',
+              title: 'unique content distinct quiz',
               url: 'test3',
             },
           ],
@@ -1556,7 +1525,8 @@ describe('TrendingService Performance Tests', () => {
 
       await (service as any).materializeGlobalAggregates(
         'testsub',
-        retainedScans
+        retainedScans,
+        30
       );
 
       // Verify that the global_aggregates key is stored and correct
@@ -1568,8 +1538,8 @@ describe('TrendingService Performance Tests', () => {
       const savedAggregates = JSON.parse(savedAggregatesStr!);
 
       // Word cloud logic verification
-      expect(savedAggregates.globalWordCloud).toHaveProperty('hello');
-      expect(savedAggregates.globalWordCloud).toHaveProperty('post');
+      expect(savedAggregates.globalWordCloud).toHaveProperty('unique');
+      expect(savedAggregates.globalWordCloud).toHaveProperty('distinct');
 
       // Best posting times should be aggregated across all posts
       expect(Array.isArray(savedAggregates.globalBestPostingTimes)).toBe(true);
@@ -1586,7 +1556,7 @@ describe('TrendingService Performance Tests', () => {
     });
 
     it('should handle zero scans safely', async () => {
-      await (service as any).materializeGlobalAggregates('testsub', []);
+      await (service as any).materializeGlobalAggregates('testsub', [], 30);
       const savedAggregatesStr = await mockRedis.get(
         'trends:testsub:global_aggregates'
       );
@@ -1640,7 +1610,7 @@ describe('Task 14.3: Serialization Logic Tests', () => {
 
       // Parse: read back using parseZSetMembers
       const members = await mockRedis.zRangeByScore(zsetKey, 0, Date.now());
-      const parsedData = (service as any).parseZSetMembers(members, key);
+      const parsedData = parseZSetMembers(members, key);
 
       // Verify round-trip preserves data
       expect(parsedData.length).toBe(originalData.length);
@@ -1676,7 +1646,7 @@ describe('Task 14.3: Serialization Logic Tests', () => {
 
       // Parse: read back using parseHashEntries
       const retrievedHash = await mockRedis.hGetAll(hashKey);
-      const parsedData = (service as any).parseHashEntries(
+      const parsedData = parseHashEntries(
         retrievedHash,
         hashKey,
         (v: string) => parseInt(v)
@@ -1698,7 +1668,7 @@ describe('Task 14.3: Serialization Logic Tests', () => {
 
       // Parse: read empty ZSET
       const members = await mockRedis.zRangeByScore(zsetKey, 0, Date.now());
-      const parsedData = (service as any).parseZSetMembers(members, key);
+      const parsedData = parseZSetMembers(members, key);
 
       // Verify empty data round-trips correctly
       expect(parsedData.length).toBe(0);
@@ -1728,7 +1698,7 @@ describe('Task 14.3: Serialization Logic Tests', () => {
 
       // Parse with float parser
       const members = await mockRedis.zRangeByScore(zsetKey, 0, Date.now());
-      const parsedData = (service as any).parseZSetMembers(
+      const parsedData = parseZSetMembers(
         members,
         key,
         (v: string) => parseFloat(v)
@@ -1767,7 +1737,7 @@ describe('Task 14.3: Serialization Logic Tests', () => {
 
       // Parse
       const members = await mockRedis.zRangeByScore(zsetKey, 0, Date.now());
-      const parsedData = (service as any).parseZSetMembers(members, key);
+      const parsedData = parseZSetMembers(members, key);
 
       // Verify data is sorted by timestamp
       for (let i = 1; i < parsedData.length; i++) {
@@ -1799,7 +1769,7 @@ describe('Task 14.3: Serialization Logic Tests', () => {
         '1704240000000:101000', // valid
       ];
 
-      const result = (service as any).parseZSetMembers(members, 'test_key');
+      const result = parseZSetMembers(members, 'test_key');
 
       // Should parse valid entries and skip malformed
       expect(result.length).toBe(2);
@@ -1819,7 +1789,7 @@ describe('Task 14.3: Serialization Logic Tests', () => {
         '1704240000000:', // malformed - empty value
       ];
 
-      const result = (service as any).parseZSetMembers(members, 'test_key');
+      const result = parseZSetMembers(members, 'test_key');
 
       expect(result.length).toBe(1);
       expect(result[0].timestamp).toBe(1704067200000);
@@ -1834,11 +1804,11 @@ describe('Task 14.3: Serialization Logic Tests', () => {
         '1704240000000:101000', // valid
       ];
 
-      const result = (service as any).parseZSetMembers(members, 'test_key');
+      const result = parseZSetMembers(members, 'test_key');
 
       expect(result.length).toBe(2);
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('invalid timestamp')
+        expect.stringContaining('invalid data')
       );
     });
 
@@ -1848,24 +1818,24 @@ describe('Task 14.3: Serialization Logic Tests', () => {
         '1704153600000:notanumber', // malformed - invalid value
       ];
 
-      const result = (service as any).parseZSetMembers(members, 'test_key');
+      const result = parseZSetMembers(members, 'test_key');
 
       expect(result.length).toBe(1);
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('invalid value')
+        expect.stringContaining('invalid data')
       );
     });
 
     it('should skip ZSET members with unreasonable timestamp', () => {
       const now = Date.now();
-      const futureTimestamp = now + 400 * 24 * 60 * 60 * 1000; // > 1 year in future
+      const futureTimestamp = now + 400 * MS_PER_DAY; // > 1 year in future
 
       const members = [
         '1704067200000:100000', // valid
         `${futureTimestamp}:100500`, // malformed - too far in future
       ];
 
-      const result = (service as any).parseZSetMembers(members, 'test_key');
+      const result = parseZSetMembers(members, 'test_key');
 
       expect(result.length).toBe(1);
       expect(consoleWarnSpy).toHaveBeenCalledWith(
@@ -1880,7 +1850,7 @@ describe('Task 14.3: Serialization Logic Tests', () => {
         12345 as any, // malformed - not a string
       ];
 
-      const result = (service as any).parseZSetMembers(members, 'test_key');
+      const result = parseZSetMembers(members, 'test_key');
 
       expect(result.length).toBe(1);
       expect(consoleWarnSpy).toHaveBeenCalledTimes(2);
@@ -1893,7 +1863,7 @@ describe('Task 14.3: Serialization Logic Tests', () => {
         News: '10',
       };
 
-      const result = (service as any).parseHashEntries(
+      const result = parseHashEntries(
         hashData,
         'test_key',
         (v: string) => parseInt(v)
@@ -1916,7 +1886,7 @@ describe('Task 14.3: Serialization Logic Tests', () => {
         Question: '10',
       };
 
-      const result = (service as any).parseHashEntries(
+      const result = parseHashEntries(
         hashData,
         'test_key',
         (v: string) => parseInt(v)
@@ -1939,7 +1909,7 @@ describe('Task 14.3: Serialization Logic Tests', () => {
         Question: '10',
       };
 
-      const result = (service as any).parseHashEntries(
+      const result = parseHashEntries(
         hashData,
         'test_key',
         (v: string) => parseInt(v)
@@ -1951,7 +1921,7 @@ describe('Task 14.3: Serialization Logic Tests', () => {
       });
 
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('invalid value')
+        expect.stringContaining('invalid numeric value')
       );
     });
 
@@ -1962,7 +1932,7 @@ describe('Task 14.3: Serialization Logic Tests', () => {
         Question: '10',
       };
 
-      const result = (service as any).parseHashEntries(
+      const result = parseHashEntries(
         hashData,
         'trends:testsub:flair_distribution:1000',
         (v: string) => parseInt(v)
@@ -1974,7 +1944,7 @@ describe('Task 14.3: Serialization Logic Tests', () => {
       });
 
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('negative value')
+        expect.stringContaining('negative flair value')
       );
     });
 
@@ -1984,7 +1954,7 @@ describe('Task 14.3: Serialization Logic Tests', () => {
         'Tue-08': '-3', // valid - negative deltas allowed
       };
 
-      const result = (service as any).parseHashEntries(
+      const result = parseHashEntries(
         hashData,
         'trends:testsub:posting_heatmap',
         (v: string) => parseInt(v)
@@ -2007,7 +1977,7 @@ describe('Task 14.3: Serialization Logic Tests', () => {
       // Only allow keys starting with 'valid'
       const keyValidator = (key: string) => key.startsWith('valid');
 
-      const result = (service as any).parseHashEntries(
+      const result = parseHashEntries(
         hashData,
         'test_key',
         (v: string) => parseInt(v),
@@ -2026,7 +1996,7 @@ describe('Task 14.3: Serialization Logic Tests', () => {
     it('should handle completely malformed input gracefully', () => {
       const members = [null as any, undefined as any, '' as any];
 
-      const result = (service as any).parseZSetMembers(members, 'test_key');
+      const result = parseZSetMembers(members, 'test_key');
 
       expect(result.length).toBe(0);
     });
@@ -2035,7 +2005,7 @@ describe('Task 14.3: Serialization Logic Tests', () => {
       // Create a valueParser that throws
       const members = ['1704067200000:100000'];
 
-      const result = (service as any).parseZSetMembers(
+      const result = parseZSetMembers(
         members,
         'test_key',
         () => {

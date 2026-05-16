@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { TrendingService } from './TrendingService';
+import { MS_PER_DAY, MS_PER_HOUR } from '../../shared/core/constants';
 
 // Enhanced Mock Redis client that properly handles the retention logic
 class EnhancedMockRedisClient {
@@ -76,6 +77,13 @@ class EnhancedMockRedisClient {
           .slice(actualStart, actualStop)
           .map((item: any) => item.member);
       }
+    });
+  }
+
+  async zCard(key: string): Promise<number> {
+    return this.trackOperation('zCard', async () => {
+      const zset = this.data.get(key) || [];
+      return zset.length;
     });
   }
 
@@ -247,12 +255,11 @@ function generateRealisticTestData(
 
   // Create scans within the last 30 days (default retention)
   const retentionDays = 30;
-  const msPerDay = 24 * 60 * 60 * 1000;
 
   // Set up timeline with scans from the last 30 days
   const timelineMembers = [];
   for (let i = 0; i < retentionDays; i++) {
-    const timestamp = now - i * msPerDay;
+    const timestamp = now - i * MS_PER_DAY;
     const currentScanId = scanId - i;
     timelineMembers.push({
       score: timestamp,
@@ -264,7 +271,7 @@ function generateRealisticTestData(
   // Set up scan metadata and stats for each scan
   for (let i = 0; i < retentionDays; i++) {
     const currentScanId = scanId - i;
-    const timestamp = now - i * msPerDay;
+    const timestamp = now - i * MS_PER_DAY;
 
     mockRedis.setData(`run:${currentScanId}:meta`, {
       scan_date: new Date(timestamp).toISOString(),
@@ -316,8 +323,8 @@ function generateRealisticTestData(
       const tsEngagementData = [
         { score: timestamp, member: `${timestamp}:${post.engagement_score}` },
         {
-          score: timestamp - 3600000,
-          member: `${timestamp - 3600000}:${post.engagement_score * 0.9}`,
+          score: timestamp - MS_PER_HOUR,
+          member: `${timestamp - MS_PER_HOUR}:${post.engagement_score * 0.9}`,
         },
       ];
       mockRedis.setData(`${postKey}:ts:engagement`, tsEngagementData);
@@ -606,10 +613,9 @@ describe('TrendingService Integration Performance Tests', () => {
 
       // Add extra historical data
       const now = Date.now();
-      const msPerDay = 24 * 60 * 60 * 1000;
 
       for (let i = 30; i < 60; i++) {
-        const timestamp = now - i * msPerDay;
+        const timestamp = now - i * MS_PER_DAY;
         const historicalScanId = testScanId - i;
 
         longRetentionRedis.setData(`run:${historicalScanId}:meta`, {

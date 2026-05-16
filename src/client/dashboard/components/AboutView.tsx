@@ -35,9 +35,8 @@ function AboutView({ appVersion, currentUsername }: AboutViewProps) {
                 Build: {new Date().toISOString().split('T')[0]}
               </p>
               <p className="text-xs text-muted-foreground">
-                Phase: Final Testing/Initial Rollout
+                Phase: Public Release
               </p>
-              {isOwner && <OwnerUtilitiesSection />}
             </div>
             <div className="flex-1" style={{ padding: '1.5rem' }}>
               <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
@@ -115,6 +114,14 @@ function AboutView({ appVersion, currentUsername }: AboutViewProps) {
             </li>
           </ul>
         </Accordion>
+
+        {isOwner && (
+          <Accordion title="Owner Utilities">
+            <div className="card-body px-0 py-2">
+              <OwnerUtilitiesSection />
+            </div>
+          </Accordion>
+        )}
       </div>
     </div>
   );

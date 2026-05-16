@@ -1,15 +1,5 @@
 import { getWebViewMode, requestExpandedMode } from '@devvit/web/client';
 import React, { useEffect, useMemo, useState } from 'react';
-import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  Legend,
-  Tooltip as RechartsTooltip,
-  ResponsiveContainer,
-  XAxis,
-  YAxis,
-} from 'recharts';
 import type { AnalyticsSnapshot, PostData } from '../../../shared/types/api';
 import { useSettings } from '../hooks/useSettings';
 import {
@@ -340,6 +330,8 @@ function ReportView({
 
   // Activity tab state - for toggling chart series visibility
   const [hiddenSeries, setHiddenSeries] = useState<Record<string, boolean>>({});
+
+
 
   const consumeServerLaunchIntent = async (): Promise<ReportTab | null> => {
     if (!isExpandedEntrypoint) {
@@ -716,7 +708,16 @@ function ReportView({
       setTrendsLoading(true);
       setTrendsError(null);
       try {
-        const res = await fetch('/api/trends');
+        // Pass the snapshot's scan timestamp so historical snapshots
+        // retrieve their matching trend overlay instead of the latest.
+        const scanTimestamp = analytics?.meta?.scanDate
+          ? new Date(analytics.meta.scanDate).getTime()
+          : undefined;
+        const trendsUrl =
+          scanTimestamp && Number.isFinite(scanTimestamp)
+            ? `/api/trends?asOf=${scanTimestamp}`
+            : '/api/trends';
+        const res = await fetch(trendsUrl);
         if (!res.ok) {
           throw new Error(`Failed to load trends (${res.status})`);
         }
@@ -769,9 +770,14 @@ function ReportView({
     <div className="mt-2 flex justify-end px-1">
       <div className="flex items-center gap-1 opacity-70">
         <Icon name="mono-info" size={10} className="text-blue-500" />
-        <span className="text-[9px] font-medium text-slate-500 tracking-tight">
-          Precision Trends: High-precision calculations active.
-        </span>
+        <Tooltip
+          content="This indicator confirms that data elements (like average scores or best posting times) have been overridden by higher-precision calculations using the full multi-post trend forecasting dataset, rather than just the current snapshot's analysis pool."
+          side="top"
+        >
+          <span className="text-[9px] font-medium text-slate-500 tracking-tight cursor-help underline decoration-dotted">
+            Precision Trends Active
+          </span>
+        </Tooltip>
       </div>
     </div>
   ) : null;
@@ -880,6 +886,20 @@ function ReportView({
 
   // Calculate best posting times
   const getBestTimes = () => {
+    if (useTrendPrecisionData && trendsData?.globalBestPostingTimes) {
+      return trendsData.globalBestPostingTimes
+        .map((slot: any) => ({
+          day: slot.day,
+          hour: slot.hour,
+          hour_fmt: slot.hour_fmt,
+          score: Math.round(slot.score),
+          sortWeight: slot.sortWeight,
+          count: slot.count,
+        }))
+        .sort((a: any, b: any) => b.sortWeight - a.sortWeight)
+        .slice(0, 3);
+    }
+
     const pool = analytics?.analysisPool;
     if (!Array.isArray(pool) || pool.length === 0) {
       return [];
@@ -944,6 +964,23 @@ function ReportView({
 
   // Calculate word cloud data
   const getWordCloudData = () => {
+    if (useTrendPrecisionData && trendsData?.globalWordCloud) {
+      const trendWords = Object.entries(trendsData.globalWordCloud)
+        .filter(([, count]) => Number(count) > 0)
+        .sort((a, b) => Number(b[1]) - Number(a[1]))
+        .slice(0, 50)
+        .map(([word, count]) => ({ word, count: Number(count) }));
+
+      if (trendWords.length > 0) {
+        const maxCount = trendWords[0]!.count;
+        return trendWords.map((item) => ({
+          ...item,
+          size: 0.8 + (item.count / maxCount) * 1.5,
+          opacity: 0.6 + (0.8 + (item.count / maxCount) * 1.5) / 6,
+        }));
+      }
+    }
+
     // Use the full analysisPool for accurate word cloud
     const pool = analytics?.analysisPool;
     if (!Array.isArray(pool)) {
@@ -1088,16 +1125,19 @@ function ReportView({
     }));
   };
 
-  // Calculate activity trend (30 days)
+  // Calculate activity trend
   const getActivityTrend = () => {
     // Use the full analysisPool for accurate activity trend
     const allPosts = analytics.analysisPool;
 
     const dateCounts: Record<string, { posts: number; comments: number }> = {};
-    const now = new Date();
+    const referenceDate = analytics?.meta?.scanDate
+      ? new Date(analytics.meta.scanDate)
+      : new Date();
+    const analysisDays = reportSettings?.trendAnalysisDays || 90;
 
-    for (let i = 0; i < 30; i++) {
-      const d = new Date(now);
+    for (let i = 0; i < analysisDays; i++) {
+      const d = new Date(referenceDate);
       d.setDate(d.getDate() - i);
       const dateStr = d.toISOString().split('T')[0]!;
       dateCounts[dateStr] = { posts: 0, comments: 0 };
@@ -1233,30 +1273,37 @@ function ReportView({
             trendAnalysisDays={reportSettings.trendAnalysisDays || 90}
             iconContext={iconContext}
             isPrintMode={isPrintMode}
+            snapshotTimestamp={analytics?.meta?.scanDate ? new Date(analytics.meta.scanDate).getTime() : undefined}
           />
         )}
 
         {(reportSettings.showTrendEngagement ?? true) && (
           <EngagementOverTimeChart
             trendsData={trendsData}
+            trendAnalysisDays={reportSettings.trendAnalysisDays || 90}
             iconContext={iconContext}
             isPrintMode={isPrintMode}
+            snapshotTimestamp={analytics?.meta?.scanDate ? new Date(analytics.meta.scanDate).getTime() : undefined}
           />
         )}
 
         {(reportSettings.showTrendContent ?? true) && (
           <ContentMixChart
             trendsData={trendsData}
+            trendAnalysisDays={reportSettings.trendAnalysisDays || 90}
             iconContext={iconContext}
             isPrintMode={isPrintMode}
+            snapshotTimestamp={analytics?.meta?.scanDate ? new Date(analytics.meta.scanDate).getTime() : undefined}
           />
         )}
 
         {reportSettings.showTrendPosting && (
           <PostingActivityHeatmapChart
             trendsData={trendsData}
+            trendAnalysisDays={reportSettings.trendAnalysisDays || 90}
             iconContext={iconContext}
             isPrintMode={isPrintMode}
+            snapshotTimestamp={analytics?.meta?.scanDate ? new Date(analytics.meta.scanDate).getTime() : undefined}
           />
         )}
 
@@ -1265,6 +1312,7 @@ function ReportView({
             trendsData={trendsData}
             iconContext={iconContext}
             isPrintMode={isPrintMode}
+            snapshotTimestamp={analytics?.meta?.scanDate ? new Date(analytics.meta.scanDate).getTime() : undefined}
           />
         )}
       </div>
@@ -1304,12 +1352,14 @@ function ReportView({
                       }
                     />
                   </div>
-                  <Button
-                    size="icon"
-                    onClick={() => onPrint?.()}
-                    icon="mono-html"
-                    iconSize={24}
-                  />
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="icon"
+                      onClick={() => onPrint?.()}
+                      icon="mono-html"
+                      iconSize={24}
+                    />
+                  </div>
                 </div>
               }
             />
@@ -1322,7 +1372,7 @@ function ReportView({
           >
             {/* Tab Bar - top on mobile, bottom on desktop via CSS order */}
             <div
-              className="report-tabs-bar flex-shrink-0 border-b border-border px-1 flex items-end justify-start z-50 h-[30px] gap-0.5 overflow-x-auto"
+              className="report-tabs-bar flex-shrink-0 border-b border-border px-1 flex items-end justify-start z-50 h-[30px] gap-0.5 overflow-x-auto overflow-y-hidden"
               style={{ background: 'var(--color-accent)' }}
             >
               {tabs.map((t) => {
@@ -1338,7 +1388,7 @@ function ReportView({
                                             min-w-[50px] flex justify-center items-center whitespace-nowrap
                                             ${
                                               isActive
-                                                ? 'h-[28px] translate-y-[1px] z-10 pb-0.5 shadow-sm'
+                                                ? `h-[28px] ${isInlineConstrained ? 'translate-y-[1px]' : 'translate-y-[-1px]'} z-10 pb-0.5 shadow-sm`
                                                 : 'bg-card border-transparent text-muted-foreground hover:text-foreground hover:bg-muted h-[24px] pb-0.5'
                                             }
                                         `}
@@ -1360,7 +1410,7 @@ function ReportView({
                     )}
                     {isActive && (
                       <div
-                        className="absolute bottom-[-1px] left-0 right-0 h-[1px]"
+                        className={`absolute ${isInlineConstrained ? 'bottom-[-1px]' : 'top-[-1px]'} left-0 right-0 h-[1px]`}
                         style={{ backgroundColor: 'var(--tab-active-bg)' }}
                       />
                     )}
@@ -1435,21 +1485,26 @@ function ReportView({
                     />
                   )}
                   {activeTab === t.tab && t.tab === 'activity' && (
-                    <ActivityView
-                      activityTrendData={getActivityTrend()}
-                      engagementVsScoreData={getEngagementVsScore()}
-                      hiddenSeries={hiddenSeries}
-                      onToggleSeries={(dataKey) =>
-                        setHiddenSeries((prev) => ({
-                          ...prev,
-                          [dataKey]: !prev[dataKey],
-                        }))
-                      }
-                      iconContext={iconContext}
-                      isPrintMode={isPrintMode}
-                      tabKey={activeTab}
-                      compactTooltipProps={compactTooltipProps}
-                    />
+                      <ActivityView
+                        activityTrendData={getActivityTrend()}
+                        engagementVsScoreData={getEngagementVsScore()}
+                        hiddenSeries={hiddenSeries}
+                        onToggleSeries={(dataKey) =>
+                          setHiddenSeries((prev) => ({
+                            ...prev,
+                            [dataKey]: !prev[dataKey],
+                          }))
+                        }
+                        iconContext={iconContext}
+                        isPrintMode={isPrintMode}
+                        tabKey={activeTab}
+                        compactTooltipProps={compactTooltipProps}
+                        referenceTimestamp={
+                          analytics?.meta?.scanDate
+                            ? new Date(analytics.meta.scanDate).getTime()
+                            : undefined
+                        }
+                      />
                   )}
                   {activeTab === t.tab &&
                     t.tab === 'trends' &&
@@ -1464,21 +1519,8 @@ function ReportView({
       {/* Print Report Layout — Rendered offscreen for HTML capture */}
       {isPrintMode &&
         (() => {
-          const printPool = excludeOfficial
-            ? analytics.analysisPool.filter(
-                (p: any) =>
-                  !effectiveOfficials.includes(p.author) &&
-                  p.author !== officialAccount &&
-                  p.author !== 'None'
-              )
-            : analytics.analysisPool;
-          const engScores = printPool.map((p: any) => p.engagement_score || 0);
-          const printAvgScore =
-            engScores.length > 0
-              ? Math.round(
-                  engScores.reduce((a, b) => a + b, 0) / engScores.length
-                )
-              : 0;
+
+          const trendGlobalStats = useTrendPrecisionData ? trendsData?.globalStats : undefined;
 
           return (
             <div className="w-full flex justify-center pb-8 overflow-x-auto print:overflow-visible">
@@ -1514,31 +1556,46 @@ function ReportView({
                     {
                       label: 'Subscribers',
                       value: Number(
-                        analytics.stats.subscribers
+                        trendGlobalStats?.subscribers ?? analytics.stats.subscribers
                       ).toLocaleString(),
                     },
-                    { label: 'Active Users', value: analytics.stats.active },
+                    { 
+                      label: 'Active Users', 
+                      value: trendGlobalStats?.active_users ?? analytics.stats.active 
+                    },
                     { label: 'Rules', value: analytics.stats.rules_count },
                     {
                       label: 'Avg Score',
-                      value: analytics.stats.avg_score,
+                      value: trendGlobalStats?.avg_score !== undefined
+                        ? Number(trendGlobalStats.avg_score).toFixed(2)
+                        : typeof analytics.stats.avg_score === 'number'
+                          ? Number(analytics.stats.avg_score).toFixed(2)
+                          : analytics.stats.avg_score,
                       color: 'text-blue-700',
                     },
                     {
                       label: 'Posts/Day',
-                      value: analytics.stats.posts_per_day,
+                      value: trendGlobalStats?.posts_per_day !== undefined
+                        ? Number(trendGlobalStats.posts_per_day).toFixed(1)
+                        : analytics.stats.posts_per_day,
                     },
                     {
                       label: 'Comments/Day',
-                      value: analytics.stats.comments_per_day,
+                      value: trendGlobalStats?.comments_per_day !== undefined
+                        ? Number(trendGlobalStats.comments_per_day).toFixed(1)
+                        : analytics.stats.comments_per_day,
                     },
                     {
                       label: 'Velocity (24h)',
-                      value: `${analytics.stats.combined_velocity}/hr`,
+                      value: `${trendGlobalStats?.velocity_24h ?? analytics.stats.combined_velocity}/hr`,
                     },
                     {
                       label: 'Avg Engagement',
-                      value: printAvgScore,
+                      value: trendGlobalStats?.avg_engagement !== undefined
+                        ? Number(trendGlobalStats.avg_engagement).toFixed(2)
+                        : typeof analytics.stats.avg_engagement === 'number'
+                          ? Number(analytics.stats.avg_engagement).toFixed(2)
+                          : analytics.stats.avg_engagement,
                       color: 'text-blue-700',
                     },
                   ].map((m, i) => (
@@ -1750,7 +1807,7 @@ function ReportView({
                 {/* Best Times Section */}
                 {reportSettings.showTiming && (
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 pdf-safe-block">
-                    {getBestTimes().map((t, idx) => (
+                    {getBestTimes().map((t: any, idx: number) => (
                       <div
                         key={idx}
                         className="bg-white p-5 rounded-xl border-2 border-slate-100 flex justify-between items-center relative overflow-hidden shadow-sm"
@@ -1976,281 +2033,22 @@ function ReportView({
                         Activity Analysis
                       </h3>
                     </div>
-                    <div className="bg-white border border-slate-200 rounded p-4 print-no-scroll space-y-5">
-                      <Chart
-                        title="Activity Trend (30d)"
-                        icon={
-                          <Icon
-                            src={getDataGroupingIcon(
-                              'activity_trend',
-                              iconContext
-                            )}
-                            size={16}
-                          />
+                    <div className="bg-white border border-slate-200 rounded p-4 print-no-scroll">
+                      <ActivityView
+                        activityTrendData={getActivityTrend()}
+                        engagementVsScoreData={getEngagementVsScore()}
+                        hiddenSeries={hiddenSeries}
+                        onToggleSeries={(dataKey) =>
+                          setHiddenSeries((prev) => ({
+                            ...prev,
+                            [dataKey]: !prev[dataKey],
+                          }))
                         }
-                        height={340}
-                      >
-                        <div
-                          style={{
-                            width: '100%',
-                            height: '300px',
-                            minWidth: 0,
-                            position: 'relative',
-                          }}
-                        >
-                          <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart
-                              data={getActivityTrend()}
-                              margin={{
-                                top: 10,
-                                right: 10,
-                                left: 5,
-                                bottom: 5,
-                              }}
-                            >
-                              <CartesianGrid
-                                strokeDasharray="3 3"
-                                vertical={true}
-                                stroke="rgba(8,10,12,.175)"
-                                opacity={1}
-                              />
-                              <XAxis
-                                dataKey="date"
-                                tickFormatter={(dateStr) => {
-                                  try {
-                                    return new Intl.DateTimeFormat('en-US', {
-                                      month: 'short',
-                                      day: 'numeric',
-                                    }).format(new Date(`${dateStr}T12:00:00Z`));
-                                  } catch (e) {
-                                    return dateStr;
-                                  }
-                                }}
-                                interval={3}
-                                tick={{
-                                  fontSize: 8,
-                                  fill: 'var(--text-primary)',
-                                }}
-                                height={42}
-                              />
-                              <YAxis
-                                yAxisId="left"
-                                orientation="left"
-                                tick={{ fontSize: 9 }}
-                                tickCount={6}
-                                stroke="var(--color-text)"
-                                width={40}
-                                label={{
-                                  value: 'Posts',
-                                  angle: -90,
-                                  position: 'insideLeft',
-                                  style: {
-                                    fontSize: 9,
-                                    fill: 'var(--text-primary)',
-                                  },
-                                }}
-                              />
-                              <YAxis
-                                yAxisId="right"
-                                orientation="right"
-                                tick={{ fontSize: 9 }}
-                                tickCount={6}
-                                stroke="var(--color-text)"
-                                width={40}
-                                label={{
-                                  value: 'Comments',
-                                  angle: 90,
-                                  position: 'insideRight',
-                                  style: {
-                                    fontSize: 9,
-                                    fill: 'var(--text-primary)',
-                                  },
-                                }}
-                              />
-                              <RechartsTooltip {...compactTooltipProps} />
-                              <Legend
-                                wrapperStyle={{
-                                  fontSize: '10px',
-                                  paddingTop: '10px',
-                                }}
-                              />
-                              <Area
-                                yAxisId="left"
-                                type="monotone"
-                                dataKey="posts"
-                                stroke="var(--chart-primary)"
-                                fill="var(--chart-primary)"
-                                opacity={0.15}
-                                strokeWidth={2.25}
-                                name="Avg Posts"
-                                isAnimationActive={false}
-                                dot={{
-                                  r: 2,
-                                  fill: 'var(--chart-primary)',
-                                  stroke: '#fff',
-                                  strokeWidth: 1,
-                                }}
-                              />
-                              <Area
-                                yAxisId="right"
-                                type="monotone"
-                                dataKey="comments"
-                                stroke="var(--chart-accent)"
-                                fill="var(--chart-accent)"
-                                opacity={0.5}
-                                strokeWidth={2.25}
-                                name="Avg Comments"
-                                isAnimationActive={false}
-                                dot={{
-                                  r: 2,
-                                  fill: 'var(--chart-accent)',
-                                  stroke: '#fff',
-                                  strokeWidth: 1,
-                                }}
-                              />
-                            </AreaChart>
-                          </ResponsiveContainer>
-                        </div>
-                      </Chart>
-
-                      <Chart
-                        title="Engagement vs Votes (24h)"
-                        icon={
-                          <Icon
-                            src={getDataGroupingIcon('engagement', iconContext)}
-                            size={16}
-                          />
-                        }
-                        height={340}
-                      >
-                        <div
-                          style={{
-                            width: '100%',
-                            height: '300px',
-                            minWidth: 0,
-                            position: 'relative',
-                          }}
-                        >
-                          <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart
-                              data={getEngagementVsScore()}
-                              margin={{
-                                top: 10,
-                                right: 10,
-                                left: 5,
-                                bottom: 5,
-                              }}
-                            >
-                              <CartesianGrid
-                                strokeDasharray="3 3"
-                                vertical={true}
-                                stroke="rgba(8,10,12,.175)"
-                                opacity={1}
-                              />
-                              <XAxis
-                                dataKey="hour"
-                                interval={2}
-                                tick={{
-                                  fontSize: 8,
-                                  fill: 'var(--text-primary)',
-                                }}
-                                height={42}
-                              />
-                              <YAxis
-                                yAxisId="left"
-                                orientation="left"
-                                tick={{ fontSize: 9 }}
-                                tickCount={6}
-                                stroke="var(--color-text)"
-                                width={40}
-                                label={{
-                                  value: 'Avg Posts',
-                                  angle: -90,
-                                  position: 'insideLeft',
-                                  style: {
-                                    fontSize: 9,
-                                    fill: 'var(--text-primary)',
-                                  },
-                                }}
-                              />
-                              <YAxis
-                                yAxisId="right"
-                                orientation="right"
-                                tick={{ fontSize: 9 }}
-                                tickCount={6}
-                                stroke="var(--color-text)"
-                                width={40}
-                                label={{
-                                  value: 'Avg Comments',
-                                  angle: 90,
-                                  position: 'insideRight',
-                                  style: {
-                                    fontSize: 9,
-                                    fill: 'var(--text-primary)',
-                                  },
-                                }}
-                              />
-                              <RechartsTooltip
-                                {...compactTooltipProps}
-                                labelFormatter={(label) => {
-                                  if (
-                                    typeof label === 'string' &&
-                                    label.includes(':')
-                                  ) {
-                                    const hour = parseInt(
-                                      label.split(':')[0] || '0'
-                                    );
-                                    const ampm = hour >= 12 ? 'PM' : 'AM';
-                                    const hour12 = hour % 12 || 12;
-                                    return `${hour12}${ampm}`;
-                                  }
-                                  return label;
-                                }}
-                              />
-                              <Legend
-                                wrapperStyle={{
-                                  fontSize: '10px',
-                                  paddingTop: '10px',
-                                }}
-                              />
-                              <Area
-                                yAxisId="left"
-                                type="monotone"
-                                dataKey="score"
-                                stroke="var(--chart-primary)"
-                                fill="var(--chart-primary)"
-                                opacity={0.15}
-                                strokeWidth={2.25}
-                                name="Avg Score"
-                                isAnimationActive={false}
-                                dot={{
-                                  r: 2,
-                                  fill: 'var(--chart-primary)',
-                                  stroke: '#fff',
-                                  strokeWidth: 1,
-                                }}
-                              />
-                              <Area
-                                yAxisId="right"
-                                type="monotone"
-                                dataKey="engagement"
-                                stroke="var(--chart-accent)"
-                                fill="var(--chart-accent)"
-                                opacity={0.5}
-                                strokeWidth={2.25}
-                                name="Avg Engagement"
-                                isAnimationActive={false}
-                                dot={{
-                                  r: 2,
-                                  fill: 'var(--chart-accent)',
-                                  stroke: '#fff',
-                                  strokeWidth: 1,
-                                }}
-                              />
-                            </AreaChart>
-                          </ResponsiveContainer>
-                        </div>
-                      </Chart>
+                        iconContext={iconContext}
+                        isPrintMode={true}
+                        tabKey="activity_print"
+                        compactTooltipProps={compactTooltipProps}
+                      />
                     </div>
                   </div>
                 )}
@@ -2278,6 +2076,7 @@ function ReportView({
                             }
                             iconContext={iconContext}
                             isPrintMode={isPrintMode}
+                            snapshotTimestamp={analytics?.meta?.scanDate ? new Date(analytics.meta.scanDate).getTime() : undefined}
                           />
                         )}
 
@@ -2286,6 +2085,7 @@ function ReportView({
                             trendsData={trendsData}
                             iconContext={iconContext}
                             isPrintMode={isPrintMode}
+                            snapshotTimestamp={analytics?.meta?.scanDate ? new Date(analytics.meta.scanDate).getTime() : undefined}
                           />
                         )}
 
@@ -2294,6 +2094,7 @@ function ReportView({
                             trendsData={trendsData}
                             iconContext={iconContext}
                             isPrintMode={isPrintMode}
+                            snapshotTimestamp={analytics?.meta?.scanDate ? new Date(analytics.meta.scanDate).getTime() : undefined}
                           />
                         )}
 
@@ -2319,7 +2120,7 @@ function ReportView({
                 {/* Footer */}
                 <div className="mt-8 pt-0.5 border-t-2 border-slate-200 flex justify-between items-center text-[9px] text-slate-400">
                   <div>
-                    Generated by ModScope Analytics Engagement Engine v1.6
+                    Generated by ModScope Analytics Engagement Engine v1.0
                   </div>
                   <div className="flex gap-4">
                     <span>© 2026 ModScope Analytics</span>

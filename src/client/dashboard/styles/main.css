@@ -8,6 +8,7 @@
 @import '../../themes/nocturne-theme.css';
 @import '../../themes/springtime-theme.css';
 @import '../../themes/rosemeadow-theme.css';
+@import '../../themes/upvoted-theme.css';
 
 /* Import table styles */
 @import './tables.css';
@@ -42,9 +43,10 @@ body {
 }
 
 body {
-  font-family:
+  /* font-family:
     'Oxygen', 'Cantarell', 'Fira Sans', 'Segoe UI', 'Roboto', 'Ubuntu',
-    'Droid Sans', 'Helvetica Neue', sans-serif;
+    'Droid Sans', 'Helvetica Neue', sans-serif; */
+  font-family: var(--default-font-family), ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background: var(--color-bg);
@@ -176,6 +178,22 @@ html[data-inline-constrained='true'] [data-report-view] .overflow-y-auto {
   border: 2px solid var(--border-strong);
   font-weight: 700;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+/* Nav buttons that trigger fullscreen when inline-constrained */
+.nav-button.nav-launch-link {
+  position: relative;
+}
+
+.nav-expand-indicator {
+  opacity: 0.5;
+  margin-left: 2px;
+  flex-shrink: 0;
+  transition: opacity 0.2s ease;
+}
+
+.nav-button.nav-launch-link:hover .nav-expand-indicator {
+  opacity: 1;
 }
 
 .nav-icon {

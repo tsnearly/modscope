@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { EntityTitle } from './ui/entity-title';
 import { Button } from './ui/button';
 import { Switch } from './ui/switch';
+import { Input } from './ui/input';
 import { Separator } from './ui/separator';
 import {
   Select,
@@ -20,6 +21,7 @@ import {
   UserSettings,
   StorageSettings,
   ReportSettings,
+  ReportingSchedule,
   AnalysisPreset,
   ScalingMethod,
   DEFAULT_CALCULATION_SETTINGS,
@@ -142,6 +144,83 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
     setIsDirty(true);
   };
 
+  const generateScheduleName = (schedule: ReportingSchedule): string => {
+    const ampm = schedule.hour >= 12 ? 'PM' : 'AM';
+    const h12 = schedule.hour % 12 || 12;
+    const timeStr = `${String(h12).padStart(2, '0')}:${String(schedule.minute).padStart(2, '0')} ${ampm}`;
+
+    if (schedule.scheduleType === 'daily') {
+      return `Runs daily at ${timeStr}`;
+    }
+    if (schedule.scheduleType === 'weekly') {
+      const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      let selectedDays: number[] = [];
+      if (Array.isArray(schedule.dayOfWeek)) {
+        selectedDays = [...schedule.dayOfWeek].sort((a,b)=>a-b);
+      } else if (typeof schedule.dayOfWeek === 'number') {
+        selectedDays = [schedule.dayOfWeek];
+      } else {
+        selectedDays = [1];
+      }
+      const dayList = selectedDays.map(d => days[d]).join(', ');
+      return `Runs on ${dayList} at ${timeStr}`;
+    }
+    if (schedule.scheduleType === 'monthly') {
+      return `Runs on day ${schedule.dayOfMonth || 1} of the month at ${timeStr}`;
+    }
+    return 'New Report Schedule';
+  };
+
+  const handleAddSchedule = () => {
+    const newSchedule: ReportingSchedule = {
+      id: Math.random().toString(36).substring(2, 9),
+      name: '',
+      scheduleType: 'weekly',
+      recipients: '',
+      enabled: true,
+      hour: 9,
+      minute: 0,
+      dayOfWeek: [1],
+    };
+    newSchedule.name = generateScheduleName(newSchedule);
+    handleReportChange('reportingSchedules', [
+      ...(localSettings?.report?.reportingSchedules || []),
+      newSchedule,
+    ]);
+  };
+
+  const handleUpdateSchedule = (
+    id: string,
+    updates: Partial<ReportingSchedule>
+  ) => {
+    const nextSchedules = (
+      localSettings?.report?.reportingSchedules || []
+    ).map((s) => {
+      if (s.id === id) {
+        const next = { ...s, ...updates };
+        if (
+          updates.scheduleType !== undefined ||
+          updates.hour !== undefined ||
+          updates.minute !== undefined ||
+          updates.dayOfWeek !== undefined ||
+          updates.dayOfMonth !== undefined
+        ) {
+          next.name = generateScheduleName(next);
+        }
+        return next;
+      }
+      return s;
+    });
+    handleReportChange('reportingSchedules', nextSchedules);
+  };
+
+  const handleRemoveSchedule = (id: string) => {
+    const nextSchedules = (
+      localSettings?.report?.reportingSchedules || []
+    ).filter((s) => s.id !== id);
+    handleReportChange('reportingSchedules', nextSchedules);
+  };
+
   const handleDisplayChange = <K extends keyof UserSettings>(
     key: K,
     value: UserSettings[K]
@@ -258,7 +337,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
 
       <div className="view-content flex-1 overflow-y-auto px-6 pb-6 w-full">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full max-w-none">
-          {/* Column 1: Analysis Profile (The "How") */}
+          {/* Column 1: Analysis Profile & Data Scope */}
           <div className="space-y-6">
             <Section title="Analysis Profile" icon="lucide:sliders">
               <SectionCard className="mb-4">
@@ -496,7 +575,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                             localSettings?.settings?.depthScaling ??
                             'logarithmic'
                           }
-                          onChange={(val) =>
+                          onChange={(val: string) =>
                             handleCalcChange(
                               'depthScaling',
                               val as ScalingMethod
@@ -620,9 +699,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                 </fieldset>
               </SectionCard>
             </Section>
-          </div>
 
-          <div className="space-y-6">
             <Section title="Data Scope" icon="lucide:layers">
               <SectionCard>
                 <fieldset
@@ -750,11 +827,11 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                       <div className="px-4 py-3 bg-muted/20 rounded-lg border border-border/50">
                         <div className="flex justify-between items-center mb-2">
                           <label className="text-sm font-semibold text-foreground">
-                            Analysis Window
+                            Analysis Window (Leaderboards)
                           </label>
                         </div>
                         <p className="text-xs text-muted-foreground mb-3 block">
-                          How far back to look for posts to include in analysis.
+                          How far back to look for posts to include in leaderboard & recommendation analysis.
                         </p>
                         <div className="flex items-center gap-3">
                           <input
@@ -804,12 +881,10 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                             checked={
                               localSettings?.settings?.excludeOfficial ?? false
                             }
-                            onChange={(
-                              e: React.ChangeEvent<HTMLInputElement>
-                            ) =>
+                            onCheckedChange={(checked) =>
                               handleCalcChange(
                                 'excludeOfficial',
-                                e.target.checked
+                                checked === true
                               )
                             }
                           />
@@ -828,10 +903,8 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                             checked={
                               localSettings?.settings?.excludeBots ?? false
                             }
-                            onChange={(
-                              e: React.ChangeEvent<HTMLInputElement>
-                            ) =>
-                              handleCalcChange('excludeBots', e.target.checked)
+                            onCheckedChange={(checked) =>
+                              handleCalcChange('excludeBots', checked === true)
                             }
                           />
                         </div>
@@ -912,8 +985,51 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
             </Section>
           </div>
 
-          {/* Column 3: Appearance & Reports */}
+          {/* Column 2: Appearance & Report Visualizations */}
           <div className="space-y-6">
+            <Section title="Appearance" icon="lucide:swatch-book">
+              <SectionCard>
+                <form>
+                  <h3 className="text-sm font-bold text-foreground mb-4 uppercase tracking-wider flex items-center gap-2">
+                    <span
+                      className="w-1 h-4 rounded-full"
+                      style={{ backgroundColor: 'var(--color-secondary)' }}
+                    ></span>
+                    Interface Theme
+                  </h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-sm font-semibold text-foreground block mb-1">
+                        Color Palette
+                      </label>
+                      <p className="text-xs text-muted-foreground mb-3">
+                        Select the visual color scheme for the application.
+                      </p>
+                      <Select
+                        value={localSettings?.display?.theme ?? 'modscopeflow'}
+                        onValueChange={(val) => {
+                          const newTheme = val as any;
+                          changeTheme(newTheme);
+                          handleDisplayChange('theme', newTheme);
+                        }}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select theme" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {THEMES.map((theme) => (
+                            <SelectItem key={theme.id} value={theme.id}>
+                              {theme.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </form>
+              </SectionCard>
+            </Section>
+
             <Section
               title="Report Visualizations"
               icon="lucide:layout-dashboard"
@@ -1133,50 +1249,296 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                       )
                     }
                   />
+                  <Separator variant="subtle" />
+                  <div className="pt-2">
+                    <label className="text-sm font-semibold text-foreground block mb-1">
+                      Trend Analysis Window
+                    </label>
+                    <p className="text-xs text-muted-foreground mb-3">
+                      Lookback period for historical trend charts (Subscribers, Engagement, Content Mix, etc).
+                    </p>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="number"
+                        min="7"
+                        max="365"
+                        step="1"
+                        value={localSettings?.report?.trendAnalysisDays ?? 90}
+                        onChange={(e) =>
+                          handleReportChange(
+                            'trendAnalysisDays',
+                            parseInt(e.target.value)
+                          )
+                        }
+                        className="w-20 px-3 py-1.5 border border-gray-300 rounded text-sm font-semibold"
+                      />
+                      <span className="text-sm font-semibold text-muted-foreground">
+                        Days
+                      </span>
+                    </div>
+                  </div>
                 </form>
               </SectionCard>
             </Section>
 
-            <Section title="Appearance" icon="lucide:swatch-book">
+            <Section title="Automated Reporting" icon="mono-mail-by-timer">
               <SectionCard>
-                <form>
-                  <h3 className="text-sm font-bold text-foreground mb-4 uppercase tracking-wider flex items-center gap-2">
-                    <span
-                      className="w-1 h-4 rounded-full"
-                      style={{ backgroundColor: 'var(--color-secondary)' }}
-                    ></span>
-                    Interface Theme
-                  </h3>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="text-sm font-semibold text-foreground block mb-1">
-                        Color Palette
-                      </label>
-                      <p className="text-xs text-muted-foreground mb-3">
-                        Select the visual color scheme for the application.
-                      </p>
-                      <Select
-                        value={localSettings?.display?.theme ?? 'modscopeflow'}
-                        onValueChange={(val) => {
-                          const newTheme = val as any;
-                          changeTheme(newTheme);
-                          handleDisplayChange('theme', newTheme);
-                        }}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select theme" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {THEMES.map((theme) => (
-                            <SelectItem key={theme.id} value={theme.id}>
-                              {theme.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                <div className="space-y-6">
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-sm font-bold text-foreground uppercase tracking-wider flex items-center gap-2">
+                      <span
+                        className="w-1 h-4 rounded-full"
+                        style={{ backgroundColor: 'var(--color-secondary)' }}
+                      ></span>
+                      Delivery Schedules
+                    </h3>
+                    <Button
+                      variant="outline"
+                      size="xs"
+                      onClick={handleAddSchedule}
+                      icon="lucide:plus"
+                    >
+                      Add Schedule
+                    </Button>
                   </div>
-                </form>
+
+                  <p className="text-xs text-muted-foreground">
+                    Configure routine report generation and delivery patterns.
+                    Each schedule can have its own recipients and frequency.
+                  </p>
+
+                  <div className="space-y-4">
+                    {localSettings?.report?.reportingSchedules?.length === 0 ? (
+                      <div className="p-8 border-2 border-dashed border-border rounded-lg text-center">
+                        <p className="text-sm text-muted-foreground">
+                          No schedules configured.
+                        </p>
+                        <Button
+                          variant="link"
+                          onClick={handleAddSchedule}
+                          className="mt-2"
+                        >
+                          Create your first schedule
+                        </Button>
+                      </div>
+                    ) : (
+                      localSettings?.report?.reportingSchedules?.map(
+                        (schedule) => (
+                          <div
+                            key={schedule.id}
+                            className="p-4 bg-muted/20 rounded-lg border border-border/50 space-y-4"
+                          >
+                            <div className="flex justify-between items-center">
+                              <div className="flex-1 mr-4">
+                                <Input
+                                  size="xs"
+                                  variant="filled"
+                                  value={schedule.name}
+                                  readOnly
+                                  disabled
+                                  className="font-bold cursor-not-allowed opacity-75"
+                                />
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <Switch
+                                  checked={schedule.enabled}
+                                  onCheckedChange={(c) =>
+                                    handleUpdateSchedule(schedule.id, {
+                                      enabled: !!c,
+                                    })
+                                  }
+                                />
+                                <Button
+                                  variant="ghost"
+                                  size="xs"
+                                  onClick={() =>
+                                    handleRemoveSchedule(schedule.id)
+                                  }
+                                  icon="lucide:trash"
+                                  className="text-destructive hover:bg-destructive/10"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">
+                                  Frequency
+                                </label>
+                                <Select
+                                  value={schedule.scheduleType}
+                                  onValueChange={(val) =>
+                                    handleUpdateSchedule(schedule.id, {
+                                      scheduleType: val as any,
+                                    })
+                                  }
+                                >
+                                  <SelectTrigger className="w-full h-8 text-xs">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="daily">Daily</SelectItem>
+                                    <SelectItem value="weekly">
+                                      Weekly
+                                    </SelectItem>
+                                    <SelectItem value="monthly">
+                                      Monthly
+                                    </SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+
+                              <div>
+                                <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">
+                                  Delivery Time
+                                </label>
+                                <div className="flex items-center gap-2">
+                                  <Select
+                                    value={String(schedule.hour)}
+                                    onValueChange={(val) =>
+                                      handleUpdateSchedule(schedule.id, {
+                                        hour: parseInt(val),
+                                      })
+                                    }
+                                  >
+                                    <SelectTrigger className="w-full h-8 text-xs">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {Array.from({ length: 24 }).map(
+                                        (_, i) => (
+                                          <SelectItem
+                                            key={i}
+                                            value={String(i)}
+                                          >
+                                            {i % 12 || 12} {i >= 12 ? 'PM' : 'AM'}
+                                          </SelectItem>
+                                        )
+                                      )}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              </div>
+                            </div>
+
+                            {schedule.scheduleType === 'weekly' && (
+                              <div>
+                                <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">
+                                  Days of Week
+                                </label>
+                                <div className="flex gap-1 overflow-x-auto pb-1">
+                                  {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(
+                                    (day, idx) => {
+                                      const isSelected = Array.isArray(schedule.dayOfWeek)
+                                        ? schedule.dayOfWeek.includes(idx)
+                                        : schedule.dayOfWeek === idx;
+
+                                      return (
+                                        <Button
+                                          key={`${day}-${idx}`}
+                                          variant={
+                                            schedule.enabled
+                                              ? isSelected
+                                                ? 'default'
+                                                : 'outline'
+                                              : 'ghost'
+                                          }
+                                          size="xs"
+                                          square
+                                          className={`w-8 h-8 font-bold${
+                                            !schedule.enabled && isSelected
+                                              ? ' ring-1 ring-border bg-muted/40'
+                                              : ''
+                                          }`}
+                                          onClick={() => {
+                                            let currentDays: number[] = [];
+                                            if (Array.isArray(schedule.dayOfWeek)) {
+                                              currentDays = [...schedule.dayOfWeek];
+                                            } else if (typeof schedule.dayOfWeek === 'number') {
+                                              currentDays = [schedule.dayOfWeek];
+                                            } else {
+                                              currentDays = [1];
+                                            }
+
+                                            if (currentDays.includes(idx)) {
+                                              currentDays = currentDays.filter((d) => d !== idx);
+                                            } else {
+                                              currentDays.push(idx);
+                                            }
+
+                                            if (currentDays.length === 0) {
+                                              currentDays = [idx];
+                                            }
+
+                                            handleUpdateSchedule(schedule.id, {
+                                              dayOfWeek: currentDays,
+                                            });
+                                          }}
+                                        >
+                                          {day}
+                                        </Button>
+                                      );
+                                    }
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {schedule.scheduleType === 'monthly' && (
+                              <div>
+                                <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">
+                                  Day of Month
+                                </label>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max="31"
+                                  value={schedule.dayOfMonth || 1}
+                                  onChange={(e) =>
+                                    handleUpdateSchedule(schedule.id, {
+                                      dayOfMonth: parseInt(e.target.value),
+                                    })
+                                  }
+                                  className="w-full h-8 px-3 py-1.5 border border-gray-300 rounded text-xs font-semibold"
+                                />
+                              </div>
+                            )}
+
+                            <div>
+                              <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">
+                                Recipients
+                              </label>
+                              <Input
+                                placeholder="u/username, r/subreddit"
+                                value={schedule.recipients}
+                                onChange={(e) =>
+                                  handleUpdateSchedule(schedule.id, {
+                                    recipients: e.target.value,
+                                  })
+                                }
+                                size="xs"
+                              />
+                              {schedule.recipients &&
+                                (() => {
+                                  const parts = schedule.recipients.split(',').map((p) => p.trim()).filter(Boolean);
+                                  for (const part of parts) {
+                                    if (!part.match(/^(r\/|u\/)?[a-zA-Z0-9_-]+$/)) {
+                                      return (
+                                        <p className="text-[10px] text-red-500 mt-1">
+                                          Invalid format: "{part}". Use u/username or r/subreddit.
+                                        </p>
+                                      );
+                                    }
+                                  }
+                                  return null;
+                                })()}
+                            </div>
+                          </div>
+                        )
+                      )
+                    )}
+                  </div>
+                </div>
               </SectionCard>
             </Section>
           </div>

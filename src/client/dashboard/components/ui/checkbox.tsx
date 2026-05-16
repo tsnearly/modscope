@@ -344,7 +344,7 @@ export function Checkbox({
     isChecked = internalChecked;
   }
 
-  const handleChange = (e) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const next = e.target.checked;
     if (isInGroup && value !== undefined) {
       group.onChange(value, next);

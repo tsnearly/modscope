@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { TrendingService } from './TrendingService';
+import { MS_PER_DAY, MS_PER_HOUR } from '../../shared/core/constants';
 
 // Comprehensive benchmark test with working retention logic
 class BenchmarkMockRedisClient {
@@ -62,6 +63,13 @@ class BenchmarkMockRedisClient {
           .slice(actualStart, actualStop)
           .map((item: any) => item.member);
       }
+    });
+  }
+
+  async zCard(key: string): Promise<number> {
+    return this.trackOperation('zCard', async () => {
+      const zset = this.data.get(key) || [];
+      return zset.length;
     });
   }
 
@@ -217,12 +225,11 @@ function generateBenchmarkData(
 
   // Use a shorter retention period that matches our test data
   const retentionDays = 7; // 7 days of data
-  const msPerDay = 24 * 60 * 60 * 1000;
 
   // Set up timeline with recent scans
   const timelineMembers = [];
   for (let i = 0; i < retentionDays; i++) {
-    const timestamp = now - i * msPerDay;
+    const timestamp = now - i * MS_PER_DAY;
     const currentScanId = scanId - i;
     timelineMembers.push({
       score: timestamp,
@@ -234,7 +241,7 @@ function generateBenchmarkData(
   // Set up scan metadata and stats for each scan
   for (let i = 0; i < retentionDays; i++) {
     const currentScanId = scanId - i;
-    const timestamp = now - i * msPerDay;
+    const timestamp = now - i * MS_PER_DAY;
 
     mockRedis.setData(`run:${currentScanId}:meta`, {
       scan_date: new Date(timestamp).toISOString(),
@@ -303,8 +310,8 @@ function generateBenchmarkData(
           member: `${timestamp - 1800000}:${post.engagement_score * 0.95}`,
         },
         {
-          score: timestamp - 3600000,
-          member: `${timestamp - 3600000}:${post.engagement_score * 0.8}`,
+          score: timestamp - MS_PER_HOUR,
+          member: `${timestamp - MS_PER_HOUR}:${post.engagement_score * 0.8}`,
         },
       ];
       mockRedis.setData(`${postKey}:ts:engagement`, tsEngagementData);

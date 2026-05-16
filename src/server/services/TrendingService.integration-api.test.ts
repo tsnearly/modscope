@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { TrendingService } from './TrendingService';
+import { MS_PER_DAY } from '../../shared/core/constants';
 
 // Mock Redis client for integration tests
 class MockRedisClient {
@@ -277,12 +278,11 @@ function generateTestDataWithSettings(
 ) {
   const mockRedis = new MockRedisClient();
   const now = Date.now();
-  const msPerDay = 24 * 60 * 60 * 1000;
 
   // Set up timeline with scans within retention window
   const timelineMembers = [];
   for (let i = 0; i < settings.retentionDays; i++) {
-    const timestamp = now - i * msPerDay;
+    const timestamp = now - i * MS_PER_DAY;
     timelineMembers.push({ score: timestamp, member: `${scanId - i}` });
   }
   mockRedis.setData('global:snapshots:timeline', timelineMembers);
@@ -290,7 +290,7 @@ function generateTestDataWithSettings(
   // Set up scan metadata and stats for each scan
   for (let i = 0; i < settings.retentionDays; i++) {
     const currentScanId = scanId - i;
-    const timestamp = now - i * msPerDay;
+    const timestamp = now - i * MS_PER_DAY;
 
     mockRedis.setData(`run:${currentScanId}:meta`, {
       scan_date: new Date(timestamp).toISOString(),

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { TrendingService } from './TrendingService';
+import { MS_PER_DAY } from '../../shared/core/constants';
 
 // Simple mock Redis client for calculation tests
 class MockRedisClient {
@@ -227,7 +228,7 @@ describe('TrendingService Calculation Logic Tests', () => {
       // Add data in reverse chronological order (oldest first) so growth rate is positive
       const now = Date.now();
       for (let i = 11; i >= 0; i--) {
-        const timestamp = now - i * 24 * 60 * 60 * 1000;
+        const timestamp = now - i * MS_PER_DAY;
         const value = 100000 + (11 - i) * 100; // Strong positive trend from oldest to newest
         await mockRedis.zAdd(
           `trends:testsub:subscriber_growth`,
@@ -249,7 +250,7 @@ describe('TrendingService Calculation Logic Tests', () => {
       // Set up subscriber growth data with only 5 points
       const now = Date.now();
       for (let i = 0; i < 5; i++) {
-        const timestamp = now - i * 24 * 60 * 60 * 1000;
+        const timestamp = now - i * MS_PER_DAY;
         const value = 100000 + i * 50;
         await mockRedis.zAdd(
           `trends:testsub:subscriber_growth`,
@@ -269,7 +270,7 @@ describe('TrendingService Calculation Logic Tests', () => {
       // Set up noisy subscriber growth data
       const now = Date.now();
       for (let i = 0; i < 15; i++) {
-        const timestamp = now - i * 24 * 60 * 60 * 1000;
+        const timestamp = now - i * MS_PER_DAY;
         // Fixed noise pattern to ensure low R-squared (< 0.6)
         const noise = i % 3 === 0 ? 500 : i % 3 === 1 ? -500 : 0;
         const value = 100000 + i * 50 + noise;
@@ -291,7 +292,7 @@ describe('TrendingService Calculation Logic Tests', () => {
       // Set up high quality subscriber growth data
       const now = Date.now();
       for (let i = 0; i < 20; i++) {
-        const timestamp = now - i * 24 * 60 * 60 * 1000;
+        const timestamp = now - i * MS_PER_DAY;
         const value = 100000 + i * 100; // Strong consistent trend
         await mockRedis.zAdd(
           `trends:testsub:subscriber_growth`,
@@ -342,7 +343,7 @@ describe('TrendingService Calculation Logic Tests', () => {
       // Set up subscriber growth data with some noise to ensure non-zero residual standard error
       const now = Date.now();
       for (let i = 0; i < 10; i++) {
-        const timestamp = now - i * 24 * 60 * 60 * 1000;
+        const timestamp = now - i * MS_PER_DAY;
         // Add small noise to create non-zero residual standard error
         const value = 100000 + i * 100 + (i % 2 === 0 ? 10 : -10);
         await mockRedis.zAdd(
@@ -370,9 +371,9 @@ describe('TrendingService Calculation Logic Tests', () => {
   describe('Task 14.1.3: Test growth rate percentage calculation including edge cases', () => {
     it('should calculate positive growth rate correctly', () => {
       const dataPoints = [
-        { timestamp: Date.now() - 30 * 24 * 60 * 60 * 1000, value: 1000 },
-        { timestamp: Date.now() - 20 * 24 * 60 * 60 * 1000, value: 1200 },
-        { timestamp: Date.now() - 10 * 24 * 60 * 60 * 1000, value: 1500 },
+        { timestamp: Date.now() - 30 * MS_PER_DAY, value: 1000 },
+        { timestamp: Date.now() - 20 * MS_PER_DAY, value: 1200 },
+        { timestamp: Date.now() - 10 * MS_PER_DAY, value: 1500 },
         { timestamp: Date.now(), value: 2000 },
       ];
 
@@ -385,9 +386,9 @@ describe('TrendingService Calculation Logic Tests', () => {
 
     it('should calculate negative growth rate correctly', () => {
       const dataPoints = [
-        { timestamp: Date.now() - 30 * 24 * 60 * 60 * 1000, value: 2000 },
-        { timestamp: Date.now() - 20 * 24 * 60 * 60 * 1000, value: 1800 },
-        { timestamp: Date.now() - 10 * 24 * 60 * 60 * 1000, value: 1500 },
+        { timestamp: Date.now() - 30 * MS_PER_DAY, value: 2000 },
+        { timestamp: Date.now() - 20 * MS_PER_DAY, value: 1800 },
+        { timestamp: Date.now() - 10 * MS_PER_DAY, value: 1500 },
         { timestamp: Date.now(), value: 1000 },
       ];
 
@@ -400,7 +401,7 @@ describe('TrendingService Calculation Logic Tests', () => {
 
     it('should handle zero prior value (baseline is zero)', () => {
       const dataPoints = [
-        { timestamp: Date.now() - 30 * 24 * 60 * 60 * 1000, value: 0 },
+        { timestamp: Date.now() - 30 * MS_PER_DAY, value: 0 },
         { timestamp: Date.now(), value: 1000 },
       ];
 
@@ -421,12 +422,12 @@ describe('TrendingService Calculation Logic Tests', () => {
 
     it('should find closest point to 30 days ago', () => {
       const now = Date.now();
-      const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
+      const thirtyDaysAgo = now - 30 * MS_PER_DAY;
 
       const dataPoints = [
-        { timestamp: thirtyDaysAgo - 5 * 24 * 60 * 60 * 1000, value: 900 }, // 35 days ago
-        { timestamp: thirtyDaysAgo + 2 * 24 * 60 * 60 * 1000, value: 1100 }, // 28 days ago
-        { timestamp: now - 10 * 24 * 60 * 60 * 1000, value: 1500 }, // 10 days ago
+        { timestamp: thirtyDaysAgo - 5 * MS_PER_DAY, value: 900 }, // 35 days ago
+        { timestamp: thirtyDaysAgo + 2 * MS_PER_DAY, value: 1100 }, // 28 days ago
+        { timestamp: now - 10 * MS_PER_DAY, value: 1500 }, // 10 days ago
         { timestamp: now, value: 2000 },
       ];
 
@@ -439,7 +440,7 @@ describe('TrendingService Calculation Logic Tests', () => {
 
     it('should round growth rate to one decimal place', () => {
       const dataPoints = [
-        { timestamp: Date.now() - 30 * 24 * 60 * 60 * 1000, value: 1000 },
+        { timestamp: Date.now() - 30 * MS_PER_DAY, value: 1000 },
         { timestamp: Date.now(), value: 1234 },
       ];
 
@@ -454,9 +455,9 @@ describe('TrendingService Calculation Logic Tests', () => {
       const now = Date.now();
       const dataPoints = [
         { timestamp: now, value: 2000 },
-        { timestamp: now - 10 * 24 * 60 * 60 * 1000, value: 1500 },
-        { timestamp: now - 30 * 24 * 60 * 60 * 1000, value: 1000 },
-        { timestamp: now - 20 * 24 * 60 * 60 * 1000, value: 1200 },
+        { timestamp: now - 10 * MS_PER_DAY, value: 1500 },
+        { timestamp: now - 30 * MS_PER_DAY, value: 1000 },
+        { timestamp: now - 20 * MS_PER_DAY, value: 1200 },
       ];
 
       const growthRate = (service as any).calculateGrowthRate(dataPoints, 30);

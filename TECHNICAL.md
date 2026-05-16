@@ -130,6 +130,7 @@ Theme preferences are saved to the user's specific state in Redis (`user:{userna
 - **Nocturne**: A true dark mode optimized for low-light environments to reduce eye strain during late-night queue clearing.
 - **Rose Meadow**: A sophisticated, deep crimson and rose-tinted palette for a premium aesthetic.
 - **Springtime**: A soft, high-vibrancy pastel theme.
+- **Upvoted**: A familiar feeling scheme for some reason…cooler, sharper. 
 
 ---
 

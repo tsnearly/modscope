@@ -1,0 +1,52 @@
+
+> modscope@0.9.8 type-check
+> tsc --build
+
+src/shared/utils/post-utils.ts(6,31): error TS6133: 'DEFAULT_CALCULATION_SETTINGS' is declared but its value is never read.
+src/client/dashboard/components/CommunityGrowthChart.tsx(186,17): error TS2379: Argument of type '{ timestamp: number; date: string; actual: number | undefined; isForecast: false; }' is not assignable to parameter of type 'GrowthDatum' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
+  Types of property 'actual' are incompatible.
+    Type 'number | undefined' is not assignable to type 'number'.
+      Type 'undefined' is not assignable to type 'number'.
+src/client/dashboard/components/CommunityGrowthChart.tsx(200,19): error TS2379: Argument of type '{ timestamp: number; date: string; forecast: number | undefined; lowerBand: number | undefined; bandWidth: number | undefined; isForecast: true; }' is not assignable to parameter of type 'GrowthDatum' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
+  Types of property 'forecast' are incompatible.
+    Type 'number | undefined' is not assignable to type 'number'.
+      Type 'undefined' is not assignable to type 'number'.
+src/client/dashboard/components/ui/checkbox.tsx(347,25): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/client/dashboard/components/ui/dropdown-menu.tsx(97,4): error TS2375: Type '{ children: (Element | ReactNode)[]; suppressHydrationWarning?: boolean | undefined; color?: string | undefined; id?: string | undefined; lang?: string | undefined; ... 279 more ...; checked: CheckedState | undefined; }' is not assignable to type 'DropdownMenuCheckboxItemProps' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
+  Types of property 'checked' are incompatible.
+    Type 'CheckedState | undefined' is not assignable to type 'CheckedState'.
+      Type 'undefined' is not assignable to type 'CheckedState'.
+src/client/dashboard/components/ui/section.tsx(4,16): error TS6133: 'CardContent' is declared but its value is never read.
+src/client/dashboard/components/ui/time-picker.tsx(50,16): error TS18048: 'hours' is possibly 'undefined'.
+src/client/dashboard/components/ui/time-picker.tsx(51,24): error TS18048: 'hours' is possibly 'undefined'.
+src/client/dashboard/components/ui/time-picker.tsx(64,51): error TS18048: 'minutes' is possibly 'undefined'.
+src/client/dashboard/components/ui/time-picker.tsx(69,20): error TS18048: 'hours' is possibly 'undefined'.
+src/client/dashboard/components/ui/time-picker.tsx(74,26): error TS18048: 'newHour' is possibly 'undefined'.
+src/client/dashboard/components/ui/time-picker.tsx(75,7): error TS18048: 'newHour' is possibly 'undefined'.
+src/client/dashboard/components/ui/time-picker.tsx(77,26): error TS18048: 'newHour' is possibly 'undefined'.
+src/client/dashboard/components/ui/time-picker.tsx(78,7): error TS18048: 'newHour' is possibly 'undefined'.
+src/client/dashboard/components/ui/time-picker.tsx(81,10): error TS18048: 'newHour' is possibly 'undefined'.
+src/client/dashboard/components/ui/time-picker.tsx(81,49): error TS18048: 'minutes' is possibly 'undefined'.
+src/client/dashboard/components/ui/time-picker.tsx(102,48): error TS18048: 'minutes' is possibly 'undefined'.
+src/client/dashboard/components/ui/time-picker.tsx(103,23): error TS18048: 'minutes' is possibly 'undefined'.
+src/client/dashboard/components/ui/time-picker.tsx(110,11): error TS6133: 'x' is declared but its value is never read.
+src/client/dashboard/components/ui/time-picker.tsx(203,50): error TS18048: 'minutes' is possibly 'undefined'.
+src/client/dashboard/components/ui/time-picker.tsx(215,12): error TS18048: 'hours' is possibly 'undefined'.
+src/client/dashboard/components/ui/time-picker.tsx(275,32): error TS18048: 'h' is possibly 'undefined'.
+src/client/dashboard/components/ui/time-picker.tsx(276,34): error TS18048: 'h' is possibly 'undefined'.
+src/client/dashboard/components/ui/time-picker.tsx(277,67): error TS18048: 'm' is possibly 'undefined'.
+src/client/dashboard/components/ui/time-picker.tsx(443,22): error TS18048: 'minutes' is possibly 'undefined'.
+src/server/core/post.ts(39,7): error TS2353: Object literal may only specify known properties, and '"border"' does not exist in type 'CustomPostStylesInput'.
+src/server/services/SnapshotService.ts(690,5): error TS6133: 'parentStartTime' is declared but its value is never read.
+src/server/services/SnapshotService.ts(758,5): error TS6133: 'historyEntry' is declared but its value is never read.
+src/server/services/TrendingService.calculation.test.ts(37,24): error TS6133: 'op' is declared but its value is never read.
+src/server/services/TrendingService.retention.test.ts(182,24): error TS6133: 'op' is declared but its value is never read.
+src/server/services/TrendingService.retention.test.ts(332,7): error TS6133: 'mockRedis' is declared but its value is never read.
+src/server/services/TrendingService.retention.test.ts(426,13): error TS6133: 'beforeRecap' is declared but its value is never read.
+src/server/services/TrendingService.retention.test.ts(440,13): error TS6133: 'beforeRecap' is declared but its value is never read.
+src/server/services/TrendingService.test.ts(1573,7): error TS6133: 'service' is declared but its value is never read.
+src/server/services/TrendingService.test.ts(1744,16): error TS2532: Object is possibly 'undefined'.
+src/server/services/TrendingService.test.ts(1745,11): error TS2532: Object is possibly 'undefined'.
+src/server/services/TrendingService.test.ts(1776,14): error TS2532: Object is possibly 'undefined'.
+src/server/services/TrendingService.test.ts(1777,14): error TS2532: Object is possibly 'undefined'.
+src/server/services/TrendingService.test.ts(1795,14): error TS2532: Object is possibly 'undefined'.

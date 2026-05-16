@@ -102,7 +102,7 @@ The Report view is broken down into several tabs at the bottom:
 
 ---
 
-## How ModScope Scores Engagement
+## How ModScope Calculates Engagement
 
 ModScope doesn't just count upvotes — it evaluates the _quality_ of engagement based on your subreddit's archetype. Here's what's happening behind the scenes in plain terms:
 
@@ -138,7 +138,7 @@ ModScope supports a custom UI engine designed for different modding environments
 | **Nocturne**      | Dark mode for low-light, late-night queue clearing punctuated by a single jolt of electric yellow |
 | **Rose Meadow**   | A sophisticated, deep crimson and rose-tinted palette for a premium aesthetic                     |
 | **Springtime**    | Soft, high-vibrancy pastels                                                                       |
-
+| **Upvoted**       | Cooler, sharper, feels like we belong                                                       |
 ---
 
 ### About ModScope
@@ -153,15 +153,60 @@ _Note: ModScope runs entirely within the Devvit ecosystem. It requires no extern
 
 ## Changelog
 
-### v0.9.9 [Development]
+## v1.0.1
 
-**Dashboard Launch**
+### 1. **Desktop & Mobile UI Refinement**
+
+- **Scrollbar Fix**: Resolved a visual bug where a horizontal scrollbar appeared in the report tabs on desktop.
+- **Dynamic Tab Alignment**: Improved tab styling so that active indicators correctly overlap the border-top on desktop (bottom tabs) and border-bottom on mobile (top tabs).
+- **Visual Polish**: Standardized chart aesthetics with smoother gradients and theme-compliant colors.
+- **Theme**: Added a new theme called "Upvoted".
+
+### 2. **Advanced Analytics (Precision Trends)**
+
+- **Trend Context**: Snapshots now retrieve and display their specific historical trend overlay rather than always showing the latest data, allowing for more accurate historical analysis.
+- **Data Removal:** Trend data link to deleted snapshots is automatically removed during retention cleanup. If the snapshot was manually deleted from the user interface, toast messages are shown to indicate starting/completing the process.
+- **Forecast Materialization**: Fully integrated the multi-day forecasting engine, which now powers the word clouds, posting heatmaps, and engagement charts with higher-precision data.
+
+### 3. **Infrastructure & Reliability**
+
+- **Background Stability**: Implemented self-registering background jobs to ensure scheduled snapshots survive app upgrades and platform reboots.
+- **Storage Management**: Added a rolling 50-entry limit to job history logs and automated purging of trend data linked to deleted snapshots to keep database usage efficient.
+- **Refactored Core**: Migrated shared logic into a new domain-driven structure (`ReportingService`, `post-utils`, `redis-utils`) for better maintainability.
+
+### 4. **Reporting & Communication**
+
+- **Modmail Integration**: Added a new feature to send snapshot summaries directly to moderators via Reddit private messages.
+- **Print Engine Fixes**: Finalized the HTML export engine to ensure consistent layouts, colors, and branding in generated offline reports.
+
+### v1.0.0
+
+**Analytics Engine**
+
+- Replaced hardcoded deep analysis constants (`MAX_DEEP_ANALYSIS_POSTS`, `MAX_COMMENTS_PER_POST`) with values derived from user-configured `analysisPoolSize` and `fetchDepth` settings, so the Configuration view actually controls snapshot behavior.
+- Comment traversal cap now scales with the selected fetch depth tier (fast → 1, light → 8, balanced → 16, thorough → 32, complete → 100).
+
+**Job Scheduling & Reliability**
+
+- Snapshot worker now proactively self-registers its job in Redis on every execution, ensuring scheduled jobs survive Devvit app upgrades even for existing installations.
+- Job history ZSET is now trimmed to a rolling 50-entry limit during the snapshot retention cleanup cycle, preventing unbounded growth.
+
+**Dashboard & Charts**
 
 - Modified inline vs expanded view logic to eliminate scrolling that violates Reddit's policy; clicking on tabs that launch an expanded view are shown with a designation next to them, and retain the context for the destination so that the new expanded window can continue where the user left off.
+- Redesigned Activity Trend and Engagement vs Votes charts to match the interactive area chart pattern: gradient fills (0.8 → 0.1 opacity), natural curve interpolation, no Y-axis ticks, and full-width layout.
+- Added time range dropdown (7d / 30d / 90d) to the Activity Trend chart; including new chart component supporting a "headerRight" slot for inline controls.
+- Screen mode uses theme-compliant CSS variable colors; print/export mode uses exact hardcoded hex values for consistent output.
 
-**Trending Service**
+**Trend Data Integrity**
+
+- After each trend materialization, the assembled trend dataset is now persisted per scan timestamp, allowing older snapshots to retrieve their matching trend overlay instead of always showing the latest state.
 
 - Further correction in the trending service so that it fully aligns with the specifications for multi-day snapshot processing and producing more accurate trending analysis datasets.
+
+**Report Export**
+
+- Added `POST /api/snapshots/:scanId/send-report` endpoint to send a markdown summary of snapshot metrics via Reddit private message (modmail).
 
 ### v0.9.8
 

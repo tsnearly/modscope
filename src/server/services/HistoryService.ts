@@ -1,3 +1,4 @@
+import { redisKey } from '../../shared/core/constants';
 import type { RedisClient } from '@devvit/web/server';
 
 export class HistoryService {
@@ -16,8 +17,8 @@ export class HistoryService {
     // Fetch back from the latest scan
     for (let i = scanCount; i > 0 && trend.length < days; i--) {
       const [meta, stats] = await Promise.all([
-        this.redis.hGetAll(`run:${i}:meta`),
-        this.redis.hGetAll(`run:${i}:stats`),
+        this.redis.hGetAll(redisKey.scanMeta(i)),
+        this.redis.hGetAll(redisKey.scanStats(i)),
       ]);
 
       if (meta && stats && meta.proc_date && stats.subscribers) {

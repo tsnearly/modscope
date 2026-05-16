@@ -2,17 +2,18 @@ import { useMemo, useState } from 'react';
 import {
     Area,
     CartesianGrid,
-    ComposedChart,
     Line,
     Tooltip as RechartsTooltip,
     ResponsiveContainer,
     XAxis,
     YAxis,
+    ComposedChart,
 } from 'recharts';
 import { getDataGroupingIcon } from '../utils/iconMappings';
 import { Chart } from './ui/chart';
 import { Icon } from './ui/icon';
 import { NonIdealState } from './ui/non-ideal-state';
+import { MS_PER_DAY } from '../../../shared/core/constants';
 
 type TrendPoint = { timestamp: number; value: number };
 type ForecastPoint = {
@@ -36,15 +37,17 @@ type CommunityGrowthChartProps = {
   trendAnalysisDays: number;
   iconContext: 'screen' | 'printed';
   isPrintMode?: boolean;
+  snapshotTimestamp?: number | undefined;
 };
 
 type GrowthDatum = {
   timestamp: number;
   date: string;
-  actual?: number;
-  forecast?: number;
-  lowerBand?: number;
-  bandWidth?: number;
+  actual?: number | undefined;
+  forecast?: number | undefined;
+  lowerBand?: number | undefined;
+  bandWidth?: number | undefined;
+  isForecast?: boolean | undefined;
 };
 
 function formatDate(ts: number): string {
@@ -121,10 +124,9 @@ export function CommunityGrowthChart({
   trendAnalysisDays,
   iconContext,
   isPrintMode = false,
+  snapshotTimestamp,
 }: CommunityGrowthChartProps) {
-  const [highlightedPoint, setHighlightedPoint] = useState<GrowthDatum | null>(
-    null
-  );
+  const [forecastHorizon, setForecastHorizon] = useState<number>(14);
   const [hiddenSeries, setHiddenSeries] = useState<Record<string, boolean>>({});
 
   const growthRate =
@@ -132,7 +134,6 @@ export function CommunityGrowthChart({
   const growthRateLabel = `${growthRate >= 0 ? '+' : ''}${growthRate.toFixed(1)}%`;
 
   const chartData = useMemo<GrowthDatum[]>(() => {
-    const dayMs = 24 * 60 * 60 * 1000;
     const toUtcDayNoon = (ts: number): number => {
       const d = new Date(ts);
       return Date.UTC(
@@ -163,7 +164,7 @@ export function CommunityGrowthChart({
       });
     }
 
-    const now = new Date();
+    const now = snapshotTimestamp ? new Date(snapshotTimestamp) : new Date();
     const todayUtcNoon = Date.UTC(
       now.getUTCFullYear(),
       now.getUTCMonth(),
@@ -174,75 +175,67 @@ export function CommunityGrowthChart({
       0
     );
 
-    let lastActual: number | undefined;
-    let lastForecast:
-      | { forecast?: number; lowerBand?: number; bandWidth?: number }
-      | undefined;
+    const data: GrowthDatum[] = [];
 
-    return Array.from({ length: trendAnalysisDays }, (_, idx) => {
-      const offset = trendAnalysisDays - 1 - idx;
-      const timestamp = todayUtcNoon - offset * dayMs;
-
-      if (actualByDay.has(timestamp)) {
-        lastActual = actualByDay.get(timestamp);
-      }
-      if (forecastByDay.has(timestamp)) {
-        lastForecast = forecastByDay.get(timestamp);
-      }
-
-      const row: GrowthDatum = {
+    // Historical points
+    for (let i = 0; i < trendAnalysisDays; i++) {
+      const offset = trendAnalysisDays - 1 - i;
+      const timestamp = todayUtcNoon - offset * MS_PER_DAY;
+      const actual = actualByDay.get(timestamp);
+      
+      data.push({
         timestamp,
         date: formatDate(timestamp),
-      };
-      if (lastActual !== undefined) {
-        row.actual = lastActual;
-      }
+        actual,
+        isForecast: false,
+      });
+    }
 
-      if (lastForecast) {
-        if (lastForecast.forecast !== undefined) {
-          row.forecast = lastForecast.forecast;
-        }
-        if (lastForecast.lowerBand !== undefined) {
-          row.lowerBand = lastForecast.lowerBand;
-        }
-        if (lastForecast.bandWidth !== undefined) {
-          row.bandWidth = lastForecast.bandWidth;
-        }
+    // Forecast points
+    for (let i = 1; i <= forecastHorizon; i++) {
+      const timestamp = todayUtcNoon + i * MS_PER_DAY;
+      const forecast = forecastByDay.get(timestamp);
+      
+      if (forecast) {
+        data.push({
+          timestamp,
+          date: formatDate(timestamp),
+          forecast: forecast.forecast,
+          lowerBand: forecast.lowerBand,
+          bandWidth: forecast.bandWidth,
+          isForecast: true,
+        });
       }
+    }
 
-      return row;
-    });
-  }, [trendAnalysisDays, trendsData]);
+    return data;
+  }, [trendAnalysisDays, forecastHorizon, trendsData, snapshotTimestamp]);
 
   const hasActual = (trendsData.subscriberGrowth || []).length > 0;
   const isActualHidden = hiddenSeries.actual === true;
   const isForecastHidden = hiddenSeries.forecast === true;
   const isBandHidden = hiddenSeries.band === true;
 
-  const highlightedUpper =
-    highlightedPoint &&
-    typeof highlightedPoint.lowerBand === 'number' &&
-    typeof highlightedPoint.bandWidth === 'number'
-      ? highlightedPoint.lowerBand + highlightedPoint.bandWidth
-      : undefined;
+  const primaryColor = isPrintMode ? '#2563eb' : 'var(--chart-primary)';
+  const secondaryColor = isPrintMode ? '#64748b' : 'var(--chart-secondary)';
 
   const renderLegend = () => {
     const items = [
       {
         key: 'actual',
         label: 'Actual',
-        color: 'var(--chart-primary)',
+        color: primaryColor,
         hidden: isActualHidden,
       },
       {
         key: 'forecast',
         label: 'Forecast',
-        color: 'var(--chart-secondary)',
+        color: secondaryColor,
         hidden: isForecastHidden,
       },
       {
         key: 'band',
-        label: 'Confidence Band',
+        label: 'Confidence',
         color: '#84cc16',
         hidden: isBandHidden,
       },
@@ -283,9 +276,9 @@ export function CommunityGrowthChart({
           >
             <span
               style={{
-                width: '10px',
+                width: '8px',
                 height: '8px',
-                borderRadius: '2px',
+                borderRadius: '999px',
                 background: item.color,
                 border: `1px solid ${item.hidden ? 'var(--color-border)' : item.color}`,
               }}
@@ -297,6 +290,29 @@ export function CommunityGrowthChart({
     );
   };
 
+  const renderForecastDropdown = () => (
+    <select
+      value={forecastHorizon}
+      onChange={(e) => setForecastHorizon(parseInt(e.target.value))}
+      style={{
+        fontSize: '11px',
+        padding: '4px 8px',
+        borderRadius: '6px',
+        border: '1px solid var(--border-default)',
+        background: 'var(--bg-surface)',
+        color: 'var(--text-secondary)',
+        cursor: 'pointer',
+        outline: 'none',
+      }}
+      aria-label="Select forecast horizon"
+    >
+      <option value={7}>7 Days Forecast</option>
+      <option value={14}>14 Days Forecast</option>
+      <option value={30}>30 Days Forecast</option>
+      <option value={45}>45 Days Forecast</option>
+    </select>
+  );
+
   return (
     <Chart
       title={`Community Growth (${trendAnalysisDays}d)`}
@@ -307,6 +323,7 @@ export function CommunityGrowthChart({
         />
       }
       height={340}
+      headerRight={!isPrintMode ? renderForecastDropdown() : undefined}
     >
       {!hasActual ? (
         <div className="h-full flex items-center justify-center">
@@ -328,21 +345,6 @@ export function CommunityGrowthChart({
             <span className="inline-flex items-center rounded-full border border-border bg-card px-2 py-1 text-xs font-bold text-foreground">
               {growthRateLabel}
             </span>
-            {highlightedPoint && (
-              <span className="inline-flex items-center rounded-md border border-border bg-card px-2 py-1 text-[11px] text-foreground">
-                {highlightedPoint.date}
-                {typeof highlightedPoint.actual === 'number'
-                  ? ` | Actual ${formatSubscribers(highlightedPoint.actual)}`
-                  : ''}
-                {typeof highlightedPoint.forecast === 'number'
-                  ? ` | Forecast ${formatSubscribers(highlightedPoint.forecast)}`
-                  : ''}
-                {typeof highlightedUpper === 'number' &&
-                typeof highlightedPoint.lowerBand === 'number'
-                  ? ` | Band ${formatSubscribers(highlightedPoint.lowerBand)}-${formatSubscribers(highlightedUpper)}`
-                  : ''}
-              </span>
-            )}
           </div>
 
           <div className="mb-2" style={{ position: 'relative', zIndex: 3 }}>
@@ -352,7 +354,7 @@ export function CommunityGrowthChart({
           <div
             style={{
               width: '100%',
-              height: '250px',
+              height: 'calc(100% - 64px)',
               minWidth: 0,
               position: 'relative',
               zIndex: 1,
@@ -361,136 +363,104 @@ export function CommunityGrowthChart({
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart
                 data={chartData}
-                margin={{ top: 10, right: 10, left: 5, bottom: 5 }}
-                onMouseMove={(state: any) => {
-                  if (state?.activePayload?.[0]?.payload) {
-                    setHighlightedPoint(
-                      state.activePayload[0].payload as GrowthDatum
-                    );
-                  }
-                }}
-                onMouseLeave={() => setHighlightedPoint(null)}
+                margin={{ top: 10, right: 0, left: 0, bottom: 5 }}
               >
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke="rgba(8,10,12,.175)"
-                  opacity={1}
-                />
-                <XAxis
-                  dataKey="timestamp"
-                  type="number"
-                  scale="time"
-                  domain={['dataMin', 'dataMax']}
-                  tickFormatter={(value) => formatDate(Number(value))}
-                  tickCount={6}
-                  minTickGap={22}
-                  height={42}
-                  tickMargin={10}
-                  tick={{ fontSize: 8, fill: 'var(--text-primary)' }}
-                />
-                <YAxis
-                  tick={{ fontSize: 8, fill: 'var(--text-primary)' }}
-                  tickFormatter={(value) => Number(value).toLocaleString()}
-                />
-                <RechartsTooltip content={<GrowthTooltip />} />
-
                 <defs>
+                  <linearGradient id="fillActual" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={primaryColor} stopOpacity={0.4} />
+                    <stop offset="95%" stopColor={primaryColor} stopOpacity={0.05} />
+                  </linearGradient>
                   <linearGradient
-                    id="confidenceBandGradient"
+                    id="confidenceGradient"
                     x1="0"
                     y1="1"
                     x2="0"
                     y2="0"
                   >
-                    <stop offset="0%" stopColor="#ef4444" stopOpacity={0.34} />
-                    <stop offset="45%" stopColor="#facc15" stopOpacity={0.26} />
+                    <stop offset="0%" stopColor="#ef4444" stopOpacity={0.2} />
+                    <stop offset="45%" stopColor="#facc15" stopOpacity={0.15} />
                     <stop
                       offset="100%"
                       stopColor="#22c55e"
-                      stopOpacity={0.34}
+                      stopOpacity={0.2}
                     />
                   </linearGradient>
                 </defs>
 
-                {/* Confidence band (lower + width stacked) */}
+                <CartesianGrid vertical={false} stroke="rgba(8,10,12,.1)" />
+                <XAxis
+                  dataKey="timestamp"
+                  type="number"
+                  scale="time"
+                  domain={['dataMin', 'dataMax']}
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                  minTickGap={32}
+                  tickFormatter={(value) => formatDate(Number(value))}
+                  tick={{ fontSize: 9, fill: 'var(--text-muted)' }}
+                />
+                <YAxis hide domain={['auto', 'auto']} />
+                <RechartsTooltip content={<GrowthTooltip />} />
+
+                {/* Confidence band */}
                 <Area
                   type="monotone"
                   dataKey="lowerBand"
-                  stackId="forecast-band"
+                  stackId="confidence"
                   stroke="none"
                   fill="transparent"
                   isAnimationActive={!isPrintMode}
                   name="Band Base"
                   legendType="none"
+                  hide={isBandHidden}
                 />
                 <Area
                   type="monotone"
                   dataKey="bandWidth"
-                  stackId="forecast-band"
-                  stroke="rgba(250, 204, 21, 0.55)"
-                  strokeWidth={0.6}
-                  fill="url(#confidenceBandGradient)"
+                  stackId="confidence"
+                  stroke="none"
+                  fill="url(#confidenceGradient)"
                   isAnimationActive={!isPrintMode}
-                  name="Confidence Band"
+                  name="Confidence"
                   hide={isBandHidden}
                 />
 
-                <Line
+                <Area
                   type="monotone"
                   dataKey="actual"
                   name="Actual"
-                  stroke="var(--chart-primary)"
-                  strokeWidth={2.25}
-                  connectNulls={false}
+                  stroke={primaryColor}
+                  fill="url(#fillActual)"
+                  strokeWidth={2}
+                  connectNulls
                   dot={false}
-                  activeDot={false}
+                  activeDot={{
+                    r: 3,
+                    fill: '#fff',
+                    stroke: primaryColor,
+                    strokeWidth: 1.5,
+                  }}
                   isAnimationActive={!isPrintMode}
                   hide={isActualHidden}
                 />
                 <Line
-                  type="linear"
+                  type="monotone"
                   dataKey="forecast"
                   name="Forecast"
-                  stroke="var(--chart-secondary)"
-                  strokeWidth={2.25}
+                  stroke={secondaryColor}
+                  strokeWidth={2}
+                  strokeDasharray="5 5"
                   dot={false}
-                  activeDot={false}
+                  activeDot={{
+                    r: 3,
+                    fill: '#fff',
+                    stroke: secondaryColor,
+                    strokeWidth: 1.5,
+                  }}
                   connectNulls
                   isAnimationActive={!isPrintMode}
                   hide={isForecastHidden}
-                />
-                <Line
-                  type="linear"
-                  dataKey="lowerBand"
-                  name="Lower Bound"
-                  stroke="#ef4444"
-                  strokeWidth={1.25}
-                  strokeOpacity={0.8}
-                  dot={false}
-                  activeDot={false}
-                  connectNulls
-                  isAnimationActive={!isPrintMode}
-                  hide={isBandHidden}
-                  legendType="none"
-                />
-                <Line
-                  type="linear"
-                  dataKey={(row: GrowthDatum) =>
-                    typeof row.lowerBand === 'number' &&
-                    typeof row.bandWidth === 'number'
-                      ? row.lowerBand + row.bandWidth
-                      : undefined
-                  }
-                  name="Upper Bound"
-                  stroke="#22c55e"
-                  strokeWidth={1.25}
-                  strokeOpacity={0.8}
-                  dot={false}
-                  activeDot={false}
-                  connectNulls
-                  isAnimationActive={!isPrintMode}
-                  hide={isBandHidden}
-                  legendType="none"
                 />
               </ComposedChart>
             </ResponsiveContainer>
@@ -500,3 +470,4 @@ export function CommunityGrowthChart({
     </Chart>
   );
 }
+

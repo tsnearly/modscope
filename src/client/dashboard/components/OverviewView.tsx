@@ -94,19 +94,34 @@ export function OverviewView({
       Array.isArray(trendData?.globalBestPostingTimes) &&
       trendData.globalBestPostingTimes.length > 0
     ) {
+      const timeline = trendData?.bestPostingTimesChange?.timeline;
+      const latestPoint = timeline && timeline.length > 0 ? timeline[timeline.length - 1] : null;
+
       return trendData.globalBestPostingTimes
-        .map((slot) => {
+        .map((slot: any) => {
           const localized = localizeTrendDayHour(slot.day, slot.hour);
+          const dayHourKey = `${slot.day}-${slot.hour.toString().padStart(2, '0')}`;
+          
+          let scoreToDisplay = Math.round(slot.score);
+          if (latestPoint && Array.isArray(latestPoint.topSlots)) {
+            const timelineSlot = latestPoint.topSlots.find((s: any) => s.dayHour === dayHourKey);
+            if (timelineSlot) {
+              scoreToDisplay = Math.round(timelineSlot.score);
+            } else {
+              scoreToDisplay = 0;
+            }
+          }
+          
           return {
             day: localized.dayShort,
             hour: localized.hour,
             hour_fmt: localized.hourFmt,
-            score: Math.round(slot.score),
-            sortWeight: slot.sortWeight,
+            score: scoreToDisplay,
             count: slot.count,
           };
         })
-        .sort((a, b) => b.sortWeight - a.sortWeight)
+        .filter((slot) => slot.score > 0)
+        .sort((a, b) => b.score - a.score)
         .slice(0, 3);
     }
 
@@ -477,7 +492,7 @@ export function OverviewView({
               <TooltipRoot>
                 <TooltipTrigger asChild>
                   <div className="bg-card p-1.5 rounded shadow-sm border border-border text-center flex flex-col justify-center h-[48px] cursor-default">
-                    <div className="text-[8px] font-bold text-muted-foreground uppercase tracking-wider truncate">
+                    <div className="text-[8px] text-muted-foreground tracking-wider truncate">
                       {metric.label}
                     </div>
                     <div

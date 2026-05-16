@@ -12,6 +12,7 @@ import {
   TableRow,
 } from './ui/table';
 import { Tooltip } from './ui/tooltip';
+import { useToast } from './ui/toast';
 
 interface Snapshot {
   scanId: number;
@@ -80,18 +81,7 @@ export function SnapshotsView({
     setSnapshots(snapshotsProp);
   }, [snapshotsProp]);
 
-  // Invokes a native Toast message from the server side via the bridge
-  const showNativeToast = useCallback(async (message: string) => {
-    try {
-      await fetch('/api/ui/toast', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message }),
-      });
-    } catch (err) {
-      console.error('Failed to trigger native toast:', err);
-    }
-  }, []);
+  const { showToast } = useToast();
 
   const registerWebView = useCallback(async () => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -115,9 +105,10 @@ export function SnapshotsView({
     const handleMessage = (event: MessageEvent) => {
       const msg = event.data;
       if (msg.type === 'SNAPSHOT_DELETED' && msg.scanId) {
-        // Show the native toast via bridge upon job completion
-        showNativeToast(
-          `Snapshot #${msg.scanId} has been successfully cleaned up along with all artifacts.`
+        // Show toast via client-side toast system
+        showToast(
+          `Snapshot #${msg.scanId} has been successfully cleaned up along with all artifacts.`,
+          'success'
         );
 
         // Update local state
@@ -132,7 +123,7 @@ export function SnapshotsView({
     return () => {
       window.removeEventListener('message', handleMessage);
     };
-  }, [selectedId, showNativeToast, registerWebView]);
+  }, [selectedId, showToast, registerWebView]);
 
   const fetchSnapshots = async () => {
     if (onRefresh) {
@@ -181,6 +172,47 @@ export function SnapshotsView({
     }
   };
 
+  const pollDeletionStatus = useCallback(
+    (scanId: number) => {
+      const deleteEntryId = `delete-${scanId}`;
+      const maxPollMs = 10 * 60 * 1000; // 10 minutes
+      const pollIntervalMs = 5000;
+      const start = Date.now();
+
+      const intervalId = setInterval(async () => {
+        if (Date.now() - start > maxPollMs) {
+          clearInterval(intervalId);
+          return;
+        }
+        try {
+          const res = await fetch('/api/history');
+          if (!res.ok) return;
+          const history: any[] = await res.json();
+          const entry = history.find((h: any) => h.id === deleteEntryId);
+          if (!entry) return;
+
+          if (entry.status === 'completed' || entry.status === 'success') {
+            clearInterval(intervalId);
+            showToast(
+              `Snapshot #${scanId} deleted successfully.`,
+              'success'
+            );
+          } else if (entry.status === 'failed') {
+            clearInterval(intervalId);
+            showToast(
+              `Snapshot #${scanId} deletion failed: ${entry.details || 'Unknown error'}`,
+              'error'
+            );
+          }
+          // 'running' or 'interrupted' — keep polling
+        } catch {
+          // Transient fetch error — keep polling
+        }
+      }, pollIntervalMs);
+    },
+    [showToast]
+  );
+
   const handleDelete = async () => {
     if (selectedId === null) {
       return;
@@ -189,10 +221,15 @@ export function SnapshotsView({
       setBootstrapping(true);
       setPendingDelete(false);
       if (onDeleteSnapshot) {
+        const deletingScanId = selectedId;
         const ok = await onDeleteSnapshot(selectedId);
         if (ok) {
           setSnapshots((prev) => prev.filter((s) => s.scanId !== selectedId));
           setSelectedId(null);
+          showToast(
+            `Deletion of snapshot #${deletingScanId} started in the background...`
+          );
+          pollDeletionStatus(deletingScanId);
         } else {
           setError('Failed to delete snapshot.');
         }
@@ -201,18 +238,12 @@ export function SnapshotsView({
           method: 'DELETE',
         });
         if (res.status === 202) {
-          // Deletion started in background
-          fetch('/api/ui/toast', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              message: `Deletion of snapshot #${selectedId} started in the background...`,
-              type: 'info',
-            }),
-          }).catch(() => {});
-
-          // Optimistically mark as pending or just wait for the realtime event
-          // For now, we'll keep the row but wait for the background job to finish
+          showToast(
+            `Deletion of snapshot #${selectedId} started in the background...`
+          );
+          pollDeletionStatus(selectedId);
+          setSnapshots((prev) => prev.filter((s) => s.scanId !== selectedId));
+          setSelectedId(null);
         } else if (!res.ok) {
           setError('Failed to initiate deletion.');
         }
@@ -350,6 +381,7 @@ export function SnapshotsView({
                 {snapshots.map((snapshot) => (
                   <TableRow
                     key={snapshot.scanId}
+                    title={`Snapshot #${snapshot.scanId}`}
                     onClick={() => handleRowClick(snapshot.scanId)}
                     onDoubleClick={() => handleDoubleClick(snapshot.scanId)}
                     className="cursor-pointer transition-colors"

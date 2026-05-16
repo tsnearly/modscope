@@ -1,3 +1,4 @@
+import { redisKey } from '../../shared/core/constants';
 import {
   AnalyticsSnapshot,
   PostData,
@@ -59,7 +60,7 @@ export class DataRetrievalService {
     const count = countStr ? parseInt(countStr) : 0;
     for (let id = count; id >= 1; id--) {
       const meta = await this.redis
-        .hGetAll(`run:${id}:meta`)
+        .hGetAll(redisKey.scanMeta(id))
         .catch(() => ({}) as Record<string, string>);
       if (meta?.subreddit?.toLowerCase() === subreddit?.toLowerCase()) {
         const snapshot = await this.getSnapshotById(id);
@@ -79,8 +80,8 @@ export class DataRetrievalService {
   async getSnapshotById(scanId: number): Promise<AnalyticsSnapshot | null> {
     console.log(`[RETRIEVER] Reassembling snapshot ${scanId}...`);
     const [meta, stats] = await Promise.all([
-      this.redis.hGetAll(`run:${scanId}:meta`),
-      this.redis.hGetAll(`run:${scanId}:stats`),
+      this.redis.hGetAll(redisKey.scanMeta(scanId)),
+      this.redis.hGetAll(redisKey.scanStats(scanId)),
     ]);
 
     if (!meta.subreddit || !stats.subscribers) {
@@ -91,6 +92,7 @@ export class DataRetrievalService {
     }
 
     const baseMeta = {
+      scanId,
       subreddit: meta.subreddit || 'unknown',
       scanDate: meta.scan_date || new Date().toISOString(),
       procDate: meta.proc_date || '',

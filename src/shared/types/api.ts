@@ -153,6 +153,7 @@ export interface SubredditDisplay {
 
 export type AnalyticsSnapshot = {
   meta: {
+    scanId?: number;
     subreddit: string;
     scanDate: string;
     procDate: string;

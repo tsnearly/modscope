@@ -24,6 +24,8 @@ type PostingActivityHeatmapChartProps = {
   trendsData: TrendsData;
   iconContext: 'screen' | 'printed';
   isPrintMode?: boolean;
+  trendAnalysisDays?: number;
+  snapshotTimestamp?: number | undefined;
 };
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -65,59 +67,88 @@ function formatHourLabel(hour: number): string {
 
 function formatHeatmapTooltipLine(
   cell: PostingHeatmapCell,
-  fallbackDayOfWeek: number,
-  fallbackHour: number
+  dayIndex: number,
+  hourIndex: number
 ): string {
-  const dayOfWeek = cell.dayOfWeek ?? fallbackDayOfWeek;
-  const hour = cell.hour ?? fallbackHour;
+  const dayName = FULL_DAYS[dayIndex] || 'Unknown day';
+  const hourLabel = formatHourLabel(hourIndex);
+  const deltaStr = `${cell.delta > 0 ? '+' : ''}${formatDeltaValue(cell.delta)} post${Math.abs(cell.delta) === 1 ? '' : 's'}`;
+  return `${dayName} - ${hourLabel}\nNet Change: ${deltaStr}`;
+}
+
+function HeatmapTooltip({
+  cell,
+  dayIndex,
+  hourIndex,
+}: {
+  cell: PostingHeatmapCell | null;
+  dayIndex: number;
+  hourIndex: number;
+}) {
+  if (!cell) {
+    return (
+      <div className="chart-tooltip-container">
+        <div className="chart-tooltip-date">
+          {FULL_DAYS[dayIndex] || 'Unknown day'} - {formatHourLabel(hourIndex)}
+        </div>
+        <div className="chart-tooltip-row">
+          <span className="chart-tooltip-label">No Data</span>
+        </div>
+      </div>
+    );
+  }
+
+  const dayOfWeek = cell.dayOfWeek ?? dayIndex;
+  const hour = cell.hour ?? hourIndex;
   const dayName = FULL_DAYS[dayOfWeek] || 'Unknown day';
   const hourLabel = formatHourLabel(hour);
-  const direction =
-    cell.delta > 0
-      ? 'Increased'
-      : cell.delta < 0
-        ? 'Decreased'
-        : 'No Change';
-  const magnitude = formatDeltaValue(cell.delta);
 
-  if (cell.delta === 0) {
-    if (
-      typeof cell.countA === 'number' ||
-      typeof cell.countB === 'number' ||
-      typeof cell.velocity === 'number'
-    ) {
-      return [
-        `${dayName} - ${hourLabel}`,
-        `Recent: ${cell.countA ?? 0}`,
-        `Historical: ${cell.countB ?? 0}`,
-        'Delta: 0 posts',
-        `Velocity: ${formatDeltaValue(cell.velocity ?? 0)} posts/day`,
-      ].join('\n');
-    }
-
-    return `${dayName} - ${hourLabel}\nNo Change`;
-  }
-
-  const lines = [`${dayName} - ${hourLabel}`];
-
-  if (
+  const hasDetail =
     typeof cell.countA === 'number' ||
     typeof cell.countB === 'number' ||
-    typeof cell.velocity === 'number'
-  ) {
-    lines.push(`Recent: ${cell.countA ?? 0}`);
-    lines.push(`Historical: ${cell.countB ?? 0}`);
-    lines.push(
-      `Delta: ${direction} ${magnitude} post${Math.abs(cell.delta) === 1 ? '' : 's'}`
-    );
-    lines.push(`Velocity: ${formatDeltaValue(cell.velocity ?? 0)} posts/day`);
-    return lines.join('\n');
-  }
+    typeof cell.velocity === 'number';
 
-  lines.push(
-    `${direction} ${magnitude} post${Math.abs(cell.delta) === 1 ? '' : 's'}`
+  return (
+    <div className="chart-tooltip-container">
+      <div className="chart-tooltip-date">
+        {dayName} - {hourLabel}
+      </div>
+
+      {hasDetail && (
+        <>
+          <div className="chart-tooltip-row">
+            <span className="chart-tooltip-label">Recent Window</span>
+            <span className="chart-tooltip-value">{cell.countA ?? 0}</span>
+          </div>
+          <div className="chart-tooltip-row">
+            <span className="chart-tooltip-label">Historical Window</span>
+            <span className="chart-tooltip-value">{cell.countB ?? 0}</span>
+          </div>
+        </>
+      )}
+
+      <div className="chart-tooltip-row">
+        <span className="chart-tooltip-label">Net Change</span>
+        <span
+          className={`chart-tooltip-value font-bold ${cell.delta > 0 ? 'text-green-500' : cell.delta < 0 ? 'text-red-500' : ''}`}
+        >
+          {cell.delta > 0 ? '+' : ''}
+          {formatDeltaValue(cell.delta)} post
+          {Math.abs(cell.delta) === 1 ? '' : 's'}
+        </span>
+      </div>
+
+      {typeof cell.velocity === 'number' && (
+        <div className="chart-tooltip-row">
+          <span className="chart-tooltip-label">Avg. Velocity</span>
+          <span className="chart-tooltip-value">
+            {cell.velocity > 0 ? '+' : ''}
+            {formatDeltaValue(cell.velocity)} posts/day
+          </span>
+        </div>
+      )}
+    </div>
   );
-  return lines.join('\n');
 }
 
 function convertUTCBucketToLocal(
@@ -162,6 +193,7 @@ function convertUTCBucketToLocal(
 export function PostingActivityHeatmapChart({
   trendsData,
   iconContext,
+  trendAnalysisDays = 90,
 }: PostingActivityHeatmapChartProps) {
   const [hiddenCategories, setHiddenCategories] = useState<
     Record<string, boolean>
@@ -405,7 +437,7 @@ export function PostingActivityHeatmapChart({
 
   return (
     <Chart
-      title="Posting Activity Heatmap"
+      title={`Posting Activity Heatmap (${trendAnalysisDays}d)`}
       icon={
         <Icon
           src={getDataGroupingIcon('activity_heatmap', iconContext)}
@@ -454,11 +486,11 @@ export function PostingActivityHeatmapChart({
                     key={hourIndex}
                     delayDuration={80}
                     content={
-                      <span className="whitespace-pre-line">
-                        {cell
-                          ? formatHeatmapTooltipLine(cell, dayIndex, hourIndex)
-                          : `${FULL_DAYS[dayIndex] || 'Unknown day'} - ${formatHourLabel(hourIndex)}\nNo Data`}
-                      </span>
+                      <HeatmapTooltip
+                        cell={cell}
+                        dayIndex={dayIndex}
+                        hourIndex={hourIndex}
+                      />
                     }
                   >
                     <div

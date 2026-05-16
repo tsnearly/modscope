@@ -20,6 +20,7 @@ import { SnapshotsView } from './components/SnapshotsView';
 import { Button } from './components/ui/button';
 import { Heading } from './components/ui/heading';
 import { Icon } from './components/ui/icon';
+import { ToastProvider } from './components/ui/toast';
 import { Tooltip } from './components/ui/tooltip';
 import './styles/main.css';
 import { cn } from './utils/cn';
@@ -90,6 +91,7 @@ export const App = ({ startupModeHint = 'inline' }: AppProps) => {
   const EXPANDED_TAB_SESSION_KEY = 'modscope:launch-intent:session';
   const EXPANDED_TAB_COOKIE_KEY = 'modscope_launch_intent';
   const EXPANDED_TAB_INTENT_MAX_AGE_MS = 10000;
+  const VIEW_LAUNCH_INTENT_KEY = 'modscope:view-launch-intent';
 
   const resolveWebViewMode = (): 'inline' | 'expanded' => {
     if (startupModeHint === 'expanded') {
@@ -121,7 +123,7 @@ export const App = ({ startupModeHint = 'inline' }: AppProps) => {
     resolveWebViewMode()
   );
   const [activeView, setActiveView] = useState<View>('report');
-  const [, setSelectedSnapshotId] = useState<number | null>(null);
+  const [selectedSnapshotId, setSelectedSnapshotId] = useState<number | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [reportData, setReportData] = useState<AnalyticsSnapshot | null>(null);
   const [officialAccounts, setOfficialAccounts] = useState<string[]>([]);
@@ -308,7 +310,25 @@ export const App = ({ startupModeHint = 'inline' }: AppProps) => {
           localStorage.setItem('modscope_settings', JSON.stringify(data.display));
         }
 
-        if (!data.analytics) {
+        // Consume a pending view launch intent (set by inline nav buttons)
+        const viewIntent = localStorage.getItem(VIEW_LAUNCH_INTENT_KEY);
+        if (viewIntent) {
+          localStorage.removeItem(VIEW_LAUNCH_INTENT_KEY);
+          try {
+            const parsed = JSON.parse(viewIntent) as { view?: string; ts?: number };
+            const VALID_VIEWS: View[] = ['snapshots', 'config', 'schedule', 'about'];
+            if (
+              parsed?.view &&
+              VALID_VIEWS.includes(parsed.view as View) &&
+              typeof parsed.ts === 'number' &&
+              Date.now() - parsed.ts <= 15000
+            ) {
+              setActiveView(parsed.view as View);
+            }
+          } catch {
+            // Ignore malformed intent
+          }
+        } else if (!data.analytics) {
           setActiveView('config');
         }
 
@@ -454,6 +474,7 @@ export const App = ({ startupModeHint = 'inline' }: AppProps) => {
         return (
           <ErrorBoundary>
             <ReportView
+              key={selectedSnapshotId || 'latest'}
               data={reportData || undefined}
               isPrintMode={false}
               onPrint={handleOpenPrintDrawer}
@@ -502,6 +523,7 @@ export const App = ({ startupModeHint = 'inline' }: AppProps) => {
         return (
           <ErrorBoundary>
             <ReportView
+              key={selectedSnapshotId || 'latest'}
               data={reportData || undefined}
               isPrintMode={false}
               onPrint={handleOpenPrintDrawer}
@@ -565,7 +587,7 @@ export const App = ({ startupModeHint = 'inline' }: AppProps) => {
   }
 
   return (
-    <>
+    <ToastProvider>
       {isPrintMode && (
         <div className="fixed inset-0 z-[2000] bg-slate-100 flex flex-col items-center no-print animate-in fade-in duration-300">
           {/* Stationary Header */}
@@ -685,16 +707,56 @@ export const App = ({ startupModeHint = 'inline' }: AppProps) => {
               { view: 'about', label: 'About', icon: 'glass-about.png' },
             ].map(({ view, label, icon, disabled }) => {
               const isActive = activeView === view;
+              // Views that are allowed to render inline without fullscreen
+              const INLINE_ALLOWED_VIEWS: View[] = ['report'];
+              const isInline = webViewMode !== 'expanded';
+              const needsFullscreen =
+                isInline && !INLINE_ALLOWED_VIEWS.includes(view as View);
 
               return (
                 <Button
                   key={view}
-                  onClick={() => setActiveView(view as View)}
+                  onClick={(e) => {
+                    if (needsFullscreen) {
+                      // Persist view intent so the expanded instance navigates here
+                      const intent = JSON.stringify({
+                        view,
+                        ts: Date.now(),
+                      });
+                      localStorage.setItem(VIEW_LAUNCH_INTENT_KEY, intent);
+                      requestExpandedMode(
+                        e as unknown as PointerEvent,
+                        'expanded'
+                      );
+                      return;
+                    }
+                    setActiveView(view as View);
+                  }}
                   disabled={disabled}
-                  className={cn('nav-button', isActive ? 'active' : '')}
+                  className={cn(
+                    'nav-button',
+                    isActive ? 'active' : '',
+                    needsFullscreen ? 'nav-launch-link' : ''
+                  )}
                 >
                   <Icon name={icon} size={16} className="nav-icon" />
                   <span className="nav-label">{label}</span>
+                  {needsFullscreen && (
+                    <svg
+                      className="nav-expand-indicator"
+                      width="8"
+                      height="8"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M7 17L17 7" />
+                      <path d="M7 7h10v10" />
+                    </svg>
+                  )}
                 </Button>
               );
             })}
@@ -751,6 +813,6 @@ export const App = ({ startupModeHint = 'inline' }: AppProps) => {
           )}
         </div>
       </div>
-    </>
+    </ToastProvider>
   );
 };
