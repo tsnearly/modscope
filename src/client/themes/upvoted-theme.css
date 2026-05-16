@@ -14,12 +14,14 @@
   --color-border: #ccc5bb;         /* warm taupe border */
 
   /* Derived semantic variables */
-  --tab-active-bg: var(--color-accent);
+
+  /* Bottom tab bar — Reddit's near-black; no more whipped snot */
+  --tab-active-bg: #1a1a1b;
   --tab-active-border: var(--color-primary);
-  --tab-active-text: var(--color-text);
-  --tab-bg: var(--color-surface);
-  --tab-border: var(--color-border);
-  --tab-text: var(--color-text-muted);
+  --tab-active-text: #ffffff;
+  --tab-bg: #1a1a1b;
+  --tab-border: #333336;
+  --tab-text: #878a8c;
   --tab-hover: var(--color-primary);
 
   --btn-primary-bg: var(--color-primary);
@@ -27,6 +29,7 @@
   --btn-primary-hover: #e03040;
   --btn-primary-active: #c4222e;
 
+  /* Nav/header — light, clean, original */
   --nav-bg: var(--color-surface);
   --nav-border: var(--color-border);
   --nav-item-text: var(--color-text-muted);
@@ -40,7 +43,7 @@
 
   --card-bg: var(--color-surface);
   --card-border: var(--color-border);
-  --card-header-text: var(--color-text);
+  --card-header-text: #1a1a1b;
   --card-body-text: var(--color-text);
 
   --border-default: var(--color-border);
