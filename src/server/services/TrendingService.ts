@@ -892,17 +892,19 @@ export class TrendingService {
     const threshold = ANOMALY_STD_DEV_THRESHOLD * stdDev;
     const anomalies: Record<string, string> = {};
 
-    // Detect anomalies
+    // Detect anomalies — store deviation as signed σ units for tooltip display
     for (const point of engagementData) {
       const deviation = point.value - mean;
       const absDeviation = Math.abs(deviation);
 
       if (absDeviation > threshold) {
         const type = deviation > 0 ? 'spike' : 'dip';
+        // Store as signed standard deviations so the client can display "+2.3σ" / "-1.8σ"
+        const sigmaDeviation = stdDev > 0 ? deviation / stdDev : 0;
         anomalies[point.timestamp.toString()] = JSON.stringify({
           type,
           value: point.value,
-          deviation: Math.round(absDeviation * 100) / 100,
+          deviation: Math.round(sigmaDeviation * 10) / 10,
         });
       }
     }
@@ -970,19 +972,11 @@ export class TrendingService {
 
       const flairDistributions = Array.from(dailyFlairDistributions.entries())
         .map(([timestamp, flairs]) => {
-          const totalForDay = Object.values(flairs).reduce(
-            (sum, count) => sum + count,
-            0
-          );
-          const normalizedFlairs: Record<string, number> = {};
+          const rawFlairs: Record<string, number> = {};
           for (const flair of allFlairs) {
-            const rawCount = flairs[flair] ?? 0;
-            normalizedFlairs[flair] =
-              totalForDay > 0
-                ? Math.round((rawCount / totalForDay) * 10_000) / 10_000
-                : 0;
+            rawFlairs[flair] = flairs[flair] ?? 0;
           }
-          return { timestamp, flairs: normalizedFlairs };
+          return { timestamp, flairs: rawFlairs };
         })
         .sort((a, b) => a.timestamp - b.timestamp);
 

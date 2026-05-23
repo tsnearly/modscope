@@ -107,9 +107,8 @@ export function OverviewView({
             const timelineSlot = latestPoint.topSlots.find((s: any) => s.dayHour === dayHourKey);
             if (timelineSlot) {
               scoreToDisplay = Math.round(timelineSlot.score);
-            } else {
-              scoreToDisplay = 0;
             }
+            // If not in the latest timeline snapshot, keep the aggregate score from globalBestPostingTimes
           }
           
           return {

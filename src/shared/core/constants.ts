@@ -104,6 +104,7 @@ export const redisKey = {
   scanCounter:         ()                  => `global:scan_counter`,
   snapshotsTimeline:   ()                  => `global:snapshots:timeline`,
   snapshotLock:        (sub: string)       => `snapshot:lock:${sub}`,
+  triggerDedup:        (trigger: string, id: string) => `lock:trigger:${trigger}:${id}`,
 
   // --- Index keys ---
   snapshotIndex:       (sub: string, date: string) => `index:snapshots:${sub}:${date}`,

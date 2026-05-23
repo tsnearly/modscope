@@ -1,4 +1,5 @@
 import { context, reddit, redis, scheduler } from '@devvit/web/server';
+import type { OnAppInstallRequest, OnAppUpgradeRequest, TriggerResponse } from '@devvit/web/shared';
 import type { Context } from 'hono';
 import { Hono } from 'hono';
 import {
@@ -49,18 +50,40 @@ const calculateReportCron = (schedule: ReportingSchedule): string => {
   }
 };
 
+async function isDuplicateTrigger(trigger: string, id: string): Promise<boolean> {
+  const lockKey = redisKey.triggerDedup(trigger, id);
+  try {
+    const result = await redis.set(lockKey, '1', {
+      nx: true,
+      expiration: new Date(Date.now() + 90 * 1000),
+    });
+    return !result;
+  } catch (err) {
+    console.error(`isDuplicateTrigger lock error for ${trigger}:${id}:`, err);
+    return false;
+  }
+}
+
 /**
  * Trigger: App Install
  */
 triggers.post('/on-app-install', async (c) => {
-  const SUBREDDIT = getSubreddit();
+  const _input = await c.req.json<OnAppInstallRequest>();
+  const _subreddit = _input.subreddit?.name || 'global';
+
+  // Deduplicate app installation/update trigger events
+  if (await isDuplicateTrigger('app-install', _subreddit)) {
+    console.log(`[TRIGGER] r/${_subreddit} Skip duplicate app-install trigger`);
+    return c.json<TriggerResponse>({ status: 'success', message: 'Duplicate trigger skipped' }, 200);
+  }
+
   try {
-    const post = await createPost(SUBREDDIT);
+    const post = await createPost(_subreddit);
 
     // Capture installed version so the next check-for-updates doesn't
     // immediately notify about the version just installed.
     const currentVersion = context.appVersion ?? 'unknown';
-    await redis.set(redisKey.lastNotifiedVersion(SUBREDDIT), currentVersion);
+    await redis.set(redisKey.lastNotifiedVersion(_subreddit), currentVersion);
 
     return c.json({ status: 'success', postId: post.id });
   } catch (error) {
@@ -69,6 +92,38 @@ triggers.post('/on-app-install', async (c) => {
   }
 });
 
+async function retry<T>(
+  fn: () => Promise<T>,
+  retries = 3,
+  delay = 500,
+  contextName = 'operation'
+): Promise<T> {
+  let attempt = 0;
+  while (true) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      attempt++;
+      const msg = String(error?.message ?? error);
+      const isTransient =
+        msg.includes('timeout') ||
+        msg.includes('tcp') ||
+        msg.includes('connection') ||
+        msg.includes('UNKNOWN') ||
+        msg.includes('i/o');
+
+      if (attempt >= retries || !isTransient) {
+        throw error;
+      }
+      const backoff = delay * Math.pow(2, attempt - 1);
+      console.warn(
+        `[RETRY] Transient failure in ${contextName} (attempt ${attempt}/${retries}). Retrying in ${backoff}ms. Error: ${msg}`
+      );
+      await new Promise((resolve) => setTimeout(resolve, backoff));
+    }
+  }
+}
+
 /**
  * Trigger: App Upgrade
  * Re-hydrates snapshot-worker jobs from jobs:active and report-worker jobs
@@ -76,26 +131,47 @@ triggers.post('/on-app-install', async (c) => {
  * scheduled tasks on app update.
  */
 triggers.post('/on-app-upgrade', async (c) => {
-  const subreddit = getSubreddit();
+  const _input = await c.req.json<OnAppUpgradeRequest>();
+  const _subreddit = _input.subreddit?.name || 'global';
+
+  if (await isDuplicateTrigger('app-upgrade', _subreddit)) {
+    console.log(`[TRIGGER] on-app-upgrade: Skip duplicate trigger`);
+    return c.json({ status: 'success', message: 'Duplicate trigger skipped' }, 200);
+  }
+
   try {
-    const activeJobIds = await redis.zRange(redisKey.jobsActive(), 0, -1);
+    const activeJobIds = await retry(
+      () => redis.zRange(redisKey.jobsActive(), 0, -1),
+      3,
+      300,
+      'zRange(jobsActive)'
+    );
 
     // Pull scheduler state once, outside the loop
-    const scheduledJobs = await scheduler.listJobs();
-
+    const scheduledJobs = await retry(
+      () => scheduler.listJobs(),
+      3,
+      300,
+      'listJobs'
+    );
 
     let restored = 0;
     let removed = 0;
     let skipped = 0;
     let limitHit = false;
 
-    console.log(`[TRIGGER] r/${subreddit} on-app-upgrade: Found ${scheduledJobs.length} jobs in scheduler. Proactively clearing for re-sync.`);
+    console.log(`[TRIGGER] r/${_subreddit} on-app-upgrade: Found ${scheduledJobs.length} jobs in scheduler. Proactively clearing for re-sync.`);
 
     // 1. Proactively clear any existing jobs that might be from the old version
     // but haven't been purged yet by Devvit.
     for (const job of scheduledJobs) {
       if (job.name === 'snapshot-worker' || job.name === 'report-worker' || job.name.startsWith('report-worker:')) {
-        await scheduler.cancelJob(job.id).catch(() => {});
+        await retry(
+          () => scheduler.cancelJob(job.id),
+          2,
+          200,
+          `cancelJob(${job.id})`
+        ).catch(() => { });
       }
     }
 
@@ -109,9 +185,19 @@ triggers.post('/on-app-upgrade', async (c) => {
         typeof entry === 'string' ? entry : (entry as any)?.member;
       if (!jobId) continue;
 
-      const jobHash = await redis.hGetAll(redisKey.job(jobId));
+      const jobHash = await retry(
+        () => redis.hGetAll(redisKey.job(jobId)),
+        3,
+        200,
+        `hGetAll(job:${jobId})`
+      );
       if (!jobHash || jobHash.status !== 'active') {
-        await redis.zRem(redisKey.jobsActive(), [jobId]);
+        await retry(
+          () => redis.zRem(redisKey.jobsActive(), [jobId]),
+          3,
+          200,
+          `zRem(jobsActive:${jobId})`
+        );
         removed++;
         continue;
       }
@@ -120,8 +206,15 @@ triggers.post('/on-app-upgrade', async (c) => {
       if (jobHash.cron === 'once' && jobHash.nextRun) {
         const runTime = parseInt(jobHash.nextRun, 10);
         if (Date.now() > runTime) {
-          await redis.zRem(redisKey.jobsActive(), [jobId]);
-          await redis.hSet(redisKey.job(jobId), { status: 'expired' });
+          await retry(
+            () => Promise.all([
+              redis.zRem(redisKey.jobsActive(), [jobId]),
+              redis.hSet(redisKey.job(jobId), { status: 'expired' })
+            ]),
+            3,
+            200,
+            `expireJobRedisState(${jobId})`
+          );
           removed++;
           continue;
         }
@@ -133,7 +226,7 @@ triggers.post('/on-app-upgrade', async (c) => {
       // Build scheduler config
       const config: any = {
         name: 'snapshot-worker',
-        data: { subreddit, scheduleType: jobHash.scheduleType || 'custom' },
+        data: { _subreddit, scheduleType: jobHash.scheduleType || 'custom' },
       };
       if (jobHash.cron && jobHash.cron !== 'once') {
         config.cron = jobHash.cron;
@@ -145,19 +238,37 @@ triggers.post('/on-app-upgrade', async (c) => {
 
       try {
         // Try to cancel the old ID first to free scheduler quota
-        await scheduler.cancelJob(jobId).catch(() => {});
+        await retry(
+          () => scheduler.cancelJob(jobId),
+          2,
+          200,
+          `cancelJob(${jobId})`
+        ).catch(() => { });
 
-        const newJobId = await scheduler.runJob(config);
-        await redis.hSet(redisKey.job(newJobId), {
-          ...jobHash,
-          id: newJobId,
-          status: 'active',
-        });
-        await redis.zRem(redisKey.jobsActive(), [jobId]);
-        await redis.zAdd(redisKey.jobsActive(), {
-          member: newJobId,
-          score: Date.now(),
-        });
+        const newJobId = await retry(
+          () => scheduler.runJob(config),
+          3,
+          300,
+          `runJob(snapshot-worker)`
+        );
+
+        await retry(
+          () => Promise.all([
+            redis.hSet(redisKey.job(newJobId), {
+              ...jobHash,
+              id: newJobId,
+              status: 'active',
+            }),
+            redis.zRem(redisKey.jobsActive(), [jobId]),
+            redis.zAdd(redisKey.jobsActive(), {
+              member: newJobId,
+              score: Date.now(),
+            })
+          ]),
+          3,
+          200,
+          `updateJobRedisState(${newJobId})`
+        );
 
         restored++;
       } catch (schedError: any) {
@@ -178,7 +289,12 @@ triggers.post('/on-app-upgrade', async (c) => {
     // Fallback: If no snapshot jobs were restored but a recurring frequency is set,
     // ensure at least one snapshot worker exists.
     if (restored === 0) {
-      const storageStr = await redis.get(redisKey.storage(subreddit));
+      const storageStr = await retry(
+        () => redis.get(redisKey.storage(_subreddit)),
+        3,
+        200,
+        'get(storage)'
+      );
       if (storageStr) {
         try {
           const storageSettings = JSON.parse(storageStr);
@@ -188,13 +304,18 @@ triggers.post('/on-app-upgrade', async (c) => {
           else if (freq === 'weekly') cron = '0 6 * * 1';
           else if (freq === 'monthly') cron = '0 7 1 * *';
 
-          await scheduler.runJob({
-            name: 'snapshot-worker',
-            cron,
-            data: { subreddit, scheduleType: freq },
-          });
+          await retry(
+            () => scheduler.runJob({
+              name: 'snapshot-worker',
+              cron,
+              data: { _subreddit, scheduleType: freq },
+            }),
+            3,
+            300,
+            'runJob(default snapshot-worker)'
+          );
           restored++;
-          console.log(`[TRIGGER] Restored default snapshot-worker for r/${subreddit} (${freq})`);
+          console.log(`[TRIGGER] Restored default snapshot-worker for r/${_subreddit} (${freq})`);
         } catch (e) {
           console.warn(`[TRIGGER] Failed to restore default snapshot-worker:`, e);
         }
@@ -205,7 +326,12 @@ triggers.post('/on-app-upgrade', async (c) => {
     let reportSkipped = 0;
     let reportLimitHit = false;
 
-    const reportSettingsStr = await storage.get(redisKey.report(subreddit));
+    const reportSettingsStr = await retry(
+      () => storage.get(redisKey.report(_subreddit)),
+      3,
+      200,
+      'get(reportSettings)'
+    );
     if (reportSettingsStr) {
       try {
         const reportSettings = JSON.parse(reportSettingsStr) as {
@@ -230,14 +356,19 @@ triggers.post('/on-app-upgrade', async (c) => {
           // Always restore during upgrade to ensure persistence in the new version's scheduler.
 
           try {
-            await scheduler.runJob({
-              name: jobName,
-              cron: calculateReportCron(schedule),
-              data: {
-                subreddit,
-                scheduleId: schedule.id,
-              },
-            });
+            await retry(
+              () => scheduler.runJob({
+                name: jobName,
+                cron: calculateReportCron(schedule),
+                data: {
+                  _subreddit,
+                  scheduleId: schedule.id,
+                },
+              }),
+              3,
+              300,
+              `runJob(report-worker:${schedule.id})`
+            );
             reportRestored++;
           } catch (schedError: any) {
             const msg = String(schedError.message ?? schedError);
@@ -258,7 +389,7 @@ triggers.post('/on-app-upgrade', async (c) => {
     }
 
     console.log(
-      `[TRIGGER] on-app-upgrade for r/${subreddit}: restored=${restored}, removed=${removed}, skipped=${skipped}, reportRestored=${reportRestored}, reportSkipped=${reportSkipped}`
+      `[TRIGGER] on-app-upgrade for r/${_subreddit}: restored=${restored}, removed=${removed}, skipped=${skipped}, reportRestored=${reportRestored}, reportSkipped=${reportSkipped}`
     );
     return c.json({
       status: 'success',
@@ -278,10 +409,15 @@ triggers.post('/on-app-upgrade', async (c) => {
  * Trigger: App Check for Updates (runs weekly via scheduler)
  */
 const handleCheckForUpdates = async (c: Context) => {
-  const currentVersion = context.appVersion ?? '0.9.8';
-  const subreddit = context.subredditName;
+  const currentVersion = context.appVersion ?? '1.0.7';
+  const _subreddit = context.subredditName || 'global';
+  if (await isDuplicateTrigger('check-for-updates', _subreddit)) {
+    console.log(`[TRIGGER] check-for-updates: Skip duplicate trigger`);
+    return c.json({ status: 'success', message: 'Duplicate trigger skipped' }, 200);
+  }
 
-  if (!subreddit) {
+
+  if (!_subreddit) {
     return c.json(
       {
         status: 'error',
@@ -325,7 +461,7 @@ const handleCheckForUpdates = async (c: Context) => {
       });
     }
 
-    const lastNotified = await redis.get(redisKey.lastNotifiedVersion(subreddit));
+    const lastNotified = await redis.get(redisKey.lastNotifiedVersion(_subreddit));
     if (lastNotified === latestVersion) {
       return c.json({
         status: 'already-notified',
@@ -335,10 +471,10 @@ const handleCheckForUpdates = async (c: Context) => {
     }
 
     await reddit.sendPrivateMessage({
-      to: `/r/${subreddit}`,
+      to: `/r/${_subreddit}`,
       subject: `ModScope Update Available: v${latestVersion}`,
       text: [
-        `Hello r/${subreddit} moderators,\n\nA new version of ModScope (v${latestVersion}) is available!`,
+        `Hello r/${_subreddit} moderators,\n\nA new version of ModScope (v${latestVersion}) is available!`,
         ``,
         `- Installed version: \`v${currentVersion}\``,
         `- Latest version: \`v${latestVersion}\``,
@@ -348,11 +484,11 @@ const handleCheckForUpdates = async (c: Context) => {
       ].join('\n'),
     });
 
-    await redis.set(redisKey.lastNotifiedVersion(subreddit), latestVersion);
+    await redis.set(redisKey.lastNotifiedVersion(_subreddit), latestVersion);
 
     return c.json({
       status: 'notified',
-      subreddit,
+      subreddit: _subreddit,
       currentVersion,
       latestVersion,
     });
@@ -374,8 +510,13 @@ triggers.post('/tasks/check-for-updates', handleCheckForUpdates);
  * Task: Snapshot Worker
  */
 triggers.post('/tasks/snapshot-worker', async (c) => {
-  const startTime = Date.now();
+  const subId = context.subredditId || 'global';
+  if (await isDuplicateTrigger('snapshot-worker', subId)) {
+    console.log(`[TRIGGER] snapshot-worker: Skip duplicate trigger`);
+    return c.json({ status: 'success', message: 'Duplicate trigger skipped' }, 200);
+  }
   const subreddit = getSubreddit();
+  const startTime = Date.now();
   const lockKey = redisKey.snapshotLock(subreddit);
   const lockToken = `${startTime}-${Math.random().toString(36).slice(2, 10)}`;
   const lockTtlMs = 10 * 60 * 1000;
@@ -507,8 +648,8 @@ triggers.post('/tasks/delete-snapshot', async (c) => {
     try {
       const raw =
         typeof item === 'object' &&
-        item !== null &&
-        'member' in (item as Record<string, unknown>)
+          item !== null &&
+          'member' in (item as Record<string, unknown>)
           ? String((item as { member: unknown }).member)
           : String(item);
       return { raw, entry: JSON.parse(raw) };
@@ -552,6 +693,12 @@ triggers.post('/tasks/delete-snapshot', async (c) => {
         }
       );
       return c.json({ status: 'error', message: 'Invalid scanId' }, 400);
+    }
+
+    const subId = context.subredditId || 'global';
+    if (await isDuplicateTrigger('delete-snapshot', `${subId}:${scanId}`)) {
+      console.log(`[TRIGGER] Suppressed duplicate delete-snapshot trigger for scan #${scanId}`);
+      return c.json({ status: 'success', message: 'Duplicate trigger skipped' }, 200);
     }
 
     const subreddit = getSubreddit();
@@ -664,6 +811,12 @@ triggers.post('/tasks/report-worker', async (c) => {
     requestBody?.scheduleId ??
     requestBody?.data?.scheduleId ??
     requestBody?.job?.data?.scheduleId;
+
+  const subId = context.subredditId || 'global';
+  if (await isDuplicateTrigger('report-worker', `${subId}:${scheduleId || 'legacy'}`)) {
+    console.log(`[TRIGGER] Suppressed duplicate report-worker trigger for schedule #${scheduleId || 'legacy'}`);
+    return c.json({ status: 'success', message: 'Duplicate trigger skipped' }, 200);
+  }
 
   try {
     const reportSettingsStr = await storage.get(

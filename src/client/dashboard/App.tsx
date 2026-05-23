@@ -4,7 +4,7 @@ import {
   requestExpandedMode,
 } from '@devvit/web/client';
 import * as React from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import {
   AnalyticsSnapshot,
   AppConfig,
@@ -762,6 +762,7 @@ export const App = ({ startupModeHint = 'inline' }: AppProps) => {
             })}
           </div>
 
+
           {/* Expand into full-screen post — right side of toolbar */}
           {webViewMode !== 'expanded' && (
             <Tooltip content="Open Full Screen" side="bottom">
@@ -813,6 +814,7 @@ export const App = ({ startupModeHint = 'inline' }: AppProps) => {
           )}
         </div>
       </div>
+
     </ToastProvider>
   );
 };

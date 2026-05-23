@@ -153,6 +153,32 @@ _Note: ModScope runs entirely within the Devvit ecosystem. It requires no extern
 
 ## Changelog
 
+## v1.0.7
+
+### 1. **Report Layout & Mobile Usability**
+
+- **Mobile Scroll Buffer**: Added a bottom padding buffer (`calc(80px + var(--safe-area-bottom))`) to the main Report view content tabs to ensure full scrollability on mobile device viewports.
+- **Scroll Unification**: Eliminated nested independent scrollbars in sub-views (Posts, Users, Content, and Trends) to ensure clean scrolling via the parent viewport.
+
+### 2. **Trigger & Task Deduplication**
+
+- **Idempotency Guard**: Integrated a generic duplicate detection helper (`isDuplicateTrigger`) using a 90-second Redis expiration lock across all Hono trigger and scheduled task endpoints to prevent repeat executions.
+- **Deduplicated Routes**: Applied deduplication checks to `/on-app-install`, `/on-app-upgrade`, `/tasks/check-for-updates`, `/tasks/snapshot-worker`, `/tasks/delete-snapshot`, and `/tasks/report-worker`.
+
+### 3. **Infrastructure Resilience**
+
+- **Upgrade Retries**: Implemented connection retry logic with exponential backoff for Devvit scheduler and Redis operations during app upgrade to gracefully handle transient network and database timeouts.
+
+## v1.0.5
+
+### 1. **Precision Trends**
+
+- **Precision Control**: Added a toggle in the top-right corner of the **Trends** tab to switch between **Precision Mode** (full multi-snapshot trend analysis) and **Snapshot Mode** (base data only).
+- **Contextual Trend Overlays**: Best-posting-times charts, word clouds, and engagement graphs now display historical context specific to the selected snapshot window rather than always showing the latest data.
+- **Improved Data Quality**: Enhanced trend forecasting with a multi-day moving window, providing more robust and statistically reliable predictions.
+- **Responsive Trends Tab**: The **Trends** tab is now hidden by default when not in **Precision Mode** to declutter the interface.
+- **User Experience**: Added clear visual indicators for **Precision Mode** activation and a smooth transition animation when switching between modes.
+
 ## v1.0.1
 
 ### 1. **Desktop & Mobile UI Refinement**

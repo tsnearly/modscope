@@ -33,7 +33,7 @@ export function PostsView({
   iconContext,
 }: PostsViewProps) {
   return (
-    <div style={{ overflowY: 'auto', height: '100%' }}>
+    <div style={{ padding: '12px' }}>
       {[
         {
           key: 'top_posts',

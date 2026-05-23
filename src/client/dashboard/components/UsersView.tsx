@@ -64,7 +64,7 @@ export function UsersView({
   ).slice(0, 5);
 
   return (
-    <div style={{ padding: '12px', overflowY: 'auto', height: '100%' }}>
+    <div style={{ padding: '12px' }}>
       <div className="report-users-grid">
         <Chart
           title="Top Contributors"

@@ -293,9 +293,11 @@ function ReportView({
   const [trendsError, setTrendsError] = useState<string | null>(null);
   const [trendsData, setTrendsData] = useState<any>(null);
   const [trendsLoadedKey, setTrendsLoadedKey] = useState<string | null>(null);
+  const [precisionMuted, setPrecisionMuted] = useState(false);
   const trendsCacheKey = `${analytics?.meta?.subreddit || 'unknown'}:${analytics?.meta?.scanDate || 'unknown'}`;
 
   const useTrendPrecisionData = useMemo(() => {
+    if (precisionMuted) return false;
     if (trendsLoadedKey !== trendsCacheKey || !trendsData) {
       return false;
     }
@@ -307,7 +309,7 @@ function ReportView({
         trendsData.globalBestPostingTimes.length > 0) ||
       trendsData.globalStats
     );
-  }, [trendsData, trendsLoadedKey, trendsCacheKey]);
+  }, [trendsData, trendsLoadedKey, trendsCacheKey, precisionMuted]);
 
   const hasRenderableTrendData = useMemo(() => {
     if (!trendsData) {
@@ -766,19 +768,69 @@ function ReportView({
   const officialAccount = analytics?.meta?.officialAccount || '';
 
   const iconContext: IconContext = isPrintMode ? 'printed' : 'screen';
-  const trendPrecisionNotice = useTrendPrecisionData ? (
+  // Determine whether trends data is available (regardless of mute state) so we
+  // can show the toggle even when the user has muted precision mode.
+  const hasPrecisionData = useMemo(() => {
+    if (trendsLoadedKey !== trendsCacheKey || !trendsData) return false;
+    return !!(
+      (trendsData.globalWordCloud && Object.keys(trendsData.globalWordCloud).length > 0) ||
+      (trendsData.globalBestPostingTimes && trendsData.globalBestPostingTimes.length > 0) ||
+      trendsData.globalStats
+    );
+  }, [trendsData, trendsLoadedKey, trendsCacheKey]);
+
+  const trendPrecisionNotice = hasPrecisionData ? (
     <div className="mt-2 flex justify-end px-1">
-      <div className="flex items-center gap-1 opacity-70">
-        <Icon name="mono-info" size={10} className="text-blue-500" />
-        <Tooltip
-          content="This indicator confirms that data elements (like average scores or best posting times) have been overridden by higher-precision calculations using the full multi-post trend forecasting dataset, rather than just the current snapshot's analysis pool."
-          side="top"
+      <Tooltip
+        content={
+          precisionMuted
+            ? 'Precision Trends is muted — displaying base snapshot data only. Click to re-enable multi-snapshot trend overrides.'
+            : 'Precision Trends is active — data elements like scores and best posting times use the full multi-snapshot dataset. Click to revert to base snapshot data and hide the Trends tab.'
+        }
+        side="top"
+      >
+        <button
+          type="button"
+          onClick={() => {
+            const nextMuted = !precisionMuted;
+            setPrecisionMuted(nextMuted);
+            // If we just muted precision and the user is on the Trends tab (which
+            // will now disappear), send them back to Overview.
+            if (nextMuted && activeTab === 'trends') {
+              handleTabChange('overview');
+            }
+          }}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            padding: '2px 4px',
+            borderRadius: '4px',
+            opacity: precisionMuted ? 0.5 : 0.7,
+          }}
         >
-          <span className="text-[9px] font-medium text-slate-500 tracking-tight cursor-help underline decoration-dotted">
-            Precision Trends Active
+          <Icon
+            name={precisionMuted ? 'mono-unavailable' : 'mono-info'}
+            size={10}
+            className={precisionMuted ? 'text-slate-400' : 'text-blue-500'}
+          />
+          <span
+            style={{
+              fontSize: '9px',
+              fontWeight: 500,
+              color: precisionMuted ? 'var(--text-muted)' : 'var(--text-secondary)',
+              letterSpacing: '-0.01em',
+              textDecoration: 'underline',
+              textDecorationStyle: 'dotted',
+            }}
+          >
+            {precisionMuted ? 'Snapshot Mode' : 'Precision Trends Active'}
           </span>
-        </Tooltip>
-      </div>
+        </button>
+      </Tooltip>
     </div>
   ) : null;
 
@@ -878,7 +930,7 @@ function ReportView({
     ) {
       return false;
     }
-    if (t.tab === 'trends' && !isPrintMode && !hasRenderableTrendData) {
+    if (t.tab === 'trends' && !isPrintMode && (!hasRenderableTrendData || precisionMuted)) {
       return false;
     }
     return true;
@@ -1261,8 +1313,6 @@ function ReportView({
           flexDirection: 'column',
           gap: '20px',
           padding: '0 4px',
-          overflowY: 'auto',
-          height: '100%',
         }}
       >
         {staleWarning}
@@ -1436,7 +1486,7 @@ function ReportView({
                   key={t.tab}
                   value={t.tab}
                   className="h-full w-full overflow-y-auto"
-                  style={{ background: 'var(--color-bg)' }}
+                  style={{ background: 'var(--color-bg)', paddingBottom: 'calc(80px + var(--safe-area-bottom))' }}
                 >
                   {activeTab === t.tab && t.tab === 'overview' && (
                     <OverviewView

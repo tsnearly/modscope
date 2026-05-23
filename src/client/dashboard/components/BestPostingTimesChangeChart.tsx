@@ -232,41 +232,62 @@ export function BestPostingTimesChangeChart({
     fallingSlots.sort((a, b) => a.change - b.change);
     stableSlots.sort((a, b) => b.score - a.score);
 
-    // 3. Evaluate all global slots to find their current scores and deltas
-    const globalBest = trendsData.globalBestPostingTimes || [];
-    const priorTimeline = earlyPeriod[0] || timeline[0]!;
-    
-    const evaluatedSlots = globalBest.map((b: any) => {
-      const local = getLocalDayHour(`${b.day}-${b.hour}`);
-      const hourFmt = `${local.hour % 12 || 12} ${local.hour < 12 ? 'AM' : 'PM'}`;
-      const dayHour = `${b.day}-${b.hour.toString().padStart(2, '0')}`;
+    // 3. Rank slots by performance within the selected window.
+    //    Collect every slot that appears in any timeline entry, aggregate its
+    //    score over the late and early periods, then sort by late-period average.
+    //    This makes BOTH the window-range and the compare-mode dropdowns
+    //    meaningfully change the output.
+    const windowSlotAccum = new Map<
+      string,
+      { lateScores: number[]; earlyScores: number[]; dayHour: string }
+    >();
 
-      const latestEntry = timeline[timeline.length - 1];
-      const latestSlot = latestEntry?.topSlots?.find(
-        (s: any) => s.dayHour === dayHour
-      );
-      const currentScore = latestSlot?.score ?? 0;
+    const earlySet = new Set(earlyPeriod.map((e) => e.timestamp));
+    const lateSet  = new Set(latePeriod.map((e) => e.timestamp));
 
-      const priorSlot = priorTimeline?.topSlots?.find(
-        (s: any) => s.dayHour === dayHour
-      );
-      const priorScore = priorSlot?.score ?? 0;
-      const delta = currentScore - priorScore;
+    for (const entry of timeline) {
+      const isEarly = earlySet.has(entry.timestamp);
+      const isLate  = lateSet.has(entry.timestamp);
+      for (const slot of entry.topSlots) {
+        if (!windowSlotAccum.has(slot.dayHour)) {
+          windowSlotAccum.set(slot.dayHour, {
+            lateScores: [],
+            earlyScores: [],
+            dayHour: slot.dayHour,
+          });
+        }
+        const accum = windowSlotAccum.get(slot.dayHour)!;
+        if (isLate)  accum.lateScores.push(slot.score);
+        if (isEarly) accum.earlyScores.push(slot.score);
+      }
+    }
 
-      return {
-        dayHour,
-        label: `${FULL_DAY_NAMES[local.dayShort] || local.dayShort} - ${hourFmt}`,
-        score: currentScore,
-        delta,
-      };
-    }).filter((s: any) => s.score > 0).sort((a: any, b: any) => b.score - a.score);
+    const avg = (arr: number[]) =>
+      arr.length > 0 ? arr.reduce((s, v) => s + v, 0) / arr.length : 0;
+
+    const evaluatedSlots = Array.from(windowSlotAccum.values())
+      .map(({ dayHour, lateScores, earlyScores }) => {
+        const local = getLocalDayHour(dayHour);
+        const hourFmt = `${local.hour % 12 || 12} ${local.hour < 12 ? 'AM' : 'PM'}`;
+        const lateAvg  = avg(lateScores);
+        const earlyAvg = avg(earlyScores);
+        return {
+          dayHour,
+          label: `${FULL_DAY_NAMES[local.dayShort] || local.dayShort} - ${hourFmt}`,
+          score: Math.round(lateAvg),
+          delta: Math.round(lateAvg - earlyAvg),
+        };
+      })
+      .filter((s) => s.score > 0)
+      .sort((a, b) => b.score - a.score);
 
     const ranked = evaluatedSlots.slice(0, 4);
 
-    // 4. Build sparkSeries with timestamps
+    // 4. Build sparkSeries — pull values across the FULL window timeline so the
+    //    trend line always shows the complete selected period.
     const topSparkSlots = evaluatedSlots.slice(0, 5);
-    
-    const slotSeries = topSparkSlots.map((slot: any, index: number) => {
+
+    const slotSeries = topSparkSlots.map((slot, index: number) => {
       const values = timeline.map((entry) => {
         const found = entry.topSlots.find(
           (candidate) => candidate.dayHour === slot.dayHour

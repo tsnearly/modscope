@@ -32,6 +32,7 @@ import {
   THEMES,
 } from '../../../shared/types/settings';
 
+
 interface ConfigViewProps {
   initialConfig?: any;
 }

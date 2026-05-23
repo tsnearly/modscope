@@ -150,7 +150,7 @@ export function ContentView({ analytics, iconContext }: ContentViewProps) {
     `${count} post${count === 1 ? '' : 's'}`;
 
   return (
-    <div className="flex flex-col gap-2 p-2 h-full overflow-y-auto">
+    <div className="flex flex-col gap-2 p-2">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2 shrink-0">
         <Chart
           title="Post Types"
