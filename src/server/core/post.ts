@@ -1,4 +1,5 @@
 import { reddit, redis } from '@devvit/web/server';
+import { isModscopeDevSubreddit } from '../../shared/core/constants';
 
 export const DASHBOARD_POST_KEY = 'modscope:launcherPostId:v2';
 
@@ -54,8 +55,14 @@ export const createPost = async (subredditName: string) => {
     console.log(`[CREATE_POST] ✓ Stickied post ${newPost.id}`);
 
     // 3d. Lock the post to prevent community interaction
-    await newPost.lock();
-    console.log(`[CREATE_POST] ✓ Locked post ${newPost.id}`);
+    if (!isModscopeDevSubreddit(subredditName)) {
+      await newPost.lock();
+      console.log(`[CREATE_POST] ✓ Locked post ${newPost.id}`);
+    } else {
+      console.log(
+        `[CREATE_POST] Skipping lock for dev subreddit r/${subredditName}`
+      );
+    }
   } catch (error) {
     console.log(`[CREATE_POST] Failed to set mod attributes: ${error}`);
   }
