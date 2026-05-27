@@ -903,7 +903,7 @@ function ScheduleView({
   };
 
   return (
-    <div className="schedule-view h-full flex flex-col bg-[var(--color-bg)] overflow-hidden max-h-full">
+    <div className="schedule-view h-full flex flex-col bg-[var(--color-bg)]">
       <EntityTitle
         icon="scheduler-tasks.png"
         title="Automated Snapshot Scheduling"
@@ -922,11 +922,11 @@ function ScheduleView({
           </Button>
         }
       />
-      <div className="flex-1 flex flex-col px-6 pb-4 pt-2 min-h-0 overflow-y-auto relative">
+      <div className="flex-1 flex flex-col px-6 pb-4 pt-2 min-h-0 relative overflow-y-auto">
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-4">
           {/* Main Configuration Card */}
           <div className="xl:col-span-2 space-y-6">
-            <Card className="overflow-hidden shadow-md border-border bg-background h-full">
+            <Card className="overflow-hidden shadow-md border-border bg-background xl:h-full">
               <CardHeader className="bg-muted/50 border-b border-border">
                 <CardTitle className="text-lg flex items-center gap-2">
                   <Icon
