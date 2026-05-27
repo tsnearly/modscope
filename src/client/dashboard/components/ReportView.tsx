@@ -1422,8 +1422,12 @@ function ReportView({
           >
             {/* Tab Bar - top on mobile, bottom on desktop via CSS order */}
             <div
-              className="report-tabs-bar flex-shrink-0 border-b border-border px-1 flex items-end justify-start z-50 h-[30px] gap-0.5 overflow-x-auto overflow-y-hidden"
-              style={{ background: 'var(--color-accent)' }}
+              className="report-tabs-bar flex-shrink-0 border-b border-border px-1 flex items-end justify-start z-50 gap-0.5 overflow-x-auto overflow-y-hidden"
+              style={{
+                background: 'var(--color-accent)',
+                paddingTop: '4px',
+                paddingBottom: isInlineConstrained ? '4px' : 'calc(6px + var(--safe-area-bottom))',
+              }}
             >
               {tabs.map((t) => {
                 const isActive = activeTab === t.tab;
@@ -1486,7 +1490,7 @@ function ReportView({
                   key={t.tab}
                   value={t.tab}
                   className="h-full w-full overflow-y-auto"
-                  style={{ background: 'var(--color-bg)', paddingBottom: 'calc(80px + var(--safe-area-bottom))' }}
+                  style={{ background: 'var(--color-bg)' }}
                 >
                   {activeTab === t.tab && t.tab === 'overview' && (
                     <OverviewView

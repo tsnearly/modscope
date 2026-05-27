@@ -512,8 +512,7 @@ html[data-inline-constrained='true'] [data-report-view] .overflow-y-auto {
 
   .report-tabs-content {
     min-height: 0;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
+    overflow: visible;
     padding-bottom: var(--safe-area-bottom);
   }
 }

@@ -28,7 +28,11 @@ import {
 } from '../services/SnapshotService';
 import { TrendingService } from '../services/TrendingService';
 import { ReportingService } from '../services/ReportingService';
-import { MS_PER_HOUR, redisKey } from '../../shared/core/constants';
+import {
+  MS_PER_HOUR,
+  isModscopeDevSubreddit,
+  redisKey,
+} from '../../shared/core/constants';
 
 export const api = new Hono();
 
@@ -275,6 +279,10 @@ async function ensureBootstrap(username?: string) {
 
 api.use('*', async (c, next) => {
   try {
+    if (isModscopeDevSubreddit(context.subredditName)) {
+      return next();
+    }
+
     const access = await ensureModeratorAccess();
     if (!access.ok) {
       return c.json(

@@ -22,6 +22,14 @@ export const COMMENT_TRAVERSAL_TIMEOUT_MS    = 5_000;
 export const DEEP_ANALYSIS_START_CUTOFF_MS   = 25_000;
 export const POST_PROCESS_TIMEOUT_MS         = 3 * 60 * MS_PER_SECOND; // 3 minutes
 
+export const MODSCOPE_DEV_SUBREDDIT = 'modscope_dev';
+
+export const isModscopeDevSubreddit = (
+  subredditName?: string | null
+): boolean => {
+  return (subredditName || '').trim().toLowerCase() === MODSCOPE_DEV_SUBREDDIT;
+};
+
 // ---------------------------------------------------------------------------
 // Snapshot fetch / pagination limits
 // ---------------------------------------------------------------------------

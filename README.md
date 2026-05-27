@@ -153,6 +153,17 @@ _Note: ModScope runs entirely within the Devvit ecosystem. It requires no extern
 
 ## Changelog
 
+## v1.0.8
+
+### 1. **Report Layout & Mobile Usability**
+
+- **Scroll Unification**: Minor cleanup of scroll activation between mobile devices, desktop, in-line, and expanded windows.
+
+### 2. **Framework Updates**
+
+- **Core & UI**: Upgraded framework and UI libraries to support the latest Devvit SDK.
+- **Dependency Updates**: Updated various Node.js and Vite dependencies.
+
 ## v1.0.7
 
 ### 1. **Report Layout & Mobile Usability**

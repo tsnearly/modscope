@@ -4,7 +4,7 @@ import {
   requestExpandedMode,
 } from '@devvit/web/client';
 import * as React from 'react';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import {
   AnalyticsSnapshot,
   AppConfig,
@@ -16,6 +16,7 @@ import AboutView from './components/AboutView';
 import ConfigView from './components/ConfigView';
 import ReportView from './components/ReportView';
 import ScheduleView from './components/ScheduleView';
+import { ModeratorsOnlyView } from './components/ModeratorsOnlyView';
 import { SnapshotsView } from './components/SnapshotsView';
 import { Button } from './components/ui/button';
 import { Heading } from './components/ui/heading';
@@ -218,10 +219,7 @@ export const App = ({ startupModeHint = 'inline' }: AppProps) => {
         }
       }
 
-      const isCoarsePointer =
-        'matchMedia' in window && window.matchMedia('(pointer: coarse)').matches;
-      const isInlineConstrained =
-        mode === 'inline' && (isCoarsePointer || window.innerWidth <= 640);
+      const isInlineConstrained = mode === 'inline';
 
       document.documentElement.setAttribute('data-webview-mode', mode);
       document.documentElement.setAttribute(
@@ -573,17 +571,7 @@ export const App = ({ startupModeHint = 'inline' }: AppProps) => {
   }
 
   if (isUnauthorized) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full p-8 text-center">
-        <Icon name="glass-warning" size={48} className="text-orange-500 mb-4" />
-        <h2 className="text-lg font-bold text-gray-900 mb-2">
-          Moderators Only
-        </h2>
-        <p className="text-sm text-gray-500">
-          This tool is restricted to subreddit moderators.
-        </p>
-      </div>
-    );
+    return <ModeratorsOnlyView />;
   }
 
   return (
