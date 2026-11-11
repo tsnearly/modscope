@@ -1,5 +1,5 @@
 import type { AnalyticsSnapshot, PostData } from '../../shared/types/api.types';
-import { GROWTH_WINDOW_DAYS } from '../../shared/core/constants';
+import { GROWTH_WINDOW_DAYS, MS_PER_DAY } from '../../shared/core/constants';
 import {
   consolidateFlairCounts,
   getCanonicalFlairKey,
@@ -74,20 +74,26 @@ export class MetricSnapshotDataBuilder {
     const subreddit =
       (snapshot as any)?.subreddit ?? snapshot?.meta?.subreddit ?? '';
 
-    // STEP 1: Fetch week-window trend data for sidebar use
+    const projectedGrowthEnabled = (config?.sections || []).some(
+      (s) => s.sectionId === 'PROJECTED_GROWTH' && s.enabled
+    );
+
+    // STEP 1: Fetch trend data (90-day base dataset if projected growth enabled, else 7-day)
+    let baseTrendData: any = null;
     try {
-      const weekTrend = await this.trendingService.getTrendData(
+      const fetchWindowDays = projectedGrowthEnabled ? 90 : 7;
+      baseTrendData = await this.trendingService.getTrendData(
         subreddit,
         asOf,
-        7
+        fetchWindowDays
       );
-      if (weekTrend) {
+      if (baseTrendData) {
         data.trendData = {
           asOf,
-          growthForecast: weekTrend.growthForecast ?? undefined,
-          subscriberGrowth: weekTrend.subscriberGrowth ?? undefined,
+          growthForecast: baseTrendData.growthForecast ?? undefined,
+          subscriberGrowth: baseTrendData.subscriberGrowth ?? undefined,
           globalBestPostingTimes:
-            weekTrend.globalBestPostingTimes ?? undefined,
+            baseTrendData.globalBestPostingTimes ?? undefined,
         };
       }
     } catch (error) {
@@ -99,44 +105,68 @@ export class MetricSnapshotDataBuilder {
     }
 
     // STEP 2: Pre-bake growthBundle only when PROJECTED_GROWTH section is enabled
-    const projectedGrowthEnabled = (config?.sections || []).some(
-      (s) => s.sectionId === 'PROJECTED_GROWTH' && s.enabled
-    );
-
     if (projectedGrowthEnabled) {
       const growthBundle: NonNullable<MetricSnapshotData['growthBundle']> = {};
 
-      await Promise.all(
-        Object.entries(GROWTH_WINDOW_DAYS).map(
-          async ([windowName, windowDays]) => {
-            try {
-              const td = await this.trendingService.getTrendData(
-                subreddit,
-                asOf,
-                windowDays
-              );
-              const hasData = !!td && (td.subscriberGrowth?.length ?? 0) >= 2;
-              growthBundle[windowName as keyof typeof growthBundle] = {
-                windowDays,
-                asOf,
-                hasData,
-                growthForecast: hasData
-                  ? td!.growthForecast ?? undefined
-                  : undefined,
-                subscriberGrowth: hasData
-                  ? td!.subscriberGrowth ?? undefined
-                  : undefined,
-              };
-            } catch {
-              growthBundle[windowName as keyof typeof growthBundle] = {
-                windowDays,
-                asOf,
-                hasData: false,
-              };
+      try {
+        // Optimization: Slices sub-windows in-memory from the single baseTrendData dataset
+        const allPoints: Array<{ timestamp: number; value: number }> =
+          baseTrendData?.subscriberGrowth || [];
+        const effectiveAsOf =
+          asOf ?? (allPoints.length > 0 ? allPoints[allPoints.length - 1]!.timestamp : Date.now());
+
+        await Promise.all(
+          Object.entries(GROWTH_WINDOW_DAYS).map(
+            async ([windowName, windowDays]) => {
+              try {
+                let slicedPoints = allPoints;
+                if (windowDays < 90) {
+                  const cutoff = effectiveAsOf - windowDays * MS_PER_DAY;
+                  slicedPoints = allPoints.filter((p: { timestamp: number; value: number }) => p.timestamp >= cutoff);
+                }
+
+                const hasData = slicedPoints.length >= 2;
+                let growthForecast = undefined;
+
+                if (hasData) {
+                  if (windowDays === 90 && baseTrendData?.growthForecast) {
+                    growthForecast = baseTrendData.growthForecast;
+                  } else {
+                    growthForecast = await this.trendingService.generateGrowthForecast(
+                      subreddit,
+                      windowDays,
+                      effectiveAsOf,
+                      slicedPoints
+                    );
+                  }
+                }
+
+                growthBundle[windowName as keyof typeof growthBundle] = {
+                  windowDays,
+                  asOf,
+                  hasData,
+                  growthForecast,
+                  subscriberGrowth: hasData ? slicedPoints : undefined,
+                };
+              } catch {
+                growthBundle[windowName as keyof typeof growthBundle] = {
+                  windowDays,
+                  asOf,
+                  hasData: false,
+                };
+              }
             }
-          }
-        )
-      );
+          )
+        );
+      } catch {
+        for (const [windowName, windowDays] of Object.entries(GROWTH_WINDOW_DAYS)) {
+          growthBundle[windowName as keyof typeof growthBundle] = {
+            windowDays,
+            asOf,
+            hasData: false,
+          };
+        }
+      }
 
       data.growthBundle = growthBundle;
 

@@ -299,13 +299,16 @@ function generateTestDataWithSettings(
     const currentScanId = scanId - i;
     const timestamp = now - i * MS_PER_DAY;
 
-    mockRedis.setData(`run:${currentScanId}:meta`, {
+    mockRedis.setData(`scan:${currentScanId}:meta`, {
       scan_date: new Date(timestamp).toISOString(),
       subreddit: subreddit,
     });
 
-    mockRedis.setData(`run:${currentScanId}:stats`, {
+    mockRedis.setData(`scan:${currentScanId}:stats`, {
       subscribers: (100000 + i * 100).toString(),
+      total_posts: settings.analysisPoolSize.toString(),
+      total_comments: '0',
+      active_users: '0',
     });
 
     // Generate posts for this scan
@@ -453,13 +456,13 @@ describe('Task 15.1: Test Settings and Snapshot Flow', () => {
       await service.materializeTrends(testSubreddit, testScanId);
 
       // Verify materialized keys were created
-      const lastMaterialized = await mockRedis.get(
-        `trends:${testSubreddit}:last_materialized`
-      );
+      const lastMaterialized =
+        (await mockRedis.hGet('trends:meta', 'lastmaterialized')) ||
+        (await mockRedis.hGet('trends:meta', 'lastMaterialized'));
       expect(lastMaterialized).toBeTruthy();
 
       const subscriberGrowth = await mockRedis.zRange(
-        `trends:${testSubreddit}:subscriber_growth`,
+        'trends:ts:subscribers',
         0,
         -1
       );
@@ -477,16 +480,16 @@ describe('Task 15.1: Test Settings and Snapshot Flow', () => {
 
       // First run
       await service.materializeTrends(testSubreddit, testScanId);
-      const firstTimestamp = await mockRedis.get(
-        `trends:${testSubreddit}:last_materialized`
-      );
+      const firstTimestamp =
+        (await mockRedis.hGet('trends:meta', 'lastmaterialized')) ||
+        (await mockRedis.hGet('trends:meta', 'lastMaterialized'));
 
       // Wait a small amount and run again with SAME scan ID (idempotent)
       await new Promise((resolve) => setTimeout(resolve, 10));
       await service.materializeTrends(testSubreddit, testScanId);
-      const secondTimestamp = await mockRedis.get(
-        `trends:${testSubreddit}:last_materialized`
-      );
+      const secondTimestamp =
+        (await mockRedis.hGet('trends:meta', 'lastmaterialized')) ||
+        (await mockRedis.hGet('trends:meta', 'lastMaterialized'));
 
       // Second timestamp should be greater or equal (updated on each run)
       expect(new Date(secondTimestamp || '').getTime()).toBeGreaterThanOrEqual(
@@ -508,15 +511,15 @@ describe('Task 15.1: Test Settings and Snapshot Flow', () => {
       // Simulate scheduled worker path (same method used)
       await service.materializeTrends(testSubreddit, testScanId);
 
-      // Verify all expected keys exist
+      // Verify all expected standardized keys exist
       const keys = [
-        `trends:${testSubreddit}:last_materialized`,
-        `trends:${testSubreddit}:subscriber_growth`,
-        `trends:${testSubreddit}:engagement_over_time`,
-        `trends:${testSubreddit}:engagement_anomalies`,
-        `trends:${testSubreddit}:content_mix`,
-        `trends:${testSubreddit}:posting_heatmap`,
-        `trends:${testSubreddit}:best_times`,
+        'trends:meta',
+        'trends:ts:subscribers',
+        'trends:ts:engagement',
+        'trends:ts:velocity',
+        'trends:ts:contentmix',
+        'trends:ts:heatmap',
+        'trends:ts:besttimes',
       ];
 
       for (const key of keys) {
@@ -540,9 +543,9 @@ describe('Task 15.1: Test Settings and Snapshot Flow', () => {
       await service.materializeTrends(testSubreddit, testScanId);
 
       // Should not throw errors and should complete successfully
-      const lastMaterialized = await mockRedis.get(
-        `trends:${testSubreddit}:last_materialized`
-      );
+      const lastMaterialized =
+        (await mockRedis.hGet('trends:meta', 'lastmaterialized')) ||
+        (await mockRedis.hGet('trends:meta', 'lastMaterialized'));
       expect(lastMaterialized).toBeTruthy();
     });
   });

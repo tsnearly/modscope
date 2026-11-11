@@ -21,6 +21,7 @@ export const JOB_TYPE_DISPLAY_NAMES: Record<string, string> = {
   'job-purge-deletions': 'Purge Deletions',
   'apply-pending-schema-patches': 'Schema Migration',
   'delete-snapshot': 'Delete Snapshot',
+  'rebuild-trend-history': 'Rebuild Trend History',
 };
 
 export interface JobHistoryLogEntry {

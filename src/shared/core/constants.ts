@@ -147,6 +147,7 @@ export const APP_VERSION_SCHEMA_MAP: Record<string, string> = {
   '1.0.7': 'v1',
   '1.0.10': 'v1',
   '1.1': 'v1',
+  '1.2': 'v2',
   '1.5': 'v2',
 };
 
@@ -213,11 +214,7 @@ export const CURRENT_MIGRATION_VERSION = 1;
 // ---------------------------------------------------------------------------
 
 /** Scan metadata hash: all fields for a given scan */
-/** Scan metadata hash: all fields for a given scan */
 export const redisKey = {
-  trendsHeatmapScan: (scanId: number) => `trends:heatmap:scan:${scanId}`,
-  trendsContentMixScan: (scanId: number) => `trends:contentmix:scan:${scanId}`,
-  trendsAnomaliesScan: (scanId: number) => `trends:anomalies:scan:${scanId}`,
   withVersion: (baseKey: string, version?: 'v1' | 'v2' | string) => {
     if (!version || version === 'v1') return baseKey;
     return `${baseKey}:${version}`;
@@ -236,7 +233,6 @@ export const redisKey = {
 
   // --- Index keys ---
   snapshotIndex: (date: string) => `index:snapshots:${date}`,
-  latestScan: () => `scan:latest`,
   launcherPost: () => `launcher:post`,
 
   // --- Config keys ---
@@ -254,12 +250,19 @@ export const redisKey = {
   job: (jobId: string) => `jobs:definition:${jobId}`,
   jobsHistory: () => `jobs:history`,
 
-  // --- Trend keys ---
-  trendsStatic: () => `trends:static`,
-  trendsTs: (metric: string) => `trends:ts:${metric.replace(/[_]/g, '')}`,
-  trendsBestTimesScan: (scanId: number) => `trends:besttimes:scan:${scanId}`,
-  trendsMaterialized: (ts: number) => `trends:materialized:${ts}`,
-  trendsFlair: (scanId: number) => `trends:flair:scan:${scanId}`,
+  // --- Trend keys (Standardized temporal ZSETs and non-temporal meta HASH) ---
+  trendsMeta: () => `trends:meta`,
+  trendsStatic: () => `trends:meta`,
+  trendsTs: (metric: string) => `trends:ts:${metric.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
+  trendsTsSubscribers: () => `trends:ts:subscribers`,
+  trendsTsEngagement: () => `trends:ts:engagement`,
+  trendsTsVelocity: () => `trends:ts:velocity`,
+  trendsTsFlair: () => `trends:ts:flair`,
+  trendsTsContentmix: () => `trends:ts:contentmix`,
+  trendsTsHeatmap: () => `trends:ts:heatmap`,
+  trendsTsBesttimes: () => `trends:ts:besttimes`,
+  trendsTsWordcloud: () => `trends:ts:wordcloud`,
+  trendsTsMaterializations: () => `trends:ts:materializations`,
   retiredPostsRegistry: () => `trends:retired`,
 
   // --- Scan list sub-keys (individual typed ZSETs) ---
@@ -271,9 +274,7 @@ export const redisKey = {
   scanListHot: (scanId: number) => `scan:${scanId}:list:h`,
   scanListControversial: (scanId: number) => `scan:${scanId}:list:c`,
   scanListByCategory: (scanId: number, category: string) => `scan:${scanId}:list:${category}`,
-  // Legacy run-level keys
-  runAnalysisPool: (scanId: number) => `run:${scanId}:analysis_pool`,
-  runLists: (scanId: number) => `run:${scanId}:lists`,
+
 
   // --- Post static / metrics shards ---
   postStatic: (postId: string) => `post:${postId}:static`,
@@ -331,6 +332,13 @@ export const redisKey = {
   userSettingsLegacy: (user: string) => `user:${user}:settings`,
 
   // --- Legacy Key Compatibility Resolvers ---
+  /** @deprecated In v2, latest scan is resolved from snapshots:timeline index; retained only as transient fallback */
+  latestScan: () => `scan:latest`,
+  // Legacy run-level keys (v1 migration cleanups only)
+  /** @deprecated Legacy v1 run-level key; use scanPool in v2 */
+  runAnalysisPool: (scanId: number) => `run:${scanId}:analysis_pool`,
+  /** @deprecated Legacy v1 run-level key; use scanLists/scanList* in v2 */
+  runLists: (scanId: number) => `run:${scanId}:lists`,
   /** @deprecated */
   trendsLastMaterialized: (sub: string) => `trends:${sub}:last_materialized`,
   /** @deprecated */
@@ -359,6 +367,18 @@ export const redisKey = {
   trendsBestPostingTimes: (sub: string) => `trends:${sub}:best_posting_times`,
   /** @deprecated */
   trendsGlobalAggregates: (sub: string) => `trends:${sub}:global_aggregates`,
+  /** @deprecated Replaced by temporal ZSET trends:ts:besttimes */
+  trendsBestTimesScan: (scanId: number) => `trends:besttimes:scan:${scanId}`,
+  /** @deprecated Replaced by temporal ZSET trends:ts:materializations and trends:meta */
+  trendsMaterialized: (ts: number) => `trends:materialized:${ts}`,
+  /** @deprecated Replaced by temporal ZSET trends:ts:flair */
+  trendsFlair: (scanId: number) => `trends:flair:scan:${scanId}`,
+  /** @deprecated Replaced by temporal ZSET trends:ts:heatmap */
+  trendsHeatmapScan: (scanId: number) => `trends:heatmap:scan:${scanId}`,
+  /** @deprecated Replaced by temporal ZSET trends:ts:contentmix */
+  trendsContentMixScan: (scanId: number) => `trends:contentmix:scan:${scanId}`,
+  /** @deprecated Anomalies are dynamically computed at query time from trends:ts:engagement */
+  trendsAnomaliesScan: (scanId: number) => `trends:anomalies:scan:${scanId}`,
   /** @deprecated */
   usernameCache: (sub: string) => `modscope:cache:username:${sub}`,
   /** @deprecated */

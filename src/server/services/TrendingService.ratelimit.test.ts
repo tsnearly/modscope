@@ -102,6 +102,24 @@ class RateLimitMockRedisClient {
     });
   }
 
+  async zRemRangeByScore(
+    key: string,
+    min: number | string,
+    max: number | string
+  ): Promise<number> {
+    return this.trackOperation('zRemRangeByScore', async () => {
+      const zset = this.data.get(key) || [];
+      const minVal = min === '-inf' ? -Infinity : Number(min);
+      const maxVal = max === '+inf' ? Infinity : Number(max);
+      const remaining = zset.filter(
+        (item: any) => item.score < minVal || item.score > maxVal
+      );
+      const removed = zset.length - remaining.length;
+      this.data.set(key, remaining);
+      return removed;
+    });
+  }
+
   async hGetAll(key: string): Promise<Record<string, string>> {
     return this.trackOperation('hGetAll', async () => {
       return this.data.get(key) || {};
@@ -241,13 +259,16 @@ function generateRateLimitTestData(
     const currentScanId = scanId - i;
     const timestamp = now - i * MS_PER_DAY;
 
-    mockRedis.setData(`run:${currentScanId}:meta`, {
+    mockRedis.setData(`scan:${currentScanId}:meta`, {
       scan_date: new Date(timestamp).toISOString(),
       subreddit: subreddit,
     });
 
-    mockRedis.setData(`run:${currentScanId}:stats`, {
+    mockRedis.setData(`scan:${currentScanId}:stats`, {
       subscribers: (100000 + i * 100).toString(),
+      total_posts: postCount.toString(),
+      total_comments: '0',
+      active_users: '0',
     });
 
     // Generate posts for this scan

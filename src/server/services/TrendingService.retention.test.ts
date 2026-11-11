@@ -230,8 +230,6 @@ function generateMultiScanTestData(
   // Set up global scan counter
   const maxScanId = 1000 + scanCount - 1;
   mockRedis.setData('global:scan_counter', maxScanId.toString());
-  mockRedis.setData(`latest_scan:${subreddit}`, maxScanId.toString());
-  mockRedis.setData(`run:latest_scan:${subreddit}`, maxScanId.toString());
 
   // Create timeline with multiple scans
   const timelineMembers = [];
@@ -247,14 +245,19 @@ function generateMultiScanTestData(
     const scanId = 1000 + i;
     const timestamp = now - i * MS_PER_DAY;
 
-    mockRedis.setData(`run:${scanId}:meta`, {
+    mockRedis.setData(`scan:${scanId}:meta`, {
       scan_date: new Date(timestamp).toISOString(),
       subreddit: subreddit,
     });
 
-    mockRedis.setData(`run:${scanId}:stats`, {
+    const statsObj = {
       subscribers: (100000 + i * 100).toString(),
-    });
+      total_posts: postCount.toString(),
+      total_comments: '0',
+      active_users: '0',
+    };
+
+    mockRedis.setData(`scan:${scanId}:stats`, statsObj);
 
     // Generate posts for this scan
     const posts = [];
@@ -430,12 +433,16 @@ describe('TrendingService Retention and Cleanup Tests', () => {
       const subreddit = 'recap_content_test';
 
       await trend.materializeTrends(subreddit, latestScanId);
-      const beforeRecap = mock.getData(`trends:${subreddit}:content_mix_recap`);
+      const beforeRecap =
+        (await mock.hGet('trends:meta', 'contentMixRecap')) ||
+        (await trend.getTrendData(subreddit))?.contentMixRecap;
       expect(beforeRecap).toBeTruthy();
 
       await norm.deleteSnapshot(1014, true); // Delete newest
 
-      const afterRecap = mock.getData(`trends:${subreddit}:content_mix_recap`);
+      const afterRecap =
+        (await mock.hGet('trends:meta', 'contentMixRecap')) ||
+        (await trend.getTrendData(subreddit))?.contentMixRecap;
       expect(afterRecap).toBeTruthy();
     });
 
@@ -445,16 +452,16 @@ describe('TrendingService Retention and Cleanup Tests', () => {
       const subreddit = 'recap_pattern_test';
 
       await trend.materializeTrends(subreddit, latestScanId);
-      const beforeRecap = mock.getData(
-        `trends:${subreddit}:posting_pattern_recap`
-      );
+      const beforeRecap =
+        (await mock.hGet('trends:meta', 'postingPatternRecap')) ||
+        (await trend.getTrendData(subreddit))?.postingPatternRecap;
       expect(beforeRecap).toBeTruthy();
 
       await norm.deleteSnapshot(1014, true);
 
-      const afterRecap = mock.getData(
-        `trends:${subreddit}:posting_pattern_recap`
-      );
+      const afterRecap =
+        (await mock.hGet('trends:meta', 'postingPatternRecap')) ||
+        (await trend.getTrendData(subreddit))?.postingPatternRecap;
       expect(afterRecap).toBeTruthy();
     });
   });

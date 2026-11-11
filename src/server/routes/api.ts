@@ -551,6 +551,7 @@ const KNOWN_WORKER_NAMES = new Set([
   'identity-reverify-cron',
   'identity-reverify-worker',
   'purge-expired-deletions',
+  'rebuild-trend-history',
 ]);
 
 // const SINGLETON_WORKER_NAMES = new Set([
@@ -1826,11 +1827,11 @@ api.get('/users/:username/avatar', async (c) => {
 api.get('/trends', async (c) => {
   try {
     const asOfParam = c.req.query('asOf');
-    const rawEmojis = (await redis.hGetAll(redisKey.customEmojis()).catch(() => ({}))) || {};
+    const rawEmojis = (await redis.hGetAll(redisKey.customEmojis()).catch(() => ({} as Record<string, string>))) || {};
     const customEmojis: Record<string, string> = {};
     for (const [k, v] of Object.entries(rawEmojis)) {
       const clean = k.replace(/^:|:$/g, '');
-      if (clean && v) customEmojis[clean] = v;
+      if (clean && v) customEmojis[clean] = String(v);
     }
 
     if (asOfParam) {
@@ -1879,7 +1880,7 @@ api.get('/trends', async (c) => {
       ...(trends || { subreddit: DATA_SUBREDDIT, stale: true }),
       customEmojis: {
         ...customEmojis,
-        ...(trends?.customEmojis || {}),
+        ...((trends as any)?.customEmojis || {}),
       },
     });
   } catch (error) {

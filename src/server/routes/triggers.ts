@@ -1392,11 +1392,11 @@ async function handleSidebarLiveRefresh(c: Context) {
           return c.json({ status: 'skipped', reason: 'not-due' });
         }
 
-        // 3. Read live stats from current snapshot in Redis
-        const snapshot = await retriever.getLatestSnapshot(targetSubreddit);
-        if (!snapshot || !snapshot.stats) {
+        // 3. Read live stats from current snapshot in Redis via direct O(1) reader
+        const stats = await retriever.getLatestStats(targetSubreddit);
+        if (!stats) {
           logger.warn(
-            `Sidebar live refresh skipped for r/${targetSubreddit}: no valid snapshot data available`,
+            `Sidebar live refresh skipped for r/${targetSubreddit}: no valid snapshot stats available`,
             'SidebarRefreshJob'
           );
           return c.json({ status: 'skipped', reason: 'no-snapshot-data' });
@@ -1408,7 +1408,7 @@ async function handleSidebarLiveRefresh(c: Context) {
           comments_per_day: commentsPerDay,
           avg_engagement: avgEngagement,
           combined_velocity: combinedVelocity,
-        } = snapshot.stats;
+        } = stats;
         if (
           subscribers == null ||
           postsPerDay == null ||
@@ -1458,3 +1458,137 @@ async function handleSidebarLiveRefresh(c: Context) {
 }
 
 triggers.post('/tasks/sidebar-live-refresh', handleSidebarLiveRefresh);
+
+/**
+ * Looping self-chaining worker that recalculates all trending datasets
+ * incrementally across retained historical snapshots.
+ */
+triggers.post('/tasks/rebuild-trend-history', async (c) => {
+  const subreddit = getSubreddit();
+  return historyService.wrapJobExecution(
+    {
+      jobType: 'rebuild-trend-history',
+      subreddit,
+      initialDetails: `Recalculating trend history for r/${subreddit}...`,
+    },
+    async (updateDetails) => {
+      const cursorKey = 'rebuild:trends:cursor';
+      const cursorStr = await storage.get(cursorKey);
+
+      // On first run without cursor, reset trending keys
+      if (!cursorStr) {
+        logger.info(
+          `rebuild-trend-history: Initial run for r/${subreddit}, resetting trend keys...`,
+          'TrendRebuild'
+        );
+        const keysToReset = [
+          redisKey.trendsMeta(),
+          redisKey.trendsStatic(),
+          redisKey.trendsTsSubscribers(),
+          redisKey.trendsTsEngagement(),
+          redisKey.trendsTsVelocity(),
+          redisKey.trendsTsFlair(),
+          redisKey.trendsTsContentmix(),
+          redisKey.trendsTsHeatmap(),
+          redisKey.trendsTsBesttimes(),
+          redisKey.trendsTsWordcloud(),
+          redisKey.trendsTsMaterializations(),
+        ];
+        await Promise.all(keysToReset.map((k) => storage.del(k).catch(() => {})));
+      }
+
+      const cursor = cursorStr ? parseInt(cursorStr, 10) : 0;
+      const minTimestamp = Date.now() - 90 * 86400000;
+
+      // Read scans from snapshots timeline
+      let rawTimeline = await storage.zRange(
+        redisKey.snapshotsTimeline(),
+        minTimestamp,
+        '+inf',
+        { by: 'score' }
+      );
+      if (!rawTimeline || rawTimeline.length === 0) {
+        rawTimeline = await storage
+          .zRange('global:snapshots:timeline', minTimestamp, '+inf', {
+            by: 'score',
+          })
+          .catch(() => []);
+      }
+
+      const allScans: Array<{ scanId: number; timestamp: number }> = [];
+      for (const entry of rawTimeline || []) {
+        const member =
+          typeof entry === 'object' && entry && 'member' in entry
+            ? (entry as any).member
+            : String(entry);
+        const score =
+          typeof entry === 'object' && entry && 'score' in entry
+            ? Number((entry as any).score)
+            : 0;
+        const scanId = parseInt(member, 10);
+        if (!isNaN(scanId)) {
+          allScans.push({ scanId, timestamp: score || Date.now() });
+        }
+      }
+
+      allScans.sort((a, b) => a.timestamp - b.timestamp);
+
+      // Filter scans strictly greater than cursor timestamp
+      const pendingScans = allScans.filter((s) => s.timestamp > cursor);
+
+      if (pendingScans.length === 0) {
+        await storage.del(cursorKey);
+        await storage.set('rebuild:trends:completed', new Date().toISOString());
+        logger.info(
+          `rebuild-trend-history: Full pass complete for r/${subreddit}`,
+          'TrendRebuild'
+        );
+        await updateDetails(`Trend history rebuild complete across ${allScans.length} historical scans`);
+        return c.json({ status: 'success', processed: 0, remaining: 0, completed: true });
+      }
+
+      // Process a batch of up to 3 scans
+      const BATCH_SIZE = 3;
+      const batch = pendingScans.slice(0, BATCH_SIZE);
+
+      for (const scan of batch) {
+        logger.info(
+          `rebuild-trend-history: Materializing scan #${scan.scanId} (timestamp: ${scan.timestamp})`,
+          'TrendRebuild'
+        );
+        await trendMaterializer.materializeTrends(subreddit, scan.scanId);
+      }
+
+      const lastProcessed = batch[batch.length - 1]!;
+      await storage.set(cursorKey, String(lastProcessed.timestamp));
+
+      const remaining = pendingScans.length - batch.length;
+      logger.info(
+        `rebuild-trend-history: Processed ${batch.length} scans, ${remaining} remaining`,
+        'TrendRebuild'
+      );
+
+      if (remaining > 0) {
+        await scheduler.runJob({
+          name: 'rebuild-trend-history',
+          runAt: new Date(Date.now() + 15000), // 15s delay between batches
+        });
+      } else {
+        await storage.del(cursorKey);
+        await storage.set('rebuild:trends:completed', new Date().toISOString());
+      }
+
+      await updateDetails(
+        `Processed ${batch.length} scans (last: #${lastProcessed.scanId}), ${remaining} remaining`
+      );
+
+      return c.json({
+        status: 'success',
+        processed: batch.length,
+        lastScanId: lastProcessed.scanId,
+        remaining,
+        completed: remaining === 0,
+      });
+    }
+  );
+});

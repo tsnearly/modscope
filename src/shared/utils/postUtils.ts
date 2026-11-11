@@ -418,6 +418,7 @@ export function consolidateFlairCounts(
 
 type MinimalRedis = {
   hSet: (key: string, fields: Record<string, string>) => Promise<unknown>;
+  hIncrBy?: (key: string, field: string, increment: number) => Promise<unknown>;
   zAdd: (
     key: string,
     entry: { score: number; member: string }
@@ -431,7 +432,7 @@ type FlairResolver = (flairText: string) => Promise<number | null>;
  *
  * Shards written:
  *   • `post:<id>:static`        — immutable fields (created_utc, is_self, url, postType, flairId, postInternalId …)
- *   • `post:<id>:metrics`       — identity pointer only (postInternalId); dynamic fields all moved to TS shards
+ *   • `post:<id>:metrics`       — identity pointer and cumulative running sums (score_sum, comments_sum, engagement_sum, samples)
  *   • `post:<id>:ts:score`      — upvote score time-series ZSET
  *   • `post:<id>:ts:comments`   — comment count time-series ZSET
  *   • `post:<id>:ts:engagement` — engagement score time-series ZSET
@@ -508,6 +509,15 @@ export function buildPostShardWrites(
       member: `${scanTimestamp}:${creatorRepliesVal}`,
     }),
   ];
+
+  if (typeof redis.hIncrBy === 'function') {
+    writes.push(
+      redis.hIncrBy(redisKey.postMetrics(postId), 'score_sum', scoreVal),
+      redis.hIncrBy(redisKey.postMetrics(postId), 'comments_sum', commentsVal),
+      redis.hIncrBy(redisKey.postMetrics(postId), 'engagement_sum', Math.round(engagementVal)),
+      redis.hIncrBy(redisKey.postMetrics(postId), 'samples', 1)
+    );
+  }
 
   // Flair: resolve id if needed, then write static + TS shard.
   // flairResolver is async so we chain it as a single Promise that settles

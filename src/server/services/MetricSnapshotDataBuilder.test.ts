@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { AnalyticsSnapshot } from '../../shared/types/api.types';
 import type { MetricPostConfig } from '../../shared/types/metricPost.types';
 import { MetricSnapshotDataBuilder } from './MetricSnapshotDataBuilder';
@@ -288,17 +288,33 @@ describe('MetricSnapshotDataBuilder', () => {
         if (overrides?.getTrendData) {
           return overrides.getTrendData(sub, asOf, windowDays);
         }
+        const ref = asOf ?? Date.now();
         return Promise.resolve({
           growthForecast: {
             growthRate: 0.05,
-            forecast: [{ timestamp: 1000, value: 5000 }],
-            trendline: [{ timestamp: 1000, value: 5000 }],
+            forecast: [{ timestamp: ref, value: 5000 }],
+            trendline: [{ timestamp: ref, value: 5000 }],
           },
           subscriberGrowth: [
-            { timestamp: 1000, value: 4900 },
-            { timestamp: 2000, value: 5000 },
+            { timestamp: ref - 12 * 3600000, value: 4900 },
+            { timestamp: ref, value: 5000 },
           ],
           globalBestPostingTimes: [{ day: 'Wednesday', hour: 14, score: 95 }],
+        });
+      },
+      generateGrowthForecast: (
+        sub: string,
+        windowDays: number,
+        asOf: number,
+        points: Array<{ timestamp: number; value: number }>
+      ) => {
+        if (overrides?.generateGrowthForecast) {
+          return overrides.generateGrowthForecast(sub, windowDays, asOf, points);
+        }
+        return Promise.resolve({
+          growthRate: 0.05,
+          forecast: [{ timestamp: asOf, value: 5000 }],
+          trendline: [{ timestamp: asOf, value: 5000 }],
         });
       },
     });
@@ -393,7 +409,7 @@ describe('MetricSnapshotDataBuilder', () => {
       expect(data.subscribers).toBe(12500);
     });
 
-    it('Item 3: Thrown exception in getTrendData for month window -> month hasData: false, other windows complete', async () => {
+    it('Item 3: Thrown exception in generateGrowthForecast for month window -> month hasData: false, other windows complete', async () => {
       const scanDateMs = Date.now();
       const snapshot = createBaseSnapshot();
       const config: MetricPostConfig = {
@@ -403,20 +419,22 @@ describe('MetricSnapshotDataBuilder', () => {
         ],
       };
 
-      const tsThrowMonth = mockTrendingService({
-        getTrendData: (_sub: string, _asOf?: number, windowDays?: number) => {
-          if (windowDays === 30) {
-            return Promise.reject(new Error('Month fetch error'));
-          }
-          return Promise.resolve({
+      const tsThrowMonth = {
+        getTrendData: () =>
+          Promise.resolve({
             subscriberGrowth: [
-              { timestamp: 1000, value: 4900 },
-              { timestamp: 2000, value: 5000 },
+              { timestamp: scanDateMs - 12 * 3600000, value: 4900 },
+              { timestamp: scanDateMs, value: 5000 },
             ],
             growthForecast: { growthRate: 0.05 },
-          });
+          }),
+        generateGrowthForecast: (_sub: string, windowDays: number) => {
+          if (windowDays === 30) {
+            return Promise.reject(new Error('Month forecast error'));
+          }
+          return Promise.resolve({ growthRate: 0.05 });
         },
-      });
+      };
 
       const builder = new MetricSnapshotDataBuilder(tsThrowMonth as any);
       const data = await builder.build(snapshot, config, scanDateMs);
@@ -427,6 +445,71 @@ describe('MetricSnapshotDataBuilder', () => {
       expect(data.growthBundle?.today?.hasData).toBe(true);
       expect(data.growthBundle?.week?.hasData).toBe(true);
       expect(data.growthBundle?.quarter?.hasData).toBe(true);
+    });
+
+    it('Redis Optimization: fetches 90d base dataset once and slices 1d, 7d, 30d, 90d in memory', async () => {
+      const scanDateMs = Date.now();
+      const snapshot = createBaseSnapshot();
+      const config: MetricPostConfig = {
+        ...createBaseConfig(),
+        sections: [
+          { sectionId: 'PROJECTED_GROWTH', enabled: true, displayOrder: 1 },
+        ],
+      };
+
+      const getTrendDataSpy = vi.fn().mockImplementation((_sub: string, _asOf?: number, _windowDays?: number) => {
+        const dayMs = 86400000;
+        // Generate daily points for 90 days
+        const points = Array.from({ length: 90 }, (_, i) => ({
+          timestamp: scanDateMs - (89 - i) * dayMs,
+          value: 10000 + i * 10,
+        }));
+        return Promise.resolve({
+          subscriberGrowth: points,
+          growthRate: 0.05,
+          growthForecast: {
+            growthRate: 0.05,
+            forecast: [],
+            trendline: [],
+            horizonDays: 7,
+            modelQuality: 0.9,
+          },
+        });
+      });
+
+      const generateGrowthForecastSpy = vi.fn().mockResolvedValue({
+        growthRate: 0.02,
+        forecast: [],
+        trendline: [],
+        horizonDays: 7,
+        modelQuality: 0.85,
+      });
+
+      const ts = {
+        getTrendData: getTrendDataSpy,
+        generateGrowthForecast: generateGrowthForecastSpy,
+      };
+
+      const builder = new MetricSnapshotDataBuilder(ts as any);
+      const data = await builder.build(snapshot, config, scanDateMs);
+
+      // Verify getTrendData was called only ONCE with 90 days
+      expect(getTrendDataSpy).toHaveBeenCalledTimes(1);
+      expect(getTrendDataSpy).toHaveBeenCalledWith('test_sub', scanDateMs, 90);
+
+      // Verify all 4 windows in growthBundle have data
+      expect(data.growthBundle).toBeDefined();
+      expect(data.growthBundle?.today?.hasData).toBe(true);
+      expect(data.growthBundle?.today?.windowDays).toBe(1);
+      expect(data.growthBundle?.week?.hasData).toBe(true);
+      expect(data.growthBundle?.week?.windowDays).toBe(7);
+      expect(data.growthBundle?.month?.hasData).toBe(true);
+      expect(data.growthBundle?.month?.windowDays).toBe(30);
+      expect(data.growthBundle?.quarter?.hasData).toBe(true);
+      expect(data.growthBundle?.quarter?.windowDays).toBe(90);
+
+      // Verify generateGrowthForecast was called for sliced sub-windows (today, week, month)
+      expect(generateGrowthForecastSpy).toHaveBeenCalled();
     });
 
     it('Item 11 & 12: No trend sections enabled -> non-trend sections output is identical, no growthBundle', async () => {

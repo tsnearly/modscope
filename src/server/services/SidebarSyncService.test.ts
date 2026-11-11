@@ -351,6 +351,56 @@ describe('SidebarSyncService', () => {
         })
       );
     });
+
+    it('refreshes sidebar widget using fast path getLatestStats without loading analysis pool', async () => {
+      await service.saveConfig('test_sub', {
+        enabled: true,
+        widgetTitle: 'Pulse',
+        showCommunityStats: true,
+        showVelocitySummary: true,
+        showTopContributors: false,
+        contributorItemCount: 3,
+        showTopInfluencer: false,
+        showPrimePostingTime: false,
+        showSubscriberMilestone: false,
+        refreshInterval: 'hourly',
+      });
+
+      await mockRedis.set(
+        'modscope:test_sub:sidebar:widgetId',
+        'widget_fast_path_456'
+      );
+
+      mockReddit.getCommunityWidgets.mockResolvedValueOnce({
+        textWidgets: [
+          {
+            id: 'widget_fast_path_456',
+            shortName: 'r/test_sub · Pulse',
+            text: 'r/test_sub · Pulse\n\n• Subscribers: 20,000 →\n• Posts / day: 8\n• Comments / day: 30\n• Avg engagement: 5\n\nCommunity trend: Holding steady →',
+          },
+        ],
+      });
+
+      // Directly simulate the fast-path LiveStatsSlice supplied by DataRetrievalService.getLatestStats
+      const fastPathSlice: LiveStatsSlice = {
+        subscribers: 22500,
+        postsPerDay: 12,
+        commentsPerDay: 45,
+        avgEngagement: 7.5,
+        combinedVelocity: 2.4,
+      };
+
+      const result = await service.updateLiveStats('test_sub', fastPathSlice);
+
+      expect(result.success).toBe(true);
+      expect(result.triggerSource).toBe('refresh');
+      expect(mockReddit.updateTextWidget).toHaveBeenCalledWith(
+        expect.objectContaining({
+          widgetId: 'widget_fast_path_456',
+          text: expect.stringContaining('• Subscribers: 22,500 ↑↑'),
+        })
+      );
+    });
   });
 
   describe('isRefreshDue', () => {

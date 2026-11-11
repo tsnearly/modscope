@@ -254,17 +254,20 @@ function generateBenchmarkData(
     const currentScanId = scanId - i;
     const timestamp = now - i * MS_PER_DAY;
 
-    mockRedis.setData(`run:${currentScanId}:meta`, {
+    mockRedis.setData(`scan:${currentScanId}:meta`, {
       scan_date: new Date(timestamp).toISOString(),
       subreddit: subreddit,
     });
 
-    mockRedis.setData(`run:${currentScanId}:stats`, {
+    mockRedis.setData(`scan:${currentScanId}:stats`, {
       subscribers: (
         100000 +
         i * 100 +
         Math.floor(Math.random() * 200)
       ).toString(),
+      total_posts: postCount.toString(),
+      total_comments: '0',
+      active_users: '0',
     });
 
     // Generate realistic posts for this scan

@@ -98,6 +98,9 @@
       },
       "identity-reverify-worker": {
         "endpoint": "/internal/triggers/tasks/identity-reverify-worker"
+      },
+      "rebuild-trend-history": {
+        "endpoint": "/internal/triggers/tasks/rebuild-trend-history"
       }
     }
   },

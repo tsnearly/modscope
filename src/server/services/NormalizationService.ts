@@ -331,8 +331,8 @@ export class NormalizationService {
         ) {
           const batch = snapshot.analysisPool
             .slice(i, i + TREND_CHUNK_POOL_HYDRATE)
-            .map((post, idx) => ({
-              score: i + idx,
+            .map((post) => ({
+              score: Math.round(Number(post.engagement_score || 0)),
               member:
                 postUtcMap.get(post.id) ||
                 resolvePostUtcId(post as PostData & { utcId?: string }),
@@ -362,7 +362,20 @@ export class NormalizationService {
                 const pid =
                   postUtcMap.get(post?.id) ||
                   resolvePostUtcId(post as PostData & { utcId?: string });
-                return pid ? { score: idx, member: pid } : null;
+                if (!pid) return null;
+                let score = 0;
+                if (listName === 'top_posts' || listName === 'hot') {
+                  score = Number(post?.score ?? 0);
+                } else if (listName === 'most_discussed' || listName === 'controversial') {
+                  score = Number(post?.comments ?? 0);
+                } else if (listName === 'most_engaged') {
+                  score = Math.round(Number(post?.engagement_score ?? 0));
+                } else if (listName === 'rising') {
+                  score = Math.round(Number(post?.velocity ?? post?.score_velocity ?? 0));
+                } else {
+                  score = Number(post?.score ?? idx);
+                }
+                return { score, member: pid };
               })
               .filter((e): e is { score: number; member: string } => e !== null);
             if (zEntries.length > 0) {
@@ -441,17 +454,9 @@ export class NormalizationService {
   // logic here was correct from the start of this conversation.
 
   async deleteSnapshot(scanId: number, awaitCleanup = false): Promise<void> {
-    let meta = await this.redis
+    const meta = await this.redis
       .hGetAll(redisKey.scanMeta(scanId))
       .catch(() => ({}) as Record<string, string>);
-    if (!meta || !meta.subreddit || !meta.scan_date) {
-      const fallbackMeta = await this.redis
-        .hGetAll(`run:${scanId}:meta`)
-        .catch(() => ({}) as Record<string, string>);
-      if (fallbackMeta && fallbackMeta.subreddit) {
-        meta = fallbackMeta;
-      }
-    }
     const subreddit = meta?.subreddit;
     const scanDate = meta?.scan_date;
 

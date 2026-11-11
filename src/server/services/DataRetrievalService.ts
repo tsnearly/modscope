@@ -77,12 +77,19 @@ export class DataRetrievalService {
    * Devvit's Redis zRange caps at 256 items; without pagination the
    * analysis_pool is silently truncated, breaking lists, users, and trends.
    */
-  private async zRangeAll(key: string): Promise<string[]> {
+  /**
+   * Fetches ALL members of a ZSET in paginated 200-item chunks.
+   * Devvit's Redis zRange caps at 256 items; without pagination the
+   * analysis_pool is silently truncated, breaking lists, users, and trends.
+   */
+  private async zRangeAll(key: string, reverse = false): Promise<string[]> {
     const CHUNK = 200;
     let offset = 0;
     const all: string[] = [];
     while (true) {
-      const batch = await this.redis.zRange(key, offset, offset + CHUNK - 1);
+      const options: any = { by: 'rank' };
+      if (reverse) options.reverse = true;
+      const batch = await this.redis.zRange(key, offset, offset + CHUNK - 1, options);
       logger.dumpRedis(key, batch);
       if (!batch || batch.length === 0) {
         break;
@@ -97,6 +104,26 @@ export class DataRetrievalService {
       offset += CHUNK;
     }
     return all;
+  }
+
+  /**
+   * Reads typed post list references in top-to-bottom order.
+   * Automatically detects legacy index-based lists (score: 0, 1, 2...) vs
+   * metric-weighted lists (score: upvotes, comments, engagement), ensuring
+   * backward compatibility with past snapshots.
+   */
+  private async fetchOrderedListRefs(listKey: string): Promise<string[]> {
+    const sample = await this.redis.zRange(listKey, 0, 1, { by: 'rank' }).catch(() => []);
+    if (!sample || sample.length === 0) return [];
+
+    const isLegacyIndex =
+      sample.length >= 2 &&
+      typeof sample[0] === 'object' &&
+      'score' in sample[0] &&
+      sample[0].score === 0 &&
+      (sample[1] as any)?.score === 1;
+
+    return this.zRangeAll(listKey, !isLegacyIndex);
   }
 
   /**
@@ -269,6 +296,87 @@ export class DataRetrievalService {
     }
 
     return result as PostLists;
+  }
+
+  /**
+   * Resolve the latest scan ID for a subreddit. Checks in-memory cache,
+   * then scan:latest pointer, then snapshots:timeline index.
+   */
+  async getLatestScanId(subreddit: string): Promise<number | null> {
+    const lowerSub = subreddit.toLowerCase();
+    const cachedPointer = DataRetrievalService.latestScanCache.get(lowerSub);
+    if (cachedPointer && cachedPointer.expiresAt > Date.now()) {
+      return cachedPointer.scanId;
+    }
+
+    // 1. Check scan:latest pointer
+    try {
+      const latestScanKey = redisKey.latestScan();
+      const scanIdStr = await this.redis.get(latestScanKey);
+      if (scanIdStr) {
+        const scanId = parseInt(scanIdStr, 10);
+        if (Number.isFinite(scanId) && scanId > 0) {
+          const meta = (await this.redis.hGetAll(redisKey.scanMeta(scanId)).catch(() => ({} as Record<string, string>))) || {};
+          if (!meta.subreddit || meta.subreddit.toLowerCase() === lowerSub) {
+            DataRetrievalService.latestScanCache.set(lowerSub, {
+              scanId,
+              expiresAt: Date.now() + computeJitteredTtl(15 * 1000, 0.2),
+            });
+            return scanId;
+          }
+        }
+      }
+    } catch {}
+
+    // 2. Check snapshots:timeline
+    try {
+      const timelineKey = redisKey.snapshotsTimeline();
+      const timelineMembers = await this.redis.zRange(timelineKey, 0, -1, { by: 'rank', reverse: true });
+      if (timelineMembers && timelineMembers.length > 0) {
+        for (const item of timelineMembers) {
+          const scanIdStr = typeof item === 'string' ? item : (item as any)?.member;
+          const scanId = parseInt(scanIdStr, 10);
+          if (scanId) {
+            const meta = (await this.redis.hGetAll(redisKey.scanMeta(scanId)).catch(() => ({} as Record<string, string>))) || {};
+            if (!meta.subreddit || meta.subreddit.toLowerCase() === lowerSub) {
+              DataRetrievalService.latestScanCache.set(lowerSub, {
+                scanId,
+                expiresAt: Date.now() + computeJitteredTtl(15 * 1000, 0.2),
+              });
+              await this.redis.set(redisKey.latestScan(), scanId.toString()).catch(() => {});
+              return scanId;
+            }
+          }
+        }
+      }
+    } catch {}
+
+    return null;
+  }
+
+  /**
+   * Direct O(1) stats reader for live refresh jobs (e.g. SidebarRefreshJob).
+   * Reads only scan:{scanId}:stats without hydrating post pools, shards, or flairs.
+   */
+  async getLatestStats(subreddit: string): Promise<SubredditStats | null> {
+    const scanId = await this.getLatestScanId(subreddit);
+    if (!scanId) return null;
+    const stats = (await this.redis.hGetAll(redisKey.scanStats(scanId)).catch(() => ({} as Record<string, string>))) || {};
+    if (!stats || Object.keys(stats).length === 0) return null;
+
+    return {
+      subscribers: parseInt(stats.subscribers || '0', 10),
+      active: parseInt(stats.active || '0', 10),
+      rules_count: parseInt(stats.rules_count || '0', 10),
+      posts_per_day: parseFloat(stats.posts_per_day || '0'),
+      comments_per_day: parseFloat(stats.comments_per_day || '0'),
+      avg_engagement: parseFloat(stats.avg_engagement || '0'),
+      avg_score: parseFloat(stats.avg_score || '0'),
+      score_velocity: parseFloat(stats.score_velocity || '0'),
+      comment_velocity: parseFloat(stats.comment_velocity || '0'),
+      combined_velocity: parseFloat(stats.combined_velocity || '0'),
+      created: stats.created || '',
+    };
   }
 
   async getLatestSnapshot(
@@ -628,7 +736,7 @@ export class DataRetrievalService {
                     await Promise.all(
                       Object.entries(listTypes).map(async ([listName, suffix]) => {
                         const listKey = `scan:${scanId}:list:${suffix}`;
-                        const refs = await this.zRangeAll(listKey);
+                        const refs = await this.fetchOrderedListRefs(listKey);
                         const posts: PostData[] = [];
                         for (const ref of refs) {
                           const fromPool = utcIdToPost.get(ref);
@@ -725,11 +833,10 @@ export class DataRetrievalService {
                     Object.entries(listTypes).map(
                       async ([listName, suffix]) => {
                         const listKey = `scan:${scanId}:list:${suffix}`;
-                        const refs = await this.zRangeAll(listKey);
+                        const refs = await this.fetchOrderedListRefs(listKey);
                         lists[listName] = refs
                           .map((postKey) => postMap.get(postKey))
-                          .filter((p): p is PostData => p !== undefined)
-                          .reverse();
+                          .filter((p): p is PostData => p !== undefined);
                       }
                     )
                   );

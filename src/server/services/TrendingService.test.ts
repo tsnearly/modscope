@@ -153,10 +153,18 @@ class MockRedisClient {
     });
   }
 
-  async hSet(key: string, field: string, value: string): Promise<number> {
+  async hSet(
+    key: string,
+    fieldOrHash: string | Record<string, string>,
+    value?: string
+  ): Promise<number> {
     return this.trackOperation('hSet', async () => {
       const hash = this.data.get(key) || {};
-      hash[field] = value;
+      if (typeof fieldOrHash === 'string' && value !== undefined) {
+        hash[fieldOrHash] = value;
+      } else if (typeof fieldOrHash === 'object' && fieldOrHash !== null) {
+        Object.assign(hash, fieldOrHash);
+      }
       this.data.set(key, hash);
       return 1;
     });
@@ -284,13 +292,30 @@ function generateTestData(
     const currentScanId = scanId - i;
     const timestamp = now - i * MS_PER_DAY;
 
-    mockRedis.setData(`run:${currentScanId}:meta`, {
+    mockRedis.setData(`scan:${currentScanId}:meta`, {
       scan_date: new Date(timestamp).toISOString(),
       subreddit: subreddit,
     });
 
-    mockRedis.setData(`run:${currentScanId}:stats`, {
+    mockRedis.setData(`scan:${currentScanId}:stats`, {
       subscribers: (100000 + i * 100).toString(),
+      posts_per_day: '10',
+      comments_per_day: '50',
+      avg_engagement: '5',
+      avg_score: '20',
+      score_velocity: '1.2',
+      comment_velocity: '2.5',
+      combined_velocity: '3.7',
+    });
+    mockRedis.setData(`scan:${currentScanId}:stats`, {
+      subscribers: (100000 + i * 100).toString(),
+      posts_per_day: '10',
+      comments_per_day: '50',
+      avg_engagement: '5',
+      avg_score: '20',
+      score_velocity: '1.2',
+      comment_velocity: '2.5',
+      combined_velocity: '3.7',
     });
 
     // Generate posts for this scan
@@ -542,12 +567,12 @@ describe('TrendingService Performance Tests', () => {
         const dayTimestamp = now - day * MS_PER_DAY;
         const dayScanId = testScanId + day;
 
-        stressTestRedis.setData(`run:${dayScanId}:meta`, {
+        stressTestRedis.setData(`scan:${dayScanId}:meta`, {
           scan_date: new Date(dayTimestamp).toISOString(),
           subreddit: testSubreddit,
         });
 
-        stressTestRedis.setData(`run:${dayScanId}:stats`, {
+        stressTestRedis.setData(`scan:${dayScanId}:stats`, {
           subscribers: (100000 + day * 50).toString(),
         });
       }
@@ -1496,7 +1521,7 @@ describe('TrendingService Performance Tests', () => {
       ];
 
       // Scan 1000 data
-      mockRedis.setData('run:1000:stats', {
+      mockRedis.setData('scan:1000:stats', {
         posts_per_day: '2',
         comments_per_day: '6',
         avg_engagement: '15',
@@ -1528,7 +1553,7 @@ describe('TrendingService Performance Tests', () => {
       );
 
       // Scan 999 data (different values to ensure aggregation works)
-      mockRedis.setData('run:999:stats', {
+      mockRedis.setData('scan:999:stats', {
         posts_per_day: '1',
         comments_per_day: '6',
         avg_engagement: '15',
@@ -1560,10 +1585,10 @@ describe('TrendingService Performance Tests', () => {
         30
       );
 
-      // Verify that the global_aggregates key is stored and correct
-      const savedAggregatesStr = await mockRedis.get(
-        'trends:testsub:global_aggregates'
-      );
+      // Verify that globalAggregates is stored in trends:meta
+      const savedAggregatesStr =
+        (await mockRedis.hGet('trends:meta', 'globalAggregates')) ||
+        (await mockRedis.get('trends:testsub:global_aggregates'));
       expect(savedAggregatesStr).toBeTruthy();
 
       const savedAggregates = JSON.parse(savedAggregatesStr!);
@@ -1588,9 +1613,9 @@ describe('TrendingService Performance Tests', () => {
 
     it('should handle zero scans safely', async () => {
       await (service as any).materializeGlobalAggregates('testsub', [], 30);
-      const savedAggregatesStr = await mockRedis.get(
-        'trends:testsub:global_aggregates'
-      );
+      const savedAggregatesStr =
+        (await mockRedis.hGet('trends:meta', 'globalAggregates')) ||
+        (await mockRedis.get('trends:testsub:global_aggregates'));
       expect(savedAggregatesStr).toBeNull();
     });
   });

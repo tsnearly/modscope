@@ -292,18 +292,23 @@ function generateRealisticTestData(
     const currentScanId = scanId - i;
     const timestamp = now - i * MS_PER_DAY;
 
-    mockRedis.setData(`run:${currentScanId}:meta`, {
+    mockRedis.setData(`scan:${currentScanId}:meta`, {
       scan_date: new Date(timestamp).toISOString(),
       subreddit: subreddit,
     });
 
-    mockRedis.setData(`run:${currentScanId}:stats`, {
+    const statsObj = {
       subscribers: (
         100000 +
         i * 50 +
         Math.floor(Math.random() * 100)
       ).toString(),
-    });
+      total_posts: postCount.toString(),
+      total_comments: '0',
+      active_users: '0',
+    };
+
+    mockRedis.setData(`scan:${currentScanId}:stats`, statsObj);
 
     // Generate posts for this scan
     const posts = [];
@@ -637,12 +642,12 @@ describe('TrendingService Integration Performance Tests', () => {
         const timestamp = now - i * MS_PER_DAY;
         const historicalScanId = testScanId - i;
 
-        longRetentionRedis.setData(`run:${historicalScanId}:meta`, {
+        longRetentionRedis.setData(`scan:${historicalScanId}:meta`, {
           scan_date: new Date(timestamp).toISOString(),
           subreddit: testSubreddit,
         });
 
-        longRetentionRedis.setData(`run:${historicalScanId}:stats`, {
+        longRetentionRedis.setData(`scan:${historicalScanId}:stats`, {
           subscribers: (100000 + i * 25).toString(),
         });
       }
