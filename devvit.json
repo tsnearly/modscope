@@ -4,8 +4,9 @@
   "permissions": {
     "reddit": true,
     "redis": true,
+    "realtime": true,
     "http": {
-      "enable": true,
+      "enable": false,
       "domains": ["raw.githubusercontent.com"]
     }
   },
@@ -13,12 +14,15 @@
     "dir": "dist/client",
     "entrypoints": {
       "default": {
-        "inline": true,
         "entry": "dashboard-inline.html"
       },
       "expanded": {
         "entry": "dashboard-expanded.html",
         "height": "tall"
+      },
+      "metric": {
+        "entry": "metric-widget.html",
+        "height": "short"
       }
     }
   },
@@ -51,7 +55,10 @@
   },
   "triggers": {
     "onAppInstall": "/internal/triggers/on-app-install",
-    "onAppUpgrade": "/internal/triggers/on-app-upgrade"
+    "onAppUpgrade": "/internal/triggers/on-app-upgrade",
+    "onPostDelete": "/internal/triggers/on-post-delete",
+    "onCommentDelete": "/internal/triggers/on-comment-delete",
+    "onPostUpdate": "/internal/triggers/on-post-update"
   },
   "scheduler": {
     "tasks": {
@@ -64,9 +71,33 @@
       "report-worker": {
         "endpoint": "/internal/triggers/tasks/report-worker"
       },
+      "metric-worker": {
+        "endpoint": "/internal/triggers/tasks/metric-worker"
+      },
+      "metric-snapshot-cleanup": {
+        "endpoint": "/internal/triggers/tasks/metric-snapshot-cleanup",
+        "cron": "30 8 * * *"
+      },
+      "purge-expired-deletions": {
+        "endpoint": "/internal/triggers/tasks/purge-expired-deletions",
+        "cron": "0 10 * * *"
+      },
+      "sidebar-live-refresh": {
+        "endpoint": "/internal/triggers/tasks/sidebar-live-refresh"
+      },
       "check-for-updates": {
         "endpoint": "/internal/triggers/tasks/check-for-updates",
-        "cron": "0 9 * * 1"
+        "cron": "0 15 * * 1"
+      },
+      "apply-pending-schema-patches": {
+        "endpoint": "/internal/triggers/tasks/apply-pending-schema-patches"
+      },
+      "identity-reverify-cron": {
+        "endpoint": "/internal/triggers/tasks/identity-reverify-cron",
+        "cron": "0 9 * * 0"
+      },
+      "identity-reverify-worker": {
+        "endpoint": "/internal/triggers/tasks/identity-reverify-worker"
       }
     }
   },

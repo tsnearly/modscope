@@ -1,76 +1,80 @@
 import { reddit, redis } from '@devvit/web/server';
-import { isModscopeDevSubreddit } from '../../shared/core/constants';
-
-export const DASHBOARD_POST_KEY = 'modscope:launcherPostId:v2';
+import { isModscopeDevSubreddit, redisKey } from '../../shared/core/constants';
+import { logger } from './logger';
 
 export const createPost = async (subredditName: string) => {
-  console.log(`[CREATE_POST] Starting post entry for ${subredditName}...`);
+  logger.info(`Starting post entry for ${subredditName}...`, 'Post');
 
   // 1. Check if there's an existing dashboard post
-  const existingPostId = await redis.get(DASHBOARD_POST_KEY);
+  const existingPostId = await redis.get(redisKey.launcherPost());
 
   if (existingPostId) {
     try {
-      console.log(`[CREATE_POST] Checking existing post: ${existingPostId}`);
+      logger.info(`Checking existing post: ${existingPostId}`, 'Post');
       const post = await reddit.getPostById(existingPostId as `t3_${string}`);
 
       // If we can fetch it, reuse it.
       // Note: getPostById will throw or return null if not found.
       if (post) {
-        console.log(
-          `[CREATE_POST] ✓ Reusing existing dashboard post: ${existingPostId}`
+        logger.info(
+          `Reusing existing dashboard post: ${existingPostId}`,
+          'Post'
         );
         return post;
       }
     } catch (error) {
-      console.log(
-        `[CREATE_POST] Existing post ${existingPostId} not found or inaccessible, creating new. Error: ${error}`
+      logger.warn(
+        `Existing post ${existingPostId} not found or inaccessible, creating new. Error: ${error}`,
+        'Post'
       );
     }
   }
 
   // 2. Create a new post if none exists or it was deleted
-  console.log('[CREATE_POST] Creating new custom post...');
+  logger.info('Creating new custom post...', 'Post');
   const newPost = await reddit.submitCustomPost({
-    title: 'ModScope — Mod Analytics Dashboard',
     subredditName,
+    title: 'ModScope — Mod Analytics Dashboard',
+    entry: 'default',
     styles: {
-      "backgroundColor": "#D7DADCAA",
-      "backgroundColorDark": "#1A1A1BCC",
-    }
+      backgroundColor: '#5a6b5aff',
+      backgroundColorDark: '#2d3a2dcc',
+    },
   });
 
   // 3. Apply mod-only attributes
   try {
     // 3a. Approve the post to pull it out of the mod queue
     await newPost.approve();
-    console.log(`[CREATE_POST] ✓ Approved post ${newPost.id}`);
+    logger.info(`✓ Approved post ${newPost.id}`, 'Post');
 
     // 3b. Distinguish as mod (green shield)
     await newPost.distinguish();
-    console.log(`[CREATE_POST] ✓ Distinguished post ${newPost.id}`);
+    logger.info(`✓ Distinguished post ${newPost.id}`, 'Post');
 
-    // 3c. Sticky to top
-    await newPost.sticky();
-    console.log(`[CREATE_POST] ✓ Stickied post ${newPost.id}`);
+    // 3c. Hide from feed
+    await newPost.hide();
+    logger.info(`✓ Hidden post ${newPost.id}`, 'Post');
 
     // 3d. Lock the post to prevent community interaction
     if (!isModscopeDevSubreddit(subredditName)) {
       await newPost.lock();
-      console.log(`[CREATE_POST] ✓ Locked post ${newPost.id}`);
+      logger.info(`✓ Locked post ${newPost.id}`, 'Post');
     } else {
-      console.log(
-        `[CREATE_POST] Skipping lock for dev subreddit r/${subredditName}`
+      logger.info(
+        `Skipping lock for dev subreddit r/${subredditName}`,
+        'Post'
       );
     }
   } catch (error) {
-    console.log(`[CREATE_POST] Failed to set mod attributes: ${error}`);
+    logger.warn(`Failed to set mod attributes: ${error}`, 'Post');
   }
 
   // 4. Store the new post ID
-  await redis.set(DASHBOARD_POST_KEY, newPost.id);
-  console.log(
-    `[CREATE_POST] ✓ Created new persistent dashboard post: ${newPost.id}`
+  await redis.set(redisKey.launcherPost(), newPost.id);
+  logger.info(
+    `✓ Created new persistent dashboard post: ${newPost.id}`,
+    'Post'
   );
 
   return newPost;

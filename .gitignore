@@ -156,3 +156,12 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Scratch & Local Test Artifacts
+downloaded-snapshots/
+test-results.json
+patch_overhaul_extra.cjs
+patch_ui_tabs.js
+test_redis.js
+secondaryExample.html
+trends-storage-after-import.txt

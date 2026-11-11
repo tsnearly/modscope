@@ -46,7 +46,9 @@ body {
   /* font-family:
     'Oxygen', 'Cantarell', 'Fira Sans', 'Segoe UI', 'Roboto', 'Ubuntu',
     'Droid Sans', 'Helvetica Neue', sans-serif; */
-  font-family: var(--default-font-family), ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  font-family:
+    var(--default-font-family), ui-sans-serif, system-ui, sans-serif,
+    'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background: var(--color-bg);
@@ -144,7 +146,7 @@ html[data-inline-constrained='true'] [data-report-view] .overflow-y-auto {
   background: var(--color-bg);
   border: 1px solid var(--nav-border);
   border-radius: var(--radius-md);
-  padding: 4px;
+  padding: 2px;
   overflow: hidden;
 }
 
@@ -153,16 +155,16 @@ html[data-inline-constrained='true'] [data-report-view] .overflow-y-auto {
   flex-direction: row;
   align-items: center;
   justify-content: flex-start;
-  gap: 6px;
-  padding: 8px 14px;
+  gap: 4px;
+  padding: 5px 8px;
   background: var(--btn-primary-bg);
   border: 2px solid transparent;
   cursor: pointer;
   transition: all 0.2s ease;
   color: var(--btn-primary-text);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
-  min-height: 36px;
+  min-height: 30px;
   border-radius: var(--radius-md);
   white-space: nowrap;
 }
@@ -187,7 +189,7 @@ html[data-inline-constrained='true'] [data-report-view] .overflow-y-auto {
 
 .nav-expand-indicator {
   opacity: 0.5;
-  margin-left: 2px;
+  margin-left: 1px;
   flex-shrink: 0;
   transition: opacity 0.2s ease;
 }
@@ -197,14 +199,14 @@ html[data-inline-constrained='true'] [data-report-view] .overflow-y-auto {
 }
 
 .nav-icon {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   object-fit: contain;
   flex-shrink: 0;
 }
 
 .nav-label {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: inherit;
 }
@@ -447,11 +449,26 @@ html[data-inline-constrained='true'] [data-report-view] .overflow-y-auto {
 }
 
 /* ── Responsive Design (Devvit webview breakpoints) ───────────────────── */
-/* Devvit renders webviews at ~375px on iPhone and ~600px on desktop,    */
-/* so we use lower breakpoints than standard web.                         */
+/* Devvit renders webviews at ~375px–430px on iPhone/Android and ≥600px on desktop. */
 
-/* Mobile: ≤ 400px — icon-only nav, single-column everything */
-@media (max-width: 400px) {
+/* Mobile: ≤ 640px — icon-only nav, single-column reflow, compact padding & typography */
+@media (max-width: 640px) {
+  body {
+    font-size: 12px;
+  }
+
+  h1 {
+    font-size: 15px !important;
+  }
+
+  h2 {
+    font-size: 13px !important;
+  }
+
+  h3 {
+    font-size: 12px !important;
+  }
+
   .nav-toolbar {
     padding: calc(4px + var(--safe-area-top)) 6px 4px;
     gap: 6px;
@@ -490,20 +507,41 @@ html[data-inline-constrained='true'] [data-report-view] .overflow-y-auto {
   }
 
   .view-content {
-    padding: var(--spacing-sm);
+    padding: 8px !important;
+    gap: 8px !important;
   }
 
   .view-header {
-    padding: var(--spacing-sm);
+    padding: 8px !important;
+    gap: 8px !important;
   }
 
-  /* Report grids */
+  /* Compact Cards on Mobile */
+  .card {
+    padding: 10px !important;
+    margin-bottom: 8px !important;
+    border-radius: var(--radius-md) !important;
+  }
+
+  .card-header {
+    font-size: 13px !important;
+    margin-bottom: 4px !important;
+  }
+
+  .card-body {
+    font-size: 11px !important;
+  }
+
+  /* Report grids: reflow to single column on mobile */
   .report-best-times-cloud {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
   }
 
   .report-users-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+    padding: 4px !important;
   }
 
   .report-tabs-bar {
@@ -512,62 +550,38 @@ html[data-inline-constrained='true'] [data-report-view] .overflow-y-auto {
 
   .report-tabs-content {
     min-height: 0;
-    overflow: visible;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
     padding-bottom: var(--safe-area-bottom);
   }
-}
 
-/* Tablet: 401px – 550px — compact nav with labels */
-@media (min-width: 401px) and (max-width: 550px) {
-  .nav-toolbar {
-    padding: 6px 10px;
-  }
-
-  .nav-button {
-    padding: 6px 10px;
-    gap: 4px;
-  }
-
-  .nav-label {
-    font-size: 11px;
-  }
-
-  .content-area {
-    padding: 0;
-    padding-bottom: max(20px, var(--safe-area-bottom));
-  }
-
-  .view-content {
-    padding: var(--spacing-md);
-  }
-
-  /* Report grids */
-  .report-best-times-cloud {
-    grid-template-columns: 1fr;
-  }
-
-  .report-users-grid {
-    grid-template-columns: 1fr 1fr;
+  /* Buttons on mobile */
+  .button-primary,
+  .button-secondary {
+    padding: 4px 10px !important;
+    font-size: 11px !important;
   }
 }
 
-/* Desktop: > 550px — restore original look */
-@media (min-width: 551px) {
+/* Desktop: > 640px */
+@media (min-width: 641px) {
   .nav-toolbar {
-    padding: 12px;
-    min-height: 55px;
-    max-height: 65px;
+    padding: 8px 12px;
+    min-height: 46px;
+    max-height: 56px;
   }
 
   .nav-group {
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    padding: 2px;
+    gap: 2px;
   }
 
   .nav-button {
-    padding: 8px 12px;
-    min-width: 120px;
-    min-height: 38px;
-    font-size: 13px;
+    padding: 6px 10px;
+    min-height: 32px;
+    font-size: 12px;
   }
 
   /* Report tabs go to bottom on desktop via reversed flex direction */
@@ -593,5 +607,11 @@ html[data-inline-constrained='true'] [data-report-view] .overflow-y-auto {
   }
 }
 
-
-
+/* Scrollable Navbar Utilities */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

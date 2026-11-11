@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { context, redis } from '@devvit/web/server';
-import { createPost, DASHBOARD_POST_KEY } from '../core/post';
+import { createPost } from '../core/post';
+import { redisKey } from '../../shared/core/constants';
 
 export const menu = new Hono();
 
@@ -24,10 +25,7 @@ menu.post('/open-dashboard', async (c) => {
 menu.post('/clear-cache', async (c) => {
   try {
     // Clear both v1 and v2 keys to be ultra-thorough
-    await Promise.all([
-      redis.del('modscope:launcherPostId'),
-      redis.del(DASHBOARD_POST_KEY),
-    ]);
+    await Promise.all([redis.del(redisKey.launcherPost())]);
     return c.json({
       showToast: {
         text: 'Cache cleared - next dashboard open will create/fetch fresh post',

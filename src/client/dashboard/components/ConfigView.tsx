@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
-import { EntityTitle } from './ui/entity-title';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from './ui/button';
-import { Switch } from './ui/switch';
+import { EntityTitle } from './ui/entity-title';
 import { Input } from './ui/input';
-import { Separator } from './ui/separator';
+import { RadioGroup, RadioItem } from './ui/radio';
+import { Section, SectionCard } from './ui/section';
 import {
   Select,
   SelectContent,
@@ -11,33 +11,42 @@ import {
   SelectTrigger,
   SelectValue,
 } from './ui/select';
-import { RadioGroup, RadioItem } from './ui/radio';
-import { Section, SectionCard } from './ui/section';
+import { Separator } from './ui/separator';
+import { Switch } from './ui/switch';
+import { Textarea } from './ui/textarea';
+import { Text } from './ui/text';
 
+import {
+  AnalysisPreset,
+  CalculationSettings,
+  DEFAULT_CALCULATION_SETTINGS,
+  DEFAULT_REPORT_SETTINGS,
+  DEFAULT_STORAGE_SETTINGS,
+  DEFAULT_USER_SETTINGS,
+  DEFAULT_DICTIONARY_SETTINGS,
+  PRESETS,
+  ReportSettings,
+  ScalingMethod,
+  StorageSettings,
+  THEMES,
+  UserSettings,
+  DictionarySettings,
+} from '../../../shared/types/settings.types';
+import type { ConfigTab } from './layout/AppHeaderNavbar';
 import { useTheme } from '../../hooks/useTheme';
 import { useSettings } from '../hooks/useSettings';
-import {
-  CalculationSettings,
-  UserSettings,
-  StorageSettings,
-  ReportSettings,
-  ReportingSchedule,
-  AnalysisPreset,
-  ScalingMethod,
-  DEFAULT_CALCULATION_SETTINGS,
-  DEFAULT_USER_SETTINGS,
-  DEFAULT_STORAGE_SETTINGS,
-  DEFAULT_REPORT_SETTINGS,
-  PRESETS,
-  THEMES,
-} from '../../../shared/types/settings';
-
 
 interface ConfigViewProps {
   initialConfig?: any;
+  activeTab?: ConfigTab;
+  isReadOnly?: boolean;
 }
 
-function ConfigView({ initialConfig }: ConfigViewProps) {
+function ConfigView({
+  initialConfig,
+  activeTab = 'profile',
+  isReadOnly = false,
+}: ConfigViewProps) {
   const { changeTheme } = useTheme();
   const { settings, loading: settingsLoading, updateSettings } = useSettings();
   const [localSettings, setLocalSettings] = useState<{
@@ -45,6 +54,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
     report: ReportSettings;
     display: UserSettings;
     storage: StorageSettings;
+    dictionary: DictionarySettings;
   }>(() => {
     if (initialConfig?.settings) {
       return {
@@ -61,6 +71,9 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
         storage: initialConfig.storage
           ? { ...DEFAULT_STORAGE_SETTINGS, ...initialConfig.storage }
           : DEFAULT_STORAGE_SETTINGS,
+        dictionary: initialConfig.dictionary
+          ? { ...DEFAULT_DICTIONARY_SETTINGS, ...initialConfig.dictionary }
+          : DEFAULT_DICTIONARY_SETTINGS,
       };
     }
     return {
@@ -68,6 +81,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
       report: DEFAULT_REPORT_SETTINGS,
       display: DEFAULT_USER_SETTINGS,
       storage: DEFAULT_STORAGE_SETTINGS,
+      dictionary: DEFAULT_DICTIONARY_SETTINGS,
     };
   });
   const [loading, setLoading] = useState(false);
@@ -76,13 +90,37 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
     retentionDays?: string;
     analysisPoolSize?: string;
   }>({});
+  const [stopwordsInput, setStopwordsInput] = useState<string | null>(null);
+  const [additionalWordsInput, setAdditionalWordsInput] = useState<string | null>(null);
+
+  const rawStopwords =
+    stopwordsInput ?? (localSettings.dictionary?.stopwords?.join(', ') || '');
+  const rawAdditionalWords =
+    additionalWordsInput ??
+    (localSettings.dictionary?.additionalWords?.join(', ') || '');
+
   const hasAppliedServerSettings = useRef(false);
+  const savedThemeRef = useRef<any>(
+    initialConfig?.display?.theme ||
+      DEFAULT_USER_SETTINGS.theme ||
+      'modscopeflow'
+  );
+
+  useEffect(() => {
+    return () => {
+      // Revert previewed theme to saved theme if unmounting without saving
+      changeTheme(savedThemeRef.current, { persist: false });
+    };
+  }, []);
 
   useEffect(() => {
     // Only apply server-fetched settings once the fetch completes (loading=false),
     // and never again within the same mount (prevents overwriting user edits after save).
     if (!settingsLoading && settings && !hasAppliedServerSettings.current) {
       hasAppliedServerSettings.current = true;
+      if (settings.display?.theme) {
+        savedThemeRef.current = settings.display.theme;
+      }
       setLocalSettings((_prev) => ({
         settings: {
           ...DEFAULT_CALCULATION_SETTINGS,
@@ -99,6 +137,10 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
         storage: {
           ...DEFAULT_STORAGE_SETTINGS,
           ...(settings.storage || {}),
+        },
+        dictionary: {
+          ...DEFAULT_DICTIONARY_SETTINGS,
+          ...(settings.dictionary || {}),
         },
       }));
     }
@@ -143,83 +185,6 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
       };
     });
     setIsDirty(true);
-  };
-
-  const generateScheduleName = (schedule: ReportingSchedule): string => {
-    const ampm = schedule.hour >= 12 ? 'PM' : 'AM';
-    const h12 = schedule.hour % 12 || 12;
-    const timeStr = `${String(h12).padStart(2, '0')}:${String(schedule.minute).padStart(2, '0')} ${ampm}`;
-
-    if (schedule.scheduleType === 'daily') {
-      return `Runs daily at ${timeStr}`;
-    }
-    if (schedule.scheduleType === 'weekly') {
-      const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-      let selectedDays: number[] = [];
-      if (Array.isArray(schedule.dayOfWeek)) {
-        selectedDays = [...schedule.dayOfWeek].sort((a,b)=>a-b);
-      } else if (typeof schedule.dayOfWeek === 'number') {
-        selectedDays = [schedule.dayOfWeek];
-      } else {
-        selectedDays = [1];
-      }
-      const dayList = selectedDays.map(d => days[d]).join(', ');
-      return `Runs on ${dayList} at ${timeStr}`;
-    }
-    if (schedule.scheduleType === 'monthly') {
-      return `Runs on day ${schedule.dayOfMonth || 1} of the month at ${timeStr}`;
-    }
-    return 'New Report Schedule';
-  };
-
-  const handleAddSchedule = () => {
-    const newSchedule: ReportingSchedule = {
-      id: Math.random().toString(36).substring(2, 9),
-      name: '',
-      scheduleType: 'weekly',
-      recipients: '',
-      enabled: true,
-      hour: 9,
-      minute: 0,
-      dayOfWeek: [1],
-    };
-    newSchedule.name = generateScheduleName(newSchedule);
-    handleReportChange('reportingSchedules', [
-      ...(localSettings?.report?.reportingSchedules || []),
-      newSchedule,
-    ]);
-  };
-
-  const handleUpdateSchedule = (
-    id: string,
-    updates: Partial<ReportingSchedule>
-  ) => {
-    const nextSchedules = (
-      localSettings?.report?.reportingSchedules || []
-    ).map((s) => {
-      if (s.id === id) {
-        const next = { ...s, ...updates };
-        if (
-          updates.scheduleType !== undefined ||
-          updates.hour !== undefined ||
-          updates.minute !== undefined ||
-          updates.dayOfWeek !== undefined ||
-          updates.dayOfMonth !== undefined
-        ) {
-          next.name = generateScheduleName(next);
-        }
-        return next;
-      }
-      return s;
-    });
-    handleReportChange('reportingSchedules', nextSchedules);
-  };
-
-  const handleRemoveSchedule = (id: string) => {
-    const nextSchedules = (
-      localSettings?.report?.reportingSchedules || []
-    ).filter((s) => s.id !== id);
-    handleReportChange('reportingSchedules', nextSchedules);
   };
 
   const handleDisplayChange = <K extends keyof UserSettings>(
@@ -282,23 +247,30 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
   };
 
   const handleSave = async () => {
+    if (isReadOnly) return;
     setLoading(true);
     const success = await updateSettings(localSettings);
     setLoading(false);
     if (success) {
       setIsDirty(false);
+      if (localSettings.display?.theme) {
+        savedThemeRef.current = localSettings.display.theme;
+      }
     }
   };
 
   const handleReset = () => {
+    if (isReadOnly) return;
+    const defaultTheme = (DEFAULT_USER_SETTINGS.theme as any) ?? 'modscopeflow';
     setLocalSettings({
       settings: DEFAULT_CALCULATION_SETTINGS,
       report: DEFAULT_REPORT_SETTINGS,
       display: DEFAULT_USER_SETTINGS,
       storage: DEFAULT_STORAGE_SETTINGS,
+      dictionary: DEFAULT_DICTIONARY_SETTINGS,
     });
-    // Apply the default theme immediately — don't make user save and restart
-    changeTheme((DEFAULT_USER_SETTINGS.theme as any) ?? 'modscopeflow');
+    // Apply the default theme preview immediately — don't make user save and restart
+    changeTheme(defaultTheme, { persist: false });
     setIsDirty(true);
   };
 
@@ -310,25 +282,31 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
         icon="mono-set-up.png"
         iconColor="var(--color-text)"
         title="Configuration & Rulesets"
-        subtitle="Analysis settings and presets"
-        className="mb-6 p-4 bg-transparent border-b border-border"
+        subtitle={
+          isReadOnly
+            ? 'Interactive showcase mode — Explore settings and options (Saving is disabled)'
+            : 'Analysis settings and presets'
+        }
+        className="mb-2 sm:mb-6 p-2 sm:p-4 bg-transparent border-b border-border"
         actions={
-          <div className="flex gap-3">
+          <div className="flex gap-2 sm:gap-3 flex-wrap">
             <Button
               variant="outline"
               onClick={handleReset}
-              disabled={loading}
-              className="w-36"
+              disabled={isReadOnly || loading}
+              className="w-auto sm:w-36 text-xs sm:text-sm h-7 sm:h-9 px-2 sm:px-3"
               icon="lucide:rotate-ccw"
+              title={isReadOnly ? 'Resetting is disabled in showcase mode' : undefined}
             >
               Reset Defaults
             </Button>
             <Button
               onClick={handleSave}
-              disabled={!isDirty || loading}
+              disabled={isReadOnly || !isDirty || loading}
               loading={loading}
-              className="w-36"
+              className="w-auto sm:w-36 text-xs sm:text-sm h-7 sm:h-9 px-2 sm:px-3"
               icon={loading ? '' : 'lucide:save'}
+              title={isReadOnly ? 'Saving settings is disabled in showcase mode' : undefined}
             >
               {loading ? 'Saving...' : 'Save Changes'}
             </Button>
@@ -336,10 +314,10 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
         }
       />
 
-      <div className="view-content flex-1 overflow-y-auto px-6 pb-6 w-full">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full max-w-none">
-          {/* Column 1: Analysis Profile & Data Scope */}
-          <div className="space-y-6">
+      <div className="view-content flex-1 overflow-y-auto px-2 pb-2 sm:px-6 sm:pb-6 w-full">
+        <div className="max-w-4xl w-full space-y-4 sm:space-y-6">
+          {activeTab === 'profile' && (
+            <div className="space-y-6">
             <Section title="Analysis Profile" icon="lucide:sliders">
               <SectionCard className="mb-4">
                 <form>
@@ -832,7 +810,8 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                           </label>
                         </div>
                         <p className="text-xs text-muted-foreground mb-3 block">
-                          How far back to look for posts to include in leaderboard & recommendation analysis.
+                          How far back to look for posts to include in
+                          leaderboard & recommendation analysis.
                         </p>
                         <div className="flex items-center gap-3">
                           <input
@@ -869,9 +848,9 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                           Filters & Exclusions
                         </h3>
 
-                        <div className="flex items-center justify-between px-4 py-3 bg-gray-50 rounded-lg border border-gray-100">
+                        <div className="flex items-center justify-between px-4 py-3 bg-card rounded-lg border border-border/50 shadow-sm">
                           <div>
-                            <span className="text-sm font-medium text-gray-800 block">
+                            <span className="text-sm font-medium text-foreground block">
                               Ignore Official Accounts
                             </span>
                             <span className="text-[10px] text-muted-foreground">
@@ -891,9 +870,9 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                           />
                         </div>
 
-                        <div className="flex items-center justify-between px-4 py-3 bg-gray-50 rounded-lg border border-gray-100">
+                        <div className="flex items-center justify-between px-4 py-3 bg-card rounded-lg border border-border/50 shadow-sm">
                           <div>
-                            <span className="text-sm font-medium text-gray-800 block">
+                            <span className="text-sm font-medium text-foreground block">
                               Ignore Bots
                             </span>
                             <span className="text-[10px] text-muted-foreground">
@@ -910,7 +889,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                           />
                         </div>
 
-                        <div className="px-4 py-3 bg-gray-50 rounded-lg border border-gray-100">
+                        <div className="px-4 py-3 bg-card rounded-lg border border-border/50 shadow-sm">
                           <div className="flex justify-between items-center mb-2">
                             <label className="text-sm font-semibold text-foreground">
                               Retention (Days)
@@ -966,7 +945,7 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                                   }));
                                 }
                               }}
-                              className={`w-24 px-3 py-1.5 border rounded text-sm font-semibold ${validationErrors.retentionDays ? 'border-red-500' : 'border-gray-300'}`}
+                              className={`w-24 px-3 py-1.5 bg-background border rounded text-sm font-semibold focus:ring-1 focus:ring-primary ${validationErrors.retentionDays ? 'border-destructive' : 'border-border/60'}`}
                             />
                             <span className="text-sm font-semibold text-muted-foreground">
                               Days
@@ -978,59 +957,48 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                             </p>
                           )}
                         </div>
+
+                        <div className="px-4 py-3 bg-card rounded-lg border border-border/50 shadow-sm">
+                          <div className="flex justify-between items-center mb-2">
+                            <label className="text-sm font-semibold text-foreground">
+                              Trend Analysis Window
+                            </label>
+                          </div>
+                          <p className="text-xs text-muted-foreground mb-3 block">
+                            Lookback period for historical trend charts (Subscribers,
+                            Engagement, Content Mix, etc).
+                          </p>
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="number"
+                              min="7"
+                              max="365"
+                              step="1"
+                              value={localSettings?.report?.trendAnalysisDays ?? 90}
+                              onChange={(e) =>
+                                handleReportChange(
+                                  'trendAnalysisDays',
+                                  parseInt(e.target.value)
+                                )
+                              }
+                              className="w-20 px-3 py-1.5 bg-background border border-border/60 rounded text-sm font-semibold focus:ring-1 focus:ring-primary"
+                            />
+                            <span className="text-sm font-semibold text-muted-foreground">
+                              Days
+                            </span>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </form>
                 </fieldset>
               </SectionCard>
             </Section>
-          </div>
+            </div>
+          )}
 
-          {/* Column 2: Appearance & Report Visualizations */}
-          <div className="space-y-6">
-            <Section title="Appearance" icon="lucide:swatch-book">
-              <SectionCard>
-                <form>
-                  <h3 className="text-sm font-bold text-foreground mb-4 uppercase tracking-wider flex items-center gap-2">
-                    <span
-                      className="w-1 h-4 rounded-full"
-                      style={{ backgroundColor: 'var(--color-secondary)' }}
-                    ></span>
-                    Interface Theme
-                  </h3>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="text-sm font-semibold text-foreground block mb-1">
-                        Color Palette
-                      </label>
-                      <p className="text-xs text-muted-foreground mb-3">
-                        Select the visual color scheme for the application.
-                      </p>
-                      <Select
-                        value={localSettings?.display?.theme ?? 'modscopeflow'}
-                        onValueChange={(val) => {
-                          const newTheme = val as any;
-                          changeTheme(newTheme);
-                          handleDisplayChange('theme', newTheme);
-                        }}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select theme" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {THEMES.map((theme) => (
-                            <SelectItem key={theme.id} value={theme.id}>
-                              {theme.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                </form>
-              </SectionCard>
-            </Section>
-
+          {activeTab === 'visualization' && (
+            <div className="space-y-6">
             <Section
               title="Report Visualizations"
               icon="lucide:layout-dashboard"
@@ -1250,299 +1218,64 @@ function ConfigView({ initialConfig }: ConfigViewProps) {
                       )
                     }
                   />
-                  <Separator variant="subtle" />
-                  <div className="pt-2">
-                    <label className="text-sm font-semibold text-foreground block mb-1">
-                      Trend Analysis Window
-                    </label>
-                    <p className="text-xs text-muted-foreground mb-3">
-                      Lookback period for historical trend charts (Subscribers, Engagement, Content Mix, etc).
-                    </p>
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="number"
-                        min="7"
-                        max="365"
-                        step="1"
-                        value={localSettings?.report?.trendAnalysisDays ?? 90}
-                        onChange={(e) =>
-                          handleReportChange(
-                            'trendAnalysisDays',
-                            parseInt(e.target.value)
-                          )
-                        }
-                        className="w-20 px-3 py-1.5 border border-gray-300 rounded text-sm font-semibold"
+                  </form>
+              </SectionCard>
+            </Section>
+            </div>
+          )}
+
+          {activeTab === 'dictionary' && (
+            <div className="space-y-6">
+              <Section title="Stopwords & Dictionary" icon="lucide:book-open">
+                <SectionCard>
+                  <form>
+                    <div className="space-y-6">
+                      <Textarea
+                        label="Stopwords List"
+                        description="Base words to exclude from word frequency and entity extraction. Comma-separated."
+                        fontMono
+                        rows={6}
+                        value={rawStopwords}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setStopwordsInput(val);
+                          const newWords = val.split(',').map((w) => w.trim()).filter(Boolean);
+                          setLocalSettings((prev) => ({
+                            ...prev,
+                            dictionary: {
+                              ...(prev.dictionary || DEFAULT_DICTIONARY_SETTINGS),
+                              stopwords: newWords,
+                            },
+                          }));
+                          setIsDirty(true);
+                        }}
                       />
-                      <span className="text-sm font-semibold text-muted-foreground">
-                        Days
-                      </span>
+                      <Textarea
+                        label="Additional Words"
+                        description="Custom words to exclude on top of the base list (e.g. sub-specific slang, common filler). Comma-separated."
+                        fontMono
+                        rows={4}
+                        value={rawAdditionalWords}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setAdditionalWordsInput(val);
+                          const newWords = val.split(',').map((w) => w.trim()).filter(Boolean);
+                          setLocalSettings((prev) => ({
+                            ...prev,
+                            dictionary: {
+                              ...(prev.dictionary || DEFAULT_DICTIONARY_SETTINGS),
+                              additionalWords: newWords,
+                            },
+                          }));
+                          setIsDirty(true);
+                        }}
+                      />
                     </div>
-                  </div>
-                </form>
-              </SectionCard>
-            </Section>
-
-            <Section title="Automated Reporting" icon="mono-mail-by-timer">
-              <SectionCard>
-                <div className="space-y-6">
-                  <div className="flex justify-between items-center">
-                    <h3 className="text-sm font-bold text-foreground uppercase tracking-wider flex items-center gap-2">
-                      <span
-                        className="w-1 h-4 rounded-full"
-                        style={{ backgroundColor: 'var(--color-secondary)' }}
-                      ></span>
-                      Delivery Schedules
-                    </h3>
-                    <Button
-                      variant="outline"
-                      size="xs"
-                      onClick={handleAddSchedule}
-                      icon="lucide:plus"
-                    >
-                      Add Schedule
-                    </Button>
-                  </div>
-
-                  <p className="text-xs text-muted-foreground">
-                    Configure routine report generation and delivery patterns.
-                    Each schedule can have its own recipients and frequency.
-                  </p>
-
-                  <div className="space-y-4">
-                    {localSettings?.report?.reportingSchedules?.length === 0 ? (
-                      <div className="p-8 border-2 border-dashed border-border rounded-lg text-center">
-                        <p className="text-sm text-muted-foreground">
-                          No schedules configured.
-                        </p>
-                        <Button
-                          variant="link"
-                          onClick={handleAddSchedule}
-                          className="mt-2"
-                        >
-                          Create your first schedule
-                        </Button>
-                      </div>
-                    ) : (
-                      localSettings?.report?.reportingSchedules?.map(
-                        (schedule) => (
-                          <div
-                            key={schedule.id}
-                            className="p-4 bg-muted/20 rounded-lg border border-border/50 space-y-4"
-                          >
-                            <div className="flex justify-between items-center">
-                              <div className="flex-1 mr-4">
-                                <Input
-                                  size="xs"
-                                  variant="filled"
-                                  value={schedule.name}
-                                  readOnly
-                                  disabled
-                                  className="font-bold cursor-not-allowed opacity-75"
-                                />
-                              </div>
-                              <div className="flex items-center gap-3">
-                                <Switch
-                                  checked={schedule.enabled}
-                                  onCheckedChange={(c) =>
-                                    handleUpdateSchedule(schedule.id, {
-                                      enabled: !!c,
-                                    })
-                                  }
-                                />
-                                <Button
-                                  variant="ghost"
-                                  size="xs"
-                                  onClick={() =>
-                                    handleRemoveSchedule(schedule.id)
-                                  }
-                                  icon="lucide:trash"
-                                  className="text-destructive hover:bg-destructive/10"
-                                />
-                              </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                              <div>
-                                <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">
-                                  Frequency
-                                </label>
-                                <Select
-                                  value={schedule.scheduleType}
-                                  onValueChange={(val) =>
-                                    handleUpdateSchedule(schedule.id, {
-                                      scheduleType: val as any,
-                                    })
-                                  }
-                                >
-                                  <SelectTrigger className="w-full h-8 text-xs">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="daily">Daily</SelectItem>
-                                    <SelectItem value="weekly">
-                                      Weekly
-                                    </SelectItem>
-                                    <SelectItem value="monthly">
-                                      Monthly
-                                    </SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
-
-                              <div>
-                                <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">
-                                  Delivery Time
-                                </label>
-                                <div className="flex items-center gap-2">
-                                  <Select
-                                    value={String(schedule.hour)}
-                                    onValueChange={(val) =>
-                                      handleUpdateSchedule(schedule.id, {
-                                        hour: parseInt(val),
-                                      })
-                                    }
-                                  >
-                                    <SelectTrigger className="w-full h-8 text-xs">
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {Array.from({ length: 24 }).map(
-                                        (_, i) => (
-                                          <SelectItem
-                                            key={i}
-                                            value={String(i)}
-                                          >
-                                            {i % 12 || 12} {i >= 12 ? 'PM' : 'AM'}
-                                          </SelectItem>
-                                        )
-                                      )}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                              </div>
-                            </div>
-
-                            {schedule.scheduleType === 'weekly' && (
-                              <div>
-                                <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">
-                                  Days of Week
-                                </label>
-                                <div className="flex gap-1 overflow-x-auto pb-1">
-                                  {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(
-                                    (day, idx) => {
-                                      const isSelected = Array.isArray(schedule.dayOfWeek)
-                                        ? schedule.dayOfWeek.includes(idx)
-                                        : schedule.dayOfWeek === idx;
-
-                                      return (
-                                        <Button
-                                          key={`${day}-${idx}`}
-                                          variant={
-                                            schedule.enabled
-                                              ? isSelected
-                                                ? 'default'
-                                                : 'outline'
-                                              : 'ghost'
-                                          }
-                                          size="xs"
-                                          square
-                                          className={`w-8 h-8 font-bold${
-                                            !schedule.enabled && isSelected
-                                              ? ' ring-1 ring-border bg-muted/40'
-                                              : ''
-                                          }`}
-                                          onClick={() => {
-                                            let currentDays: number[] = [];
-                                            if (Array.isArray(schedule.dayOfWeek)) {
-                                              currentDays = [...schedule.dayOfWeek];
-                                            } else if (typeof schedule.dayOfWeek === 'number') {
-                                              currentDays = [schedule.dayOfWeek];
-                                            } else {
-                                              currentDays = [1];
-                                            }
-
-                                            if (currentDays.includes(idx)) {
-                                              currentDays = currentDays.filter((d) => d !== idx);
-                                            } else {
-                                              currentDays.push(idx);
-                                            }
-
-                                            if (currentDays.length === 0) {
-                                              currentDays = [idx];
-                                            }
-
-                                            handleUpdateSchedule(schedule.id, {
-                                              dayOfWeek: currentDays,
-                                            });
-                                          }}
-                                        >
-                                          {day}
-                                        </Button>
-                                      );
-                                    }
-                                  )}
-                                </div>
-                              </div>
-                            )}
-
-                            {schedule.scheduleType === 'monthly' && (
-                              <div>
-                                <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">
-                                  Day of Month
-                                </label>
-                                <input
-                                  type="number"
-                                  min="1"
-                                  max="31"
-                                  value={schedule.dayOfMonth || 1}
-                                  onChange={(e) =>
-                                    handleUpdateSchedule(schedule.id, {
-                                      dayOfMonth: parseInt(e.target.value),
-                                    })
-                                  }
-                                  className="w-full h-8 px-3 py-1.5 border border-gray-300 rounded text-xs font-semibold"
-                                />
-                              </div>
-                            )}
-
-                            <div>
-                              <label className="text-[10px] font-bold text-muted-foreground uppercase mb-1 block">
-                                Recipients
-                              </label>
-                              <Input
-                                placeholder="u/username, r/subreddit"
-                                value={schedule.recipients}
-                                onChange={(e) =>
-                                  handleUpdateSchedule(schedule.id, {
-                                    recipients: e.target.value,
-                                  })
-                                }
-                                size="xs"
-                              />
-                              {schedule.recipients &&
-                                (() => {
-                                  const parts = schedule.recipients.split(',').map((p) => p.trim()).filter(Boolean);
-                                  for (const part of parts) {
-                                    if (!part.match(/^(r\/|u\/)?[a-zA-Z0-9_-]+$/)) {
-                                      return (
-                                        <p className="text-[10px] text-red-500 mt-1">
-                                          Invalid format: "{part}". Use u/username or r/subreddit.
-                                        </p>
-                                      );
-                                    }
-                                  }
-                                  return null;
-                                })()}
-                            </div>
-                          </div>
-                        )
-                      )
-                    )}
-                  </div>
-                </div>
-              </SectionCard>
-            </Section>
-          </div>
+                  </form>
+                </SectionCard>
+              </Section>
+            </div>
+          )}
         </div>
       </div>
     </div>

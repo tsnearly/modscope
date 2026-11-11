@@ -117,6 +117,13 @@ class MockRedisClient {
     });
   }
 
+  async hGet(key: string, field: string): Promise<string | null> {
+    return this.trackOperation('hGet', async () => {
+      const hash = this.data.get(key) || {};
+      return hash[field] ?? null;
+    });
+  }
+
   async zAdd(
     key: string,
     scoreOrOptions: number | { score: number; member: string },

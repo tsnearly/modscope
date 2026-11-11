@@ -54,6 +54,19 @@ To tie the shredded data back into a specific historical "Report", these ZSETs m
 - `scan:{scanId}:list:t`: Pointers to Top posts (Score = total upvotes).
 - `scan:{scanId}:list:d`: Pointers to Most Discussed posts (Score = total comments).
 
+### Layer 5: In-Process L1 Cache Resilience & Stampede Mitigation
+
+Because ModScope executes within Devvit as a moderator tool without an edge CDN shield, the application cache serves as the primary barrier protecting Redis and upstream Reddit API quotas. To eliminate cache stampedes, ModScope enforces four resilience patterns:
+
+1. **Request Coalescing (Single-Flight In-Flight Deduplication)**:
+   - High-traffic queries (`getModeratorUsernames`, `getLatestSnapshot`, `getFlairTable`, and identity resolution) coalesce concurrent calls using `coalesceInFlight`. When multiple incoming requests encounter a cache miss, only one upstream fetch executes while concurrent callers subscribe to the identical in-flight promise.
+2. **Jittered TTLs (Non-Uniform Expiration)**:
+   - Fixed TTLs guarantee synchronized expirations that cause simultaneous reload stampedes. ModScope applies randomized jitter (default ±20% via `computeJitteredTtl`) to in-memory TTLs across moderator caches, snapshot pointers, flair tables, and identity maps, ensuring natural dispersion across time.
+3. **Short TTL Concurrency Protection**:
+   - Short freshness windows (e.g. 15-second latest scan pointers or 60-second moderator role caches) are shielded by single-flight locking, preventing transient traffic bursts from dogpiling upstream services.
+4. **Granular Evacuation**:
+   - Cache invalidations are strictly targeted to specific entities (e.g., individual `scanId` or subreddit keys in `DataRetrievalService.clearCache`) rather than global cache flushes, mitigating cold-start stampedes during high-traffic windows.
+
 ---
 
 ## 2. The Content DNA Algorithmic Engine
@@ -130,7 +143,7 @@ Theme preferences are saved to the user's specific state in Redis (`user:{userna
 - **Nocturne**: A true dark mode optimized for low-light environments to reduce eye strain during late-night queue clearing.
 - **Rose Meadow**: A sophisticated, deep crimson and rose-tinted palette for a premium aesthetic.
 - **Springtime**: A soft, high-vibrancy pastel theme.
-- **Upvoted**: A familiar feeling scheme for some reason…cooler, sharper. 
+- **Upvoted**: A familiar feeling scheme for some reason…cooler, sharper.
 
 ---
 

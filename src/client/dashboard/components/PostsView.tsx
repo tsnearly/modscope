@@ -1,4 +1,12 @@
-import type { AnalyticsSnapshot, PostData } from '../../../shared/types/api';
+import { navigateTo } from '@devvit/web/client';
+import type {
+  AnalyticsSnapshot,
+  PostData,
+} from '../../../shared/types/api.types';
+import {
+  getPostUrlFromId,
+  isExternalUrl,
+} from '../../../shared/utils/postHelpers';
 import {
   getDataGroupingIcon,
   getPostDetailIcon,
@@ -7,6 +15,7 @@ import {
 import { formatPostListDateTime } from '../utils/reportFormatting';
 import { Icon } from './ui/icon';
 import { Tooltip } from './ui/tooltip';
+import { FlairBadge } from './ui/FlairBadge';
 
 interface PostsViewProps {
   analytics: AnalyticsSnapshot;
@@ -33,7 +42,12 @@ export function PostsView({
   iconContext,
 }: PostsViewProps) {
   return (
-    <div style={{ padding: '12px' }}>
+    <div
+      className="p-1.5 sm:p-3"
+      style={{
+        paddingBottom: 'max(48px, calc(16px + var(--safe-area-bottom)))',
+      }}
+    >
       {[
         {
           key: 'top_posts',
@@ -148,23 +162,65 @@ export function PostsView({
                           paddingRight: '12px',
                         }}
                       >
-                        <a
-                          href={post.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{
-                            display: 'block',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                            fontSize: '0.875rem',
-                            fontWeight: 500,
-                            color: '#1e293b',
-                            textDecoration: 'none',
-                          }}
-                        >
-                          {post.title}
-                        </a>
+                        {(() => {
+                          // Prefer external post.url for links if it's an external link.
+                          const external = post.url && isExternalUrl(post.url);
+                          const built = getPostUrlFromId(post.id || post.url);
+                          const href = external ? post.url : built || post.url;
+
+                          // If no href (deleted post), render title without anchor
+                          if (!href) {
+                            return (
+                              <div
+                                style={{
+                                  display: 'block',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                  fontSize: '0.875rem',
+                                  fontWeight: 500,
+                                  color: '#1e293b',
+                                }}
+                              >
+                                {post.title}
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <a
+                              href={href}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                try {
+                                  const targetUrl = new URL(
+                                    href,
+                                    'https://reddit.com'
+                                  ).toString();
+                                  navigateTo(targetUrl);
+                                } catch (err) {
+                                  console.error(
+                                    'Failed to navigate to post:',
+                                    err
+                                  );
+                                }
+                              }}
+                              style={{
+                                display: 'block',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                fontSize: '0.875rem',
+                                fontWeight: 500,
+                                color: '#1e293b',
+                                textDecoration: 'none',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              {post.title}
+                            </a>
+                          );
+                        })()}
                         <div
                           style={{
                             fontSize: '10px',
@@ -275,24 +331,16 @@ export function PostsView({
                             </Tooltip>
                           )}
                           <span>
-                            • {post.author} •{' '}
+                            • {post.author || '[Deleted User]'} •{' '}
                             {formatPostListDateTime(post.created_utc)}
                           </span>
                         </div>
                       </div>
                       {post.flair && (
-                        <span
-                          style={{
-                            padding: '2px 6px',
-                            background: '#f1f5f9',
-                            fontSize: '9px',
-                            borderRadius: '3px',
-                            color: '#64748b',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {post.flair}
-                        </span>
+                        <FlairBadge
+                          text={post.flair}
+                          emojis={analytics?.meta?.customEmojis}
+                        />
                       )}
                     </div>
                   ))}

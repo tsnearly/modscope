@@ -38,16 +38,24 @@ class BenchmarkMockRedisClient {
 
   async zRange(
     key: string,
-    start: number,
-    stop: number,
-    options?: { REV?: boolean; BYSCORE?: boolean }
+    start: number | string,
+    stop: number | string,
+    options?: { REV?: boolean; BYSCORE?: boolean; by?: string }
   ): Promise<string[]> {
     return this.trackOperation('zRange', async () => {
       const zset = this.data.get(key) || [];
 
-      if (options?.BYSCORE) {
+      if (options?.BYSCORE || options?.by === 'score') {
+        const minScore =
+          typeof start === 'string' && start === '-inf'
+            ? -Infinity
+            : Number(start);
+        const maxScore =
+          typeof stop === 'string' && (stop === '+inf' || stop === 'inf')
+            ? Infinity
+            : Number(stop);
         return zset
-          .filter((item: any) => item.score >= start && item.score <= stop)
+          .filter((item: any) => item.score >= minScore && item.score <= maxScore)
           .sort((a: any, b: any) =>
             options?.REV ? b.score - a.score : a.score - b.score
           )
@@ -56,9 +64,12 @@ class BenchmarkMockRedisClient {
         const sorted = zset.sort((a: any, b: any) =>
           options?.REV ? b.score - a.score : a.score - b.score
         );
+        const numStart = Number(start);
+        const numStop = Number(stop);
         const actualStart =
-          start < 0 ? Math.max(0, sorted.length + start) : start;
-        const actualStop = stop < 0 ? sorted.length + stop + 1 : stop + 1;
+          numStart < 0 ? Math.max(0, sorted.length + numStart) : numStart;
+        const actualStop =
+          numStop < 0 ? sorted.length + numStop + 1 : numStop + 1;
         return sorted
           .slice(actualStart, actualStop)
           .map((item: any) => item.member);

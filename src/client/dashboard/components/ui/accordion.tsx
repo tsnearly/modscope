@@ -7,6 +7,8 @@ interface AccordionContextType {
   exclusive?: boolean;
   expandedItems: string[];
   toggleItem: (id: string) => void;
+  /** When true, item headers use bg-muted/50 like a CardHeader. Default false (transparent). */
+  cardStyle?: boolean;
 }
 
 const AccordionContext = createContext<AccordionContextType | undefined>(
@@ -20,6 +22,10 @@ export interface AccordionRootProps {
   transition?: boolean;
   className?: string;
   defaultExpanded?: string[];
+  expanded?: string[];
+  onExpandedChange?: (items: string[]) => void;
+  /** When true, item headers get bg-muted/50 styling to match CardHeader. */
+  cardStyle?: boolean;
 }
 
 export function AccordionRoot({
@@ -28,22 +34,40 @@ export function AccordionRoot({
   exclusive = false,
   className,
   defaultExpanded = [],
+  expanded,
+  onExpandedChange,
+  cardStyle = false,
 }: AccordionRootProps) {
-  const [expandedItems, setExpandedItems] = useState<string[]>(defaultExpanded);
+  const [internalExpanded, setInternalExpanded] =
+    useState<string[]>(defaultExpanded);
+  const isControlled = expanded !== undefined;
+  const currentExpanded = isControlled ? expanded : internalExpanded;
 
   const handleToggle = (id: string) => {
-    setExpandedItems((prev) => {
-      const isOpen = prev.includes(id);
-      if (exclusive) {
-        return isOpen ? [] : [id];
-      }
-      return isOpen ? prev.filter((item) => item !== id) : [...prev, id];
-    });
+    const isOpen = currentExpanded.includes(id);
+    let next: string[];
+    if (exclusive) {
+      next = isOpen ? [] : [id];
+    } else {
+      next = isOpen
+        ? currentExpanded.filter((item) => item !== id)
+        : [...currentExpanded, id];
+    }
+    if (!isControlled) {
+      setInternalExpanded(next);
+    }
+    onExpandedChange?.(next);
   };
 
   return (
     <AccordionContext.Provider
-      value={{ variant, exclusive, expandedItems, toggleItem: handleToggle }}
+      value={{
+        variant,
+        exclusive,
+        expandedItems: currentExpanded,
+        toggleItem: handleToggle,
+        cardStyle,
+      }}
     >
       <div className={cn('flex flex-col gap-2', className)}>{children}</div>
     </AccordionContext.Provider>
@@ -72,6 +96,7 @@ export function AccordionItem({
 
   const isOpen = context.expandedItems.includes(id);
   const isReverse = context.variant === 'reverse';
+  const cardStyle = context.cardStyle ?? false;
 
   return (
     <div
@@ -84,8 +109,11 @@ export function AccordionItem({
       <button
         data-accordion-trigger
         className={cn(
-          'w-full flex items-center justify-between px-6 py-4 text-sm font-bold text-[var(--color-text)] transition-all hover:bg-black/5',
-          isOpen && 'bg-black/[0.02]'
+          'w-full flex items-center justify-between p-4 text-sm font-bold text-foreground transition-all cursor-pointer',
+          cardStyle
+            ? 'bg-muted/50 hover:bg-muted/70'
+            : 'bg-transparent hover:bg-muted/20',
+          isOpen && 'border-b border-border'
         )}
         onClick={() => context.toggleItem(id)}
       >
@@ -96,9 +124,7 @@ export function AccordionItem({
               size={16}
               className={cn(
                 'flex-shrink-0 transition-transform duration-200',
-                isOpen
-                  ? 'rotate-180 text-[var(--color-primary)]'
-                  : 'text-muted-foreground'
+                isOpen ? 'rotate-180 text-primary' : 'text-muted-foreground'
               )}
             />
             <span className="flex-1 text-left">{heading}</span>
@@ -111,9 +137,7 @@ export function AccordionItem({
               size={16}
               className={cn(
                 'flex-shrink-0 transition-transform duration-200',
-                isOpen
-                  ? 'rotate-180 text-[var(--color-primary)]'
-                  : 'text-muted-foreground'
+                isOpen ? 'rotate-180 text-primary' : 'text-muted-foreground'
               )}
             />
           </div>
@@ -127,7 +151,7 @@ export function AccordionItem({
       >
         <div
           data-accordion-content
-          className="px-6 pb-6 pt-4 border-t border-[var(--color-border)] text-[var(--color-text)] leading-relaxed"
+          className="p-6 bg-card text-foreground leading-relaxed"
         >
           {children}
         </div>
@@ -136,7 +160,7 @@ export function AccordionItem({
   );
 }
 
-// Support legacy usage
+// Support legacy usage — transparent header (About page style)
 export function Accordion({
   title,
   children,
@@ -147,7 +171,11 @@ export function Accordion({
   defaultOpen?: boolean;
 }) {
   return (
-    <AccordionRoot defaultExpanded={defaultOpen ? ['legacy'] : []} exclusive>
+    <AccordionRoot
+      defaultExpanded={defaultOpen ? ['legacy'] : []}
+      exclusive
+      cardStyle={false}
+    >
       <AccordionItem id="legacy" heading={title}>
         {children}
       </AccordionItem>

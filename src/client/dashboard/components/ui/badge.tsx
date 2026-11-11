@@ -1,12 +1,7 @@
 import React from 'react';
 
 export type BadgeVariant =
-  | 'default'
-  | 'primary'
-  | 'secondary'
-  | 'success'
-  | 'warning'
-  | 'danger';
+  'default' | 'primary' | 'secondary' | 'success' | 'warning' | 'danger';
 export type BadgeSize = 'sm' | 'md' | 'lg';
 
 interface BadgeProps {

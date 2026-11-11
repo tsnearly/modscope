@@ -35,7 +35,7 @@ export function Switch({
   const hasField = label || description;
 
   const toggleGraphic = (
-    <div className="relative inline-flex shrink-0" data-flux-switch>
+    <div className="relative inline-flex shrink-0">
       <div
         data-checked={checked ? '' : undefined}
         className={[
@@ -88,7 +88,7 @@ export function Switch({
     );
   }
 
-  // With flux:field wrapper — label + optional description
+  // Field wrapper — label + optional description
   const labelEl = (
     <div className="flex flex-col gap-0.5 flex-1 min-w-0">
       {label && (
@@ -123,7 +123,6 @@ export function Switch({
   return (
     <label
       htmlFor={id}
-      data-flux-switch
       className={[
         'flex items-center gap-3 relative',
         disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',

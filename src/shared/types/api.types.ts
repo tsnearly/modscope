@@ -6,12 +6,30 @@ export type PostStatic = {
   created_utc: number;
   author: string;
   is_self: boolean;
+  author_id?: string;
+  postInternalId?: string;
+  postType?:
+    | 'self'
+    | 'image'
+    | 'video'
+    | 'gallery'
+    | 'link'
+    | 'app'
+    | 'poll'
+    | 'ama'
+    | string;
 };
 
 export type PostDynamic = {
   score: number;
   comments: number;
+  // Legacy inline text — present on posts written before the flair lookup
+  // table existed. New writes populate flairId instead and drop this field
+  // (mirrors how title/author are dropped once postInternalId is set).
   flair: string | null;
+  // Integer id into flair:{sub}:table. Present on posts written after the
+  // flair lookup table shipped.
+  flairId?: number | null;
   over_18: boolean;
   max_depth: number;
   creator_replies: number;
@@ -112,6 +130,9 @@ export interface TrendData {
     comments_per_day: number;
     avg_engagement: number;
     avg_score: number;
+    velocity_24h?: number;
+    subscribers?: number;
+    active_users?: number;
   };
 }
 
@@ -159,6 +180,7 @@ export type AnalyticsSnapshot = {
     procDate: string;
     officialAccount?: string;
     officialAccounts?: string[];
+    customEmojis?: Record<string, string>;
   };
   stats: SubredditStats;
   lists: PostLists;
@@ -171,6 +193,9 @@ export type InitResponse = {
   postId: string;
   count: number;
   username: string;
+  avatarUrl?: string | undefined;
+  isReadOnly?: boolean;
+  isSubredditMod?: boolean;
 };
 
 export type AnalyticsResponse = InitResponse & {

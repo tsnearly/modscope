@@ -1,18 +1,20 @@
 import { useMemo, useState } from 'react';
 import {
-    Area,
-    AreaChart,
-    CartesianGrid,
-    Tooltip as RechartsTooltip,
-    ResponsiveContainer,
-    XAxis,
-    YAxis,
+  Area,
+  AreaChart,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  ResponsiveContainer,
+  XAxis,
+  YAxis,
 } from 'recharts';
 import { getDataGroupingIcon } from '../utils/iconMappings';
 import { Chart } from './ui/chart';
 import { Icon } from './ui/icon';
 import { NonIdealState } from './ui/non-ideal-state';
 import { MS_PER_DAY } from '../../../shared/core/constants';
+import { getCanonicalFlairKey } from '../../../shared/utils/postUtils';
+import { renderFlairWithEmojis } from './ui/FlairBadge';
 
 type ContentMixPoint = {
   timestamp: number;
@@ -30,6 +32,7 @@ type ContentMixChartProps = {
   iconContext: 'screen' | 'printed';
   isPrintMode?: boolean;
   snapshotTimestamp?: number | undefined;
+  customEmojis?: Record<string, string> | null | undefined;
 };
 
 function formatShortDate(ts: number): string {
@@ -55,10 +58,12 @@ function ContentMixTooltip({
   active,
   payload,
   label,
+  customEmojis,
 }: {
   active?: boolean;
   payload?: any[];
   label?: string;
+  customEmojis?: Record<string, string> | null | undefined;
 }) {
   if (!active || !payload || payload.length === 0) {
     return null;
@@ -74,7 +79,9 @@ function ContentMixTooltip({
       </div>
       {payload.map((item: any, idx: number) => (
         <div key={idx} className="chart-tooltip-row">
-          <span className="chart-tooltip-label">{item.name}</span>
+          <span className="chart-tooltip-label">
+            {renderFlairWithEmojis(item.name, customEmojis, 12)}
+          </span>
           <span className="chart-tooltip-value">
             {Number(item.value).toLocaleString()}
           </span>
@@ -90,6 +97,7 @@ export function ContentMixChart({
   iconContext,
   isPrintMode = false,
   snapshotTimestamp,
+  customEmojis,
 }: ContentMixChartProps) {
   const [hiddenSeries, setHiddenSeries] = useState<Record<string, boolean>>({});
   const contentMixData = useMemo(
@@ -116,19 +124,51 @@ export function ContentMixChart({
       );
     };
 
-    const allFlairs = new Set<string>();
+    // Consolidate raw flair keys by canonical group to avoid splitting on rich-text/formatting differences
+    const canonicalGroups = new Map<
+      string,
+      { bestDisplay: string; variants: Map<string, number> }
+    >();
     contentMixData.forEach((point) => {
-      Object.keys(point.flairs).forEach((flair) => allFlairs.add(flair));
+      Object.entries(point.flairs || {}).forEach(([flair, count]) => {
+        const canonical = getCanonicalFlairKey(flair);
+        let grp = canonicalGroups.get(canonical);
+        if (!grp) {
+          grp = { bestDisplay: flair, variants: new Map() };
+          canonicalGroups.set(canonical, grp);
+        }
+        grp.variants.set(flair, (grp.variants.get(flair) || 0) + count);
+      });
     });
 
-    const flairKeys = Array.from(allFlairs).sort();
+    const rawToConsolidated = new Map<string, string>();
+    const consolidatedFlairs = new Set<string>();
+
+    for (const grp of canonicalGroups.values()) {
+      const sorted = Array.from(grp.variants.entries()).sort((a, b) => {
+        if (b[1] !== a[1]) return b[1] - a[1];
+        const aShort = /:[a-zA-Z0-9_-]+:/.test(a[0]);
+        const bShort = /:[a-zA-Z0-9_-]+:/.test(b[0]);
+        if (aShort && !bShort) return -1;
+        if (!aShort && bShort) return 1;
+        return b[0].length - a[0].length;
+      });
+      const best = sorted[0]?.[0] || 'No Flair';
+      consolidatedFlairs.add(best);
+      for (const [v] of sorted) {
+        rawToConsolidated.set(v, best);
+      }
+    }
+
+    const flairKeys = Array.from(consolidatedFlairs).sort();
 
     const byDay = new Map<number, Record<string, number>>();
     for (const point of contentMixData) {
       const dayKey = toUtcDayNoon(point.timestamp);
       const existing = byDay.get(dayKey) || {};
-      for (const flair of flairKeys) {
-        existing[flair] = (existing[flair] || 0) + (point.flairs[flair] || 0);
+      for (const [rawFlair, count] of Object.entries(point.flairs || {})) {
+        const targetFlair = rawToConsolidated.get(rawFlair) || rawFlair;
+        existing[targetFlair] = (existing[targetFlair] || 0) + count;
       }
       byDay.set(dayKey, existing);
     }
@@ -187,7 +227,7 @@ export function ContentMixChart({
   }
 
   const compactTooltipProps = {
-    content: <ContentMixTooltip />,
+    content: <ContentMixTooltip customEmojis={customEmojis} />,
     cursor: {
       stroke: 'var(--color-accent)',
       strokeWidth: 1,
@@ -235,7 +275,9 @@ export function ContentMixChart({
               border: `1px solid ${hiddenSeries[flair] ? 'var(--color-border)' : `hsl(${(idx * 47) % 360} 70% 45%)`}`,
             }}
           />
-          <span>{flair}</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+            {renderFlairWithEmojis(flair, customEmojis, 14)}
+          </span>
         </button>
       ))}
     </div>
@@ -245,13 +287,13 @@ export function ContentMixChart({
     <Chart
       title={`Content Mix Trend (${trendAnalysisDays}d)`}
       icon={<Icon src={getDataGroupingIcon('flair', iconContext)} size={16} />}
-      height={340}
+      height="auto"
     >
       <div style={{ position: 'relative', zIndex: 3, marginBottom: '8px' }}>
         {renderLegend()}
       </div>
-      <div style={{ width: '100%', height: 'calc(100% - 32px)' }}>
-        <ResponsiveContainer width="100%" height="100%">
+      <div style={{ width: '100%', height: '240px', minWidth: 0 }}>
+        <ResponsiveContainer width="100%" height="100%" minWidth={240}>
           <AreaChart
             data={chartData}
             margin={{ top: 10, right: 10, left: 5, bottom: 5 }}
@@ -293,8 +335,8 @@ export function ContentMixChart({
 
       {contentMixRecap && (
         <div className="mt-3 px-3 py-2 bg-muted/50 rounded-md">
-          <p className="text-sm text-muted-foreground text-center">
-            {contentMixRecap}
+          <p className="text-sm text-muted-foreground text-center break-words leading-relaxed">
+            {renderFlairWithEmojis(contentMixRecap, customEmojis, 14)}
           </p>
         </div>
       )}

@@ -38,15 +38,10 @@ export function TimePicker({
   const [open, setOpen] = React.useState(false);
   const [tempTime, setTempTime] = React.useState(value);
 
-  // Initial sync
-  React.useEffect(() => {
-    if (open) {
-      setTempTime(value);
-    }
-  }, [open, value]);
-
   // Parse time
-  const [parsedHours, parsedMinutes] = (tempTime || '00:00').split(':').map(Number);
+  const [parsedHours, parsedMinutes] = (tempTime || '00:00')
+    .split(':')
+    .map(Number);
   const hours = parsedHours ?? 0;
   const minutes = parsedMinutes ?? 0;
   const isPM = hours >= 12;
@@ -260,7 +255,15 @@ export function TimePicker({
       {label && <Label>{label}</Label>}
       {name && <input type="hidden" name={name} value={value} />}
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog
+        open={open}
+        onOpenChange={(nextOpen) => {
+          if (nextOpen) {
+            setTempTime(value);
+          }
+          setOpen(nextOpen);
+        }}
+      >
         <DialogTrigger asChild>
           <Button
             variant={'outline'}
@@ -273,7 +276,9 @@ export function TimePicker({
             <Clock className="mr-2 h-4 w-4 text-muted-foreground" />
             {value ? (
               (() => {
-                const [h_raw, m_raw] = (value || '00:00').split(':').map(Number);
+                const [h_raw, m_raw] = (value || '00:00')
+                  .split(':')
+                  .map(Number);
                 const h = h_raw ?? 0;
                 const m = m_raw ?? 0;
                 const suffix = h >= 12 ? 'PM' : 'AM';

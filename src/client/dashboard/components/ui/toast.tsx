@@ -1,4 +1,10 @@
-import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useState,
+  type ReactNode,
+} from 'react';
 import { createPortal } from 'react-dom';
 
 type ToastType = 'info' | 'success' | 'error';
@@ -50,7 +56,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     }, 400);
   }, []);
 
-  const typeStyles: Record<ToastType, { bg: string; border: string; icon: string }> = {
+  const typeStyles: Record<
+    ToastType,
+    { bg: string; border: string; icon: string }
+  > = {
     info: {
       bg: 'rgba(37, 99, 235, 0.08)',
       border: 'rgba(37, 99, 235, 0.25)',
@@ -110,7 +119,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                   backdropFilter: 'blur(16px)',
                   WebkitBackdropFilter: 'blur(16px)',
                   border: `1px solid ${style.border}`,
-                  boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)',
+                  boxShadow:
+                    '0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)',
                   fontSize: '13px',
                   fontWeight: 500,
                   color: 'var(--color-text, #1e293b)',
@@ -119,7 +129,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                     ? 'toast-exit 400ms ease-in forwards'
                     : 'toast-enter 350ms ease-out',
                   opacity: toast.exiting ? 0 : 1,
-                  transform: toast.exiting ? 'translateX(120%)' : 'translateX(0)',
+                  transform: toast.exiting
+                    ? 'translateX(120%)'
+                    : 'translateX(0)',
                   transition: 'opacity 350ms, transform 350ms',
                 }}
               >

@@ -1,7 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { TrendingService } from './TrendingService';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MS_PER_DAY } from '../../shared/core/constants';
-import { parseZSetMembers, parseHashEntries } from '../../shared/utils/redis-utils';
+import {
+  parseHashEntries,
+  parseZSetMembers,
+} from '../../shared/utils/redisUtils';
+import { TrendingService } from './TrendingService';
 // Mock Redis client for testing
 class MockRedisClient {
   private data: Map<string, any> = new Map();
@@ -48,17 +51,25 @@ class MockRedisClient {
 
   async zRange(
     key: string,
-    start: number,
-    stop: number,
-    options?: { REV?: boolean; BYSCORE?: boolean }
+    start: number | string,
+    stop: number | string,
+    options?: { REV?: boolean; BYSCORE?: boolean; by?: string }
   ): Promise<string[]> {
     return this.trackOperation('zRange', async () => {
       const zset = this.data.get(key) || [];
 
-      if (options?.BYSCORE) {
+      if (options?.BYSCORE || options?.by === 'score') {
         // When BYSCORE is used, start and stop are score values
+        const minScore =
+          typeof start === 'string' && start === '-inf'
+            ? -Infinity
+            : Number(start);
+        const maxScore =
+          typeof stop === 'string' && (stop === '+inf' || stop === 'inf')
+            ? Infinity
+            : Number(stop);
         return zset
-          .filter((item: any) => item.score >= start && item.score <= stop)
+          .filter((item: any) => item.score >= minScore && item.score <= maxScore)
           .sort((a: any, b: any) =>
             options?.REV ? b.score - a.score : a.score - b.score
           )
@@ -68,9 +79,12 @@ class MockRedisClient {
         const sorted = zset.sort((a: any, b: any) =>
           options?.REV ? b.score - a.score : a.score - b.score
         );
+        const numStart = Number(start);
+        const numStop = Number(stop);
         const actualStart =
-          start < 0 ? Math.max(0, sorted.length + start) : start;
-        const actualStop = stop < 0 ? sorted.length + stop + 1 : stop + 1;
+          numStart < 0 ? Math.max(0, sorted.length + numStart) : numStart;
+        const actualStop =
+          numStop < 0 ? sorted.length + numStop + 1 : numStop + 1;
         return sorted
           .slice(actualStart, actualStop)
           .map((item: any) => item.member);
@@ -117,6 +131,25 @@ class MockRedisClient {
       }
       this.data.set(key, zset);
       return 1;
+    });
+  }
+
+  async hGet(key: string, field: string): Promise<string | null> {
+    return this.trackOperation('hGet', async () => {
+      const hash = this.data.get(key) || {};
+      return hash[field] ?? null;
+    });
+  }
+
+  async zRem(key: string, members: string | string[]): Promise<number> {
+    return this.trackOperation('zRem', async () => {
+      const zset = this.data.get(key) || [];
+      const memberArray = Array.isArray(members) ? members : [members];
+      const memberSet = new Set(memberArray);
+      const filtered = zset.filter((item: any) => !memberSet.has(item.member));
+      const removed = zset.length - filtered.length;
+      this.data.set(key, filtered);
+      return removed;
     });
   }
 
@@ -1352,8 +1385,6 @@ describe('TrendingService Performance Tests', () => {
         expect(slotScores['Wed-00']).toBe(0);
       });
 
-
-
       it('should handle empty posts array', () => {
         const posts: any[] = [];
 
@@ -1570,12 +1601,11 @@ describe('TrendingService Performance Tests', () => {
 // =========================================================================
 
 describe('Task 14.3: Serialization Logic Tests', () => {
-  let service: TrendingService;
   let mockRedis: MockRedisClient;
 
   beforeEach(() => {
     mockRedis = new MockRedisClient();
-    service = new TrendingService(mockRedis as any);
+    new TrendingService(mockRedis as any);
   });
 
   afterEach(() => {
@@ -1646,10 +1676,8 @@ describe('Task 14.3: Serialization Logic Tests', () => {
 
       // Parse: read back using parseHashEntries
       const retrievedHash = await mockRedis.hGetAll(hashKey);
-      const parsedData = parseHashEntries(
-        retrievedHash,
-        hashKey,
-        (v: string) => parseInt(v)
+      const parsedData = parseHashEntries(retrievedHash, hashKey, (v: string) =>
+        parseInt(v)
       );
 
       // Verify round-trip preserves data
@@ -1698,10 +1726,8 @@ describe('Task 14.3: Serialization Logic Tests', () => {
 
       // Parse with float parser
       const members = await mockRedis.zRangeByScore(zsetKey, 0, Date.now());
-      const parsedData = parseZSetMembers(
-        members,
-        key,
-        (v: string) => parseFloat(v)
+      const parsedData = parseZSetMembers(members, key, (v: string) =>
+        parseFloat(v)
       );
 
       // Verify floating point precision is preserved
@@ -1741,8 +1767,54 @@ describe('Task 14.3: Serialization Logic Tests', () => {
 
       // Verify data is sorted by timestamp
       for (let i = 1; i < parsedData.length; i++) {
-        expect(parsedData[i].timestamp).toBeGreaterThan(
-          parsedData[i - 1].timestamp
+        expect(parsedData[i]!.timestamp).toBeGreaterThan(
+          parsedData[i - 1]!.timestamp
+        );
+      }
+    });
+  });
+
+  // =======================================================================
+  // 14.3.1 Test score precision during score-key string conversion
+  // =======================================================================
+  describe('14.3.1 Score precision during conversion', () => {
+    it('should preserve floating point precision in ZSET member string', async () => {
+      const timestamp = 1704067200000;
+      const score = 123.456789;
+      const key = 'test_metric';
+      const zsetKey = `trends:test_sub:${key}`;
+
+      // Add to ZSET using score precision formatting
+      const memberStr = `${timestamp}:${score}`;
+      await mockRedis.zAdd(zsetKey, timestamp, memberStr);
+
+      // Retrieve and parse
+      const members = await mockRedis.zRangeByScore(zsetKey, 0, Date.now());
+      const parsedData = parseZSetMembers(members, key, parseFloat);
+
+      expect(parsedData.length).toBe(1);
+      expect(parsedData[0]!.value).toBeCloseTo(score, 5);
+    });
+
+    it('should maintain chronological order with equal timestamps', async () => {
+      const zsetKey = 'trends:test_sub:test_metric';
+      const key = 'test_metric';
+
+      // Insert members with increasing timestamps
+      for (let i = 0; i < 5; i++) {
+        const timestamp = 1704067200000 + i * 1000;
+        const memberStr = `${timestamp}:${i * 10}`;
+        await mockRedis.zAdd(zsetKey, timestamp, memberStr);
+      }
+
+      // Parse
+      const members = await mockRedis.zRangeByScore(zsetKey, 0, Date.now());
+      const parsedData = parseZSetMembers(members, key);
+
+      // Verify data is sorted by timestamp
+      for (let i = 1; i < parsedData.length; i++) {
+        expect(parsedData[i]!.timestamp).toBeGreaterThan(
+          parsedData[i - 1]!.timestamp
         );
       }
     });
@@ -1773,8 +1845,8 @@ describe('Task 14.3: Serialization Logic Tests', () => {
 
       // Should parse valid entries and skip malformed
       expect(result.length).toBe(2);
-      expect(result[0].timestamp).toBe(1704067200000);
-      expect(result[1].timestamp).toBe(1704240000000);
+      expect(result[0]!.timestamp).toBe(1704067200000);
+      expect(result[1]!.timestamp).toBe(1704240000000);
 
       // Should log warning for malformed entry
       expect(consoleWarnSpy).toHaveBeenCalledWith(
@@ -1792,7 +1864,7 @@ describe('Task 14.3: Serialization Logic Tests', () => {
       const result = parseZSetMembers(members, 'test_key');
 
       expect(result.length).toBe(1);
-      expect(result[0].timestamp).toBe(1704067200000);
+      expect(result[0]!.timestamp).toBe(1704067200000);
 
       expect(consoleWarnSpy).toHaveBeenCalledTimes(2);
     });
@@ -1863,10 +1935,8 @@ describe('Task 14.3: Serialization Logic Tests', () => {
         News: '10',
       };
 
-      const result = parseHashEntries(
-        hashData,
-        'test_key',
-        (v: string) => parseInt(v)
+      const result = parseHashEntries(hashData, 'test_key', (v: string) =>
+        parseInt(v)
       );
 
       expect(result).toEqual({
@@ -1886,10 +1956,8 @@ describe('Task 14.3: Serialization Logic Tests', () => {
         Question: '10',
       };
 
-      const result = parseHashEntries(
-        hashData,
-        'test_key',
-        (v: string) => parseInt(v)
+      const result = parseHashEntries(hashData, 'test_key', (v: string) =>
+        parseInt(v)
       );
 
       expect(result).toEqual({
@@ -1909,10 +1977,8 @@ describe('Task 14.3: Serialization Logic Tests', () => {
         Question: '10',
       };
 
-      const result = parseHashEntries(
-        hashData,
-        'test_key',
-        (v: string) => parseInt(v)
+      const result = parseHashEntries(hashData, 'test_key', (v: string) =>
+        parseInt(v)
       );
 
       expect(result).toEqual({
@@ -2005,18 +2071,13 @@ describe('Task 14.3: Serialization Logic Tests', () => {
       // Create a valueParser that throws
       const members = ['1704067200000:100000'];
 
-      const result = parseZSetMembers(
-        members,
-        'test_key',
-        () => {
-          throw new Error('Parser error');
-        }
-      );
+      const result = parseZSetMembers(members, 'test_key', () => {
+        throw new Error('Parser error');
+      });
 
       expect(result.length).toBe(0);
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Error parsing'),
-        expect.any(Error)
+        expect.stringContaining('Error parsing')
       );
     });
   });

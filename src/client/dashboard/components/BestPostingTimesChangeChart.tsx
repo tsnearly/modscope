@@ -1,4 +1,9 @@
-import { useCallback, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react';
+import {
+  useCallback,
+  useMemo,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from 'react';
 import { getDataGroupingIcon } from '../utils/iconMappings';
 import { Chart } from './ui/chart';
 import { Icon } from './ui/icon';
@@ -87,12 +92,15 @@ const FULL_DAY_NAMES: Record<string, string> = {
   Sat: 'Saturday',
 };
 
-
 function buildSparkPath(
   values: number[],
   width: number,
   height: number
-): { line: string; fill: string; points: Array<{ x: number; y: number; value: number }> } {
+): {
+  line: string;
+  fill: string;
+  points: Array<{ x: number; y: number; value: number }>;
+} {
   if (values.length === 0) {
     return { line: '', fill: '', points: [] };
   }
@@ -126,7 +134,9 @@ export function BestPostingTimesChangeChart({
 }: BestPostingTimesChangeChartProps) {
   const [windowRange, setWindowRange] = useState<WindowRange>('30');
   const [compareMode, setCompareMode] = useState<CompareMode>('2');
-  const [hiddenSparkSeries, setHiddenSparkSeries] = useState<Record<string, boolean>>({});
+  const [hiddenSparkSeries, setHiddenSparkSeries] = useState<
+    Record<string, boolean>
+  >({});
   const [sparkTooltip, setSparkTooltip] = useState<{
     x: number;
     y: number;
@@ -150,10 +160,14 @@ export function BestPostingTimesChangeChart({
     }
 
     // 1. Filter timeline by windowRange and snapshot anchor
-    const anchorTimestamp = snapshotTimestamp || (rawTimeline.length > 0 ? rawTimeline[rawTimeline.length - 1]!.timestamp : Date.now());
+    const anchorTimestamp =
+      snapshotTimestamp ||
+      (rawTimeline.length > 0
+        ? rawTimeline[rawTimeline.length - 1]!.timestamp
+        : Date.now());
     const windowDays = parseInt(windowRange, 10);
     const cutoffTs = anchorTimestamp - windowDays * MS_PER_DAY;
-    
+
     // Filter to points between cutoff and anchor
     const timeline = rawTimeline.filter(
       (t) => t.timestamp >= cutoffTs && t.timestamp <= anchorTimestamp
@@ -170,7 +184,10 @@ export function BestPostingTimesChangeChart({
 
     // 2. Perform comparison analysis based on compareMode
     const segmentsCount = parseInt(compareMode, 10);
-    const segmentSize = Math.max(1, Math.floor(timeline.length / segmentsCount));
+    const segmentSize = Math.max(
+      1,
+      Math.floor(timeline.length / segmentsCount)
+    );
 
     const earlyPeriod = timeline.slice(0, segmentSize);
     const latePeriod = timeline.slice(-segmentSize);
@@ -243,11 +260,11 @@ export function BestPostingTimesChangeChart({
     >();
 
     const earlySet = new Set(earlyPeriod.map((e) => e.timestamp));
-    const lateSet  = new Set(latePeriod.map((e) => e.timestamp));
+    const lateSet = new Set(latePeriod.map((e) => e.timestamp));
 
     for (const entry of timeline) {
       const isEarly = earlySet.has(entry.timestamp);
-      const isLate  = lateSet.has(entry.timestamp);
+      const isLate = lateSet.has(entry.timestamp);
       for (const slot of entry.topSlots) {
         if (!windowSlotAccum.has(slot.dayHour)) {
           windowSlotAccum.set(slot.dayHour, {
@@ -257,7 +274,7 @@ export function BestPostingTimesChangeChart({
           });
         }
         const accum = windowSlotAccum.get(slot.dayHour)!;
-        if (isLate)  accum.lateScores.push(slot.score);
+        if (isLate) accum.lateScores.push(slot.score);
         if (isEarly) accum.earlyScores.push(slot.score);
       }
     }
@@ -269,7 +286,7 @@ export function BestPostingTimesChangeChart({
       .map(({ dayHour, lateScores, earlyScores }) => {
         const local = getLocalDayHour(dayHour);
         const hourFmt = `${local.hour % 12 || 12} ${local.hour < 12 ? 'AM' : 'PM'}`;
-        const lateAvg  = avg(lateScores);
+        const lateAvg = avg(lateScores);
         const earlyAvg = avg(earlyScores);
         return {
           dayHour,
@@ -528,103 +545,144 @@ export function BestPostingTimesChangeChart({
       <div className="flex flex-col gap-5">
         {/* Section: Top Posting Windows — Ranked */}
         <div>
-          <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 mb-2">
+          <div className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500 mb-1">
             Top posting windows — shift
           </div>
+          <div
+            style={{
+              fontSize: '10px',
+              color: 'var(--text-muted)',
+              marginBottom: '10px',
+              lineHeight: 1.5,
+            }}
+          >
+            The bar shows each window's recent activity score (higher = more
+            posts in that slot). The{' '}
+            <span style={{ color: '#1D9E75', fontWeight: 700 }}>+delta</span> /{' '}
+            <span style={{ color: '#D85A30', fontWeight: 700 }}>−delta</span>{' '}
+            shows how much the score changed vs the earlier period.
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {rankedSlots.map((slot: { dayHour: string; label: string; score: number; delta: number }, idx: number) => {
-              const maxScore = Math.max(
-                ...rankedSlots.map((s: any) => s.score),
-                1
-              );
-              const pct = Math.round((slot.score / maxScore) * 100);
-              const d = Math.round(slot.delta);
-              const isUp = d > 0;
-              const isDown = d < 0;
+            {rankedSlots.map(
+              (
+                slot: {
+                  dayHour: string;
+                  label: string;
+                  score: number;
+                  delta: number;
+                },
+                idx: number
+              ) => {
+                const maxScore = Math.max(
+                  ...rankedSlots.map((s: any) => s.score),
+                  1
+                );
+                const pct = Math.round((slot.score / maxScore) * 100);
+                const d = Math.round(slot.delta);
+                const isUp = d > 0;
+                const isDown = d < 0;
 
-              const barColor = isUp
-                ? '#1D9E75'
-                : isDown
-                  ? '#D85A30'
-                  : '#378ADD';
+                const barColor = isUp
+                  ? '#1D9E75'
+                  : isDown
+                    ? '#D85A30'
+                    : '#378ADD';
 
-              return (
-                <div
-                  key={slot.dayHour}
-                  style={{
-                    background: 'var(--bg-surface)',
-                    border: '0.5px solid var(--border-default)',
-                    borderRadius: '10px',
-                    padding: '12px 14px',
-                  }}
-                >
+                return (
                   <div
+                    key={slot.dayHour}
                     style={{
-                      fontSize: '13px',
-                      fontWeight: 500,
-                      color: 'var(--text-primary)',
-                      marginBottom: '2px',
-                    }}
-                  >
-                    {slot.label}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: '11px',
-                      color: 'var(--text-muted)',
-                      marginBottom: '10px',
-                    }}
-                  >
-                    Prime window · rank {idx + 1}
-                  </div>
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      marginBottom: '4px',
+                      background: 'var(--bg-surface)',
+                      border: '0.5px solid var(--border-default)',
+                      borderRadius: '10px',
+                      padding: '12px 14px',
                     }}
                   >
                     <div
                       style={{
-                        flex: 1,
-                        height: '20px',
-                        background: 'var(--bg-secondary)',
-                        borderRadius: '4px',
-                        overflow: 'hidden',
+                        fontSize: '13px',
+                        fontWeight: 500,
+                        color: 'var(--text-primary)',
+                        marginBottom: '2px',
+                      }}
+                    >
+                      {slot.label}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: '11px',
+                        color: 'var(--text-muted)',
+                        marginBottom: '10px',
+                      }}
+                    >
+                      Prime window · rank {idx + 1}
+                    </div>
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        marginBottom: '4px',
                       }}
                     >
                       <div
                         style={{
-                          height: '100%',
-                          width: `${pct}%`,
-                          background: barColor,
+                          flex: 1,
+                          height: '20px',
+                          background: 'var(--bg-secondary)',
                           borderRadius: '4px',
-                          transition: 'width 0.4s',
+                          overflow: 'hidden',
                         }}
-                      />
-                    </div>
-                    <div className="flex flex-col items-end min-w-[60px]">
-                      <span className="text-sm font-black text-slate-800 leading-none">
-                        {slot.score > 0 ? slot.score.toLocaleString() : 'N/A'}
-                      </span>
-                      {slot.score > 0 && (
-                        <div className="flex items-center gap-1 mt-1">
-                          <Icon
-                            name={slot.delta >= 0 ? 'mono-trend' : 'mono-trend-alt'}
-                            size={10}
-                            className={slot.delta >= 0 ? 'text-emerald-500' : 'text-red-500'}
-                          />
-                          <span className={`text-[10px] font-bold ${slot.delta >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                            {slot.delta > 0 ? '+' : ''}{slot.delta.toFixed(0)}
-                          </span>
-                        </div>
-                      )}
+                      >
+                        <div
+                          style={{
+                            height: '100%',
+                            width: `${pct}%`,
+                            background: barColor,
+                            borderRadius: '4px',
+                            transition: 'width 0.4s',
+                          }}
+                        />
+                      </div>
+                      <div className="flex flex-col items-end min-w-[60px]">
+                        <span
+                          className="text-sm font-black text-slate-800 leading-none"
+                          title="Activity score: average number of posts in this time slot over the selected window"
+                        >
+                          {slot.score > 0 ? slot.score.toLocaleString() : 'N/A'}
+                        </span>
+                        <span className="text-[9px] text-slate-400 leading-none mb-1">
+                          score
+                        </span>
+                        {slot.score > 0 && (
+                          <div className="flex items-center gap-1 mt-1">
+                            <Icon
+                              name={
+                                slot.delta >= 0
+                                  ? 'mono-trend'
+                                  : 'mono-trend-alt'
+                              }
+                              size={10}
+                              className={
+                                slot.delta >= 0
+                                  ? 'text-emerald-500'
+                                  : 'text-red-500'
+                              }
+                            />
+                            <span
+                              className={`text-[10px] font-bold ${slot.delta >= 0 ? 'text-emerald-600' : 'text-red-600'}`}
+                            >
+                              {slot.delta > 0 ? '+' : ''}
+                              {slot.delta.toFixed(0)}
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              }
+            )}
           </div>
         </div>
 
@@ -676,8 +734,10 @@ export function BestPostingTimesChangeChart({
                         {day.net.toFixed(1)}
                       </div>
                       <div className="text-[9px] text-slate-500 mt-1">
-                        {day.rising.toFixed(1)} rise / {day.falling.toFixed(1)}{' '}
-                        fall
+                        Net{' '}
+                        {day.net > 0 ? 'gain' : day.net < 0 ? 'drop' : 'change'}{' '}
+                        · {day.rising.toFixed(1)} rise /{' '}
+                        {day.falling.toFixed(1)} fall
                       </div>
                     </div>
                   );
@@ -685,6 +745,23 @@ export function BestPostingTimesChangeChart({
               </div>
             );
           })()}
+          {/* Legend */}
+          <div
+            style={{
+              marginTop: '8px',
+              fontSize: '9px',
+              color: 'var(--text-muted)',
+              lineHeight: 1.6,
+              borderTop: '1px solid var(--color-border)',
+              paddingTop: '6px',
+            }}
+          >
+            <strong>How to read:</strong> The arrow/circle size reflects total
+            slot activity for that day. The number is the{' '}
+            <em>net score change</em> (positive = more posts trending up,
+            negative = trending down). Rise / Fall show the total score gained
+            or lost across all hours of that day.
+          </div>
         </div>
 
         {/* Section: Sparkline Trends */}
@@ -697,9 +774,14 @@ export function BestPostingTimesChangeChart({
               fontSize: '11px',
               color: 'var(--text-muted)',
               marginBottom: '10px',
+              lineHeight: 1.5,
             }}
           >
-            Each sparkline = one prime window's rolling activity score
+            Each line tracks one prime time slot's{' '}
+            <strong>activity score</strong> (average posts in that window) over
+            the selected period. The number on the right is the most recent
+            score. The earlier comparison period is used to calculate the
+            rise/fall arrows in the ranked list above.
           </div>
           {/* Legend */}
           <div
@@ -713,102 +795,116 @@ export function BestPostingTimesChangeChart({
             {sparkSeries.map((series: any) => {
               const isHidden = hiddenSparkSeries[series.dayHour];
               return (
-              <button
-                key={series.dayHour}
-                onClick={() => setHiddenSparkSeries(prev => ({ ...prev, [series.dayHour]: !prev[series.dayHour] }))}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '5px',
-                  fontSize: '12px',
-                  color: 'var(--text-secondary)',
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: 0,
-                  opacity: isHidden ? 0.45 : 1,
-                  textDecoration: isHidden ? 'line-through' : 'none',
-                }}
-              >
-                <span
+                <button
+                  key={series.dayHour}
+                  onClick={() =>
+                    setHiddenSparkSeries((prev) => ({
+                      ...prev,
+                      [series.dayHour]: !prev[series.dayHour],
+                    }))
+                  }
                   style={{
-                    width: '8px',
-                    height: '8px',
-                    borderRadius: '2px',
-                    background: series.color,
-                    display: 'inline-block',
-                    border: isHidden ? '1px solid var(--border-default)' : 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    fontSize: '12px',
+                    color: 'var(--text-secondary)',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: 0,
+                    opacity: isHidden ? 0.45 : 1,
+                    textDecoration: isHidden ? 'line-through' : 'none',
                   }}
-                />
-                {series.label}
-              </button>
-            )})}
+                >
+                  <span
+                    style={{
+                      width: '8px',
+                      height: '8px',
+                      borderRadius: '2px',
+                      background: series.color,
+                      display: 'inline-block',
+                      border: isHidden
+                        ? '1px solid var(--border-default)'
+                        : 'none',
+                    }}
+                  />
+                  {series.label}
+                </button>
+              );
+            })}
           </div>
           {/* Sparklines */}
           <div className="space-y-3">
-            {sparkSeries.filter((series: any) => !hiddenSparkSeries[series.dayHour]).map((series: any) => {
-              const width = 280;
-              const height = 40;
-              const path = buildSparkPath(series.values, width, height);
-              const latestValue = series.values[series.values.length - 1] ?? 0;
+            {sparkSeries
+              .filter((series: any) => !hiddenSparkSeries[series.dayHour])
+              .map((series: any) => {
+                const width = 280;
+                const height = 40;
+                const path = buildSparkPath(series.values, width, height);
+                const latestValue =
+                  series.values[series.values.length - 1] ?? 0;
 
-              return (
-                <div key={series.dayHour} className="flex items-center gap-3">
-                  <div
-                    className="flex-1 min-w-0"
-                    style={{ position: 'relative' }}
-                  >
-                    <svg
-                      width="100%"
-                      viewBox={`0 0 ${width} ${height + 2}`}
-                      preserveAspectRatio="none"
-                      className="block h-10"
-                      onMouseLeave={handleSparkLeave}
+                return (
+                  <div key={series.dayHour} className="flex items-center gap-3">
+                    <div
+                      className="flex-1 min-w-0"
+                      style={{ position: 'relative' }}
                     >
-                      <path d={path.fill} fill={series.color} opacity="0.12" />
-                      <path
-                        d={path.line}
-                        fill="none"
-                        stroke={series.color}
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                      {/* Invisible hover targets for tooltips */}
-                      {path.points.map((pt, i) => (
-                        <rect
-                          key={i}
-                          x={pt.x - 6}
-                          y={0}
-                          width={12}
-                          height={height + 2}
-                          fill="transparent"
-                          onMouseEnter={(e) =>
-                            handleSparkHover(
-                              e,
-                              series.label,
-                              pt.value,
-                              i,
-                              series.timestamps?.[i]
-                            )
-                          }
-                          onMouseMove={(e) =>
-                            handleSparkHover(
-                              e,
-                              series.label,
-                              pt.value,
-                              i,
-                              series.timestamps?.[i]
-                            )
-                          }
-                          onMouseLeave={handleSparkLeave}
-                          style={{ cursor: 'crosshair' }}
+                      <svg
+                        width="100%"
+                        viewBox={`0 0 ${width} ${height + 2}`}
+                        preserveAspectRatio="none"
+                        className="block h-10"
+                        onMouseLeave={handleSparkLeave}
+                      >
+                        <path
+                          d={path.fill}
+                          fill={series.color}
+                          opacity="0.12"
                         />
-                      ))}
-                    </svg>
-                    {/* Lightweight sparkline tooltip */}
-                    {sparkTooltip &&
-                      sparkTooltip.label === series.label && (
+                        <path
+                          d={path.line}
+                          fill="none"
+                          stroke={series.color}
+                          strokeWidth="1.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                        {/* Invisible hover targets for tooltips */}
+                        {path.points.map((pt, i) => (
+                          <rect
+                            key={i}
+                            x={pt.x - 6}
+                            y={0}
+                            width={12}
+                            height={height + 2}
+                            fill="transparent"
+                            onMouseEnter={(e) =>
+                              handleSparkHover(
+                                e,
+                                series.label,
+                                pt.value,
+                                i,
+                                series.timestamps?.[i]
+                              )
+                            }
+                            onMouseMove={(e) =>
+                              handleSparkHover(
+                                e,
+                                series.label,
+                                pt.value,
+                                i,
+                                series.timestamps?.[i]
+                              )
+                            }
+                            onMouseLeave={handleSparkLeave}
+                            style={{ cursor: 'crosshair' }}
+                          />
+                        ))}
+                      </svg>
+                      {/* Lightweight sparkline tooltip */}
+                      {sparkTooltip && sparkTooltip.label === series.label && (
                         <div
                           style={{
                             position: 'absolute',
@@ -831,17 +927,23 @@ export function BestPostingTimesChangeChart({
                             {sparkTooltip.value.toFixed(1)}
                           </span>
                           <span style={{ opacity: 0.6, marginLeft: '4px' }}>
-                            {sparkTooltip.dateLabel || `pt ${sparkTooltip.index + 1}`}
+                            {sparkTooltip.dateLabel ||
+                              `pt ${sparkTooltip.index + 1}`}
                           </span>
                         </div>
                       )}
+                    </div>
+                    <div className="w-12 text-right">
+                      <span className="text-xs font-black text-slate-700">
+                        {latestValue.toFixed(1)}
+                      </span>
+                      <div className="text-[9px] text-slate-400 leading-none">
+                        score
+                      </div>
+                    </div>
                   </div>
-                  <div className="w-12 text-right text-xs font-black text-slate-700">
-                    {latestValue.toFixed(1)}
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
           </div>
         </div>
 

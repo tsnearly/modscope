@@ -1,9 +1,10 @@
-import React, { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { getDataGroupingIcon, type IconContext } from '../utils/iconMappings';
 import { DAYS, FULL_DAYS, formatHourLabel } from '../utils/reportFormatting';
 import { Chart } from './ui/chart';
 import { Icon } from './ui/icon';
 import { Tooltip } from './ui/tooltip';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 interface TimingViewProps {
   heatmapResult: any;
@@ -11,10 +12,18 @@ interface TimingViewProps {
 }
 
 export function TimingView({ heatmapResult, iconContext }: TimingViewProps) {
+  const isMobile = useIsMobile();
   const heatmapData = heatmapResult.grid;
   const [hiddenCategories, setHiddenCategories] = useState<
     Record<string, boolean>
   >({});
+  const [tappedCell, setTappedCell] = useState<{
+    intensity: number;
+    count: number;
+    dayIndex: number;
+    hourIndex: number;
+  } | null>(null);
+  const heatmapContainerRef = useRef<HTMLDivElement>(null);
 
   const tiers = useMemo(() => {
     const rawRanges = [
@@ -27,7 +36,9 @@ export function TimingView({ heatmapResult, iconContext }: TimingViewProps) {
       const fallback = index + 1;
       const rawMin = Number(pair?.[0]);
       const rawMax = Number(pair?.[1]);
-      const min = Number.isFinite(rawMin) ? Math.max(1, Math.round(rawMin)) : fallback;
+      const min = Number.isFinite(rawMin)
+        ? Math.max(1, Math.round(rawMin))
+        : fallback;
       const max = Number.isFinite(rawMax)
         ? Math.max(min, Math.round(rawMax))
         : index === 4
@@ -185,7 +196,8 @@ export function TimingView({ heatmapResult, iconContext }: TimingViewProps) {
   return (
     <div
       style={{
-        backgroundColor: 'var(--color-surface)',
+        padding: '12px',
+        paddingBottom: 'max(48px, calc(16px + var(--safe-area-bottom)))',
       }}
     >
       <Chart
@@ -196,29 +208,52 @@ export function TimingView({ heatmapResult, iconContext }: TimingViewProps) {
             size={16}
           />
         }
-        height={420}
+        height="auto"
       >
-        <div className="p-3 h-full">
+        <div className="p-3 h-full space-y-4">
           {heatmapResult.thresholds && renderLegend()}
-          <div style={{ width: '100%', maxWidth: '1000px', margin: '0 auto' }}>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '30px repeat(24, minmax(0, 1fr))',
-                gap: '2px',
-                fontSize: '8px',
-                color: '#94a3b8',
-              }}
-            >
-              <div></div>
-              {Array.from({ length: 24 }).map((_, i) => (
-                <div key={i} style={{ textAlign: 'center' }}>
-                  {i}
-                </div>
-              ))}
+
+          <div
+            ref={heatmapContainerRef}
+            className="mx-auto w-full min-w-0"
+            style={{
+              maxWidth: '1000px',
+              overflowX: 'auto',
+              overflowY: 'hidden',
+            }}
+            onClick={(e) => {
+              if (e.target === heatmapContainerRef.current) setTappedCell(null);
+            }}
+          >
+            <div style={{ width: '100%', minWidth: '420px' }}>
+              <div
+                className="grid gap-1 mb-2"
+                style={{
+                  gridTemplateColumns: '40px repeat(24, minmax(0, 1fr))',
+                }}
+              >
+                <div className="text-xs font-small text-muted-foreground"></div>
+                {Array.from({ length: 24 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="text-xs text-center text-muted-foreground"
+                    style={{ fontSize: '8px' }}
+                    title={formatHourLabel(i)}
+                  >
+                    {i}
+                  </div>
+                ))}
+              </div>
+
               {DAYS.map((day, d) => (
-                <React.Fragment key={d}>
-                  <div style={{ textAlign: 'right', paddingRight: '4px' }}>
+                <div
+                  key={d}
+                  className="grid gap-1 mb-1"
+                  style={{
+                    gridTemplateColumns: '40px repeat(24, minmax(0, 1fr))',
+                  }}
+                >
+                  <div className="text-xs font-small text-muted-foreground text-right pr-2 flex items-center justify-end">
                     {day}
                   </div>
                   {Array.from({ length: 24 }, (_, h) => {
@@ -228,6 +263,9 @@ export function TimingView({ heatmapResult, iconContext }: TimingViewProps) {
                     };
                     const dayLabel = FULL_DAYS[d] || DAYS[d] || 'Unknown day';
                     const hourLabel = formatHourLabel(h);
+                    const isTapped =
+                      tappedCell?.dayIndex === d && tappedCell?.hourIndex === h;
+
                     return (
                       <Tooltip
                         key={h}
@@ -243,19 +281,96 @@ export function TimingView({ heatmapResult, iconContext }: TimingViewProps) {
                             aspectRatio: '1',
                             borderRadius: '2px',
                             background: getCellColor(data.intensity),
-                            border: '1px solid var(--color-border)',
+                            border:
+                              isMobile && isTapped
+                                ? '1.5px solid var(--color-primary)'
+                                : '1px solid var(--color-border)',
                             opacity: 0.9,
-                            cursor: 'default',
+                            cursor: isMobile ? 'pointer' : 'default',
+                            outline:
+                              isMobile && isTapped
+                                ? '1px solid var(--color-primary)'
+                                : 'none',
                           }}
                           aria-label={`${dayLabel} - ${hourLabel}\n${data.count} post${data.count !== 1 ? 's' : ''}`}
+                          onClick={
+                            isMobile
+                              ? (e) => {
+                                  e.stopPropagation();
+                                  setTappedCell(
+                                    isTapped
+                                      ? null
+                                      : {
+                                          intensity: data.intensity,
+                                          count: data.count,
+                                          dayIndex: d,
+                                          hourIndex: h,
+                                        }
+                                  );
+                                }
+                              : undefined
+                          }
                         />
                       </Tooltip>
                     );
                   })}
-                </React.Fragment>
+                </div>
               ))}
             </div>
           </div>
+
+          {/* Mobile tap-info bar — shows cell detail when a cell is tapped */}
+          {isMobile && tappedCell !== null && (
+            <div
+              className="mt-2 px-3 py-2 rounded-md"
+              style={{
+                background: 'var(--color-surface)',
+                border: '1px solid var(--color-border)',
+                fontSize: '11px',
+                color: 'var(--text-secondary)',
+                lineHeight: 1.6,
+              }}
+            >
+              <div
+                style={{
+                  fontWeight: 700,
+                  marginBottom: '2px',
+                  color: 'var(--text-primary)',
+                }}
+              >
+                {FULL_DAYS[tappedCell.dayIndex] || 'Unknown day'} —{' '}
+                {formatHourLabel(tappedCell.hourIndex)}
+              </div>
+              <div>
+                Activity:{' '}
+                <strong style={{ color: 'var(--color-primary)' }}>
+                  {tappedCell.count} post{tappedCell.count === 1 ? '' : 's'}
+                </strong>
+                {tappedCell.intensity > 0 && (
+                  <span className="ml-2 text-muted-foreground">
+                    ({tiers[tappedCell.intensity - 1]?.label || 'tier'}{' '}
+                    intensity)
+                  </span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setTappedCell(null)}
+                style={{
+                  marginTop: '4px',
+                  fontSize: '10px',
+                  color: 'var(--text-muted)',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: 0,
+                  textDecoration: 'underline',
+                }}
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
         </div>
       </Chart>
     </div>

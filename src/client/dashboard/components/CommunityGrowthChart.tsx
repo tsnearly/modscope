@@ -1,19 +1,20 @@
 import { useMemo, useState } from 'react';
 import {
-    Area,
-    CartesianGrid,
-    Line,
-    Tooltip as RechartsTooltip,
-    ResponsiveContainer,
-    XAxis,
-    YAxis,
-    ComposedChart,
+  Area,
+  CartesianGrid,
+  ComposedChart,
+  Line,
+  Tooltip as RechartsTooltip,
+  ResponsiveContainer,
+  XAxis,
+  YAxis,
 } from 'recharts';
+import { MS_PER_DAY } from '../../../shared/core/constants';
+import { formatDateMMMD, formatSafe } from '../../../shared/utils/dateUtils';
 import { getDataGroupingIcon } from '../utils/iconMappings';
 import { Chart } from './ui/chart';
 import { Icon } from './ui/icon';
 import { NonIdealState } from './ui/non-ideal-state';
-import { MS_PER_DAY } from '../../../shared/core/constants';
 
 type TrendPoint = { timestamp: number; value: number };
 type ForecastPoint = {
@@ -51,22 +52,11 @@ type GrowthDatum = {
 };
 
 function formatDate(ts: number): string {
-  const d = new Date(ts);
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-  }).format(d);
+  return formatDateMMMD(ts);
 }
 
 function formatDateWithYear(ts: number): string {
-  const d = new Date(ts);
-  return new Intl.DateTimeFormat('en-US', {
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric',
-    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-  }).format(d);
+  return formatSafe(ts, 'M/d/yyyy');
 }
 
 function formatSubscribers(n: number | undefined): string {
@@ -182,7 +172,7 @@ export function CommunityGrowthChart({
       const offset = trendAnalysisDays - 1 - i;
       const timestamp = todayUtcNoon - offset * MS_PER_DAY;
       const actual = actualByDay.get(timestamp);
-      
+
       data.push({
         timestamp,
         date: formatDate(timestamp),
@@ -195,7 +185,7 @@ export function CommunityGrowthChart({
     for (let i = 1; i <= forecastHorizon; i++) {
       const timestamp = todayUtcNoon + i * MS_PER_DAY;
       const forecast = forecastByDay.get(timestamp);
-      
+
       if (forecast) {
         data.push({
           timestamp,
@@ -367,8 +357,16 @@ export function CommunityGrowthChart({
               >
                 <defs>
                   <linearGradient id="fillActual" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={primaryColor} stopOpacity={0.4} />
-                    <stop offset="95%" stopColor={primaryColor} stopOpacity={0.05} />
+                    <stop
+                      offset="5%"
+                      stopColor={primaryColor}
+                      stopOpacity={0.4}
+                    />
+                    <stop
+                      offset="95%"
+                      stopColor={primaryColor}
+                      stopOpacity={0.05}
+                    />
                   </linearGradient>
                   <linearGradient
                     id="confidenceGradient"
@@ -379,11 +377,7 @@ export function CommunityGrowthChart({
                   >
                     <stop offset="0%" stopColor="#ef4444" stopOpacity={0.2} />
                     <stop offset="45%" stopColor="#facc15" stopOpacity={0.15} />
-                    <stop
-                      offset="100%"
-                      stopColor="#22c55e"
-                      stopOpacity={0.2}
-                    />
+                    <stop offset="100%" stopColor="#22c55e" stopOpacity={0.2} />
                   </linearGradient>
                 </defs>
 
@@ -470,4 +464,3 @@ export function CommunityGrowthChart({
     </Chart>
   );
 }
-

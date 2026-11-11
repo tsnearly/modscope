@@ -23,7 +23,9 @@ const ids = scanIds.length > 0 ? scanIds : DEFAULT_SCAN_IDS;
 await mkdir(outputDir, { recursive: true });
 
 if (source !== 'api' && source !== 'redis') {
-  throw new Error(`Unsupported MODSCOPE_SOURCE '${source}'. Use 'api' or 'redis'.`);
+  throw new Error(
+    `Unsupported MODSCOPE_SOURCE '${source}'. Use 'api' or 'redis'.`
+  );
 }
 
 if (source === 'api' && !baseUrl && !snapshotUrlPattern) {
@@ -44,7 +46,9 @@ if (source === 'api' && baseUrl) {
   console.log(`[snapshot-download] Base URL: ${baseUrl}`);
 }
 if (source === 'api' && snapshotUrlPattern) {
-  console.log(`[snapshot-download] Snapshot URL pattern: ${snapshotUrlPattern}`);
+  console.log(
+    `[snapshot-download] Snapshot URL pattern: ${snapshotUrlPattern}`
+  );
 }
 if (source === 'redis') {
   console.log(`[snapshot-download] Redis URL: ${redisUrl}`);
@@ -159,11 +163,9 @@ if (source === 'api') {
           posts_per_day: Number.parseFloat(stats.posts_per_day || '0') || 0,
           comments_per_day:
             Number.parseFloat(stats.comments_per_day || '0') || 0,
-          avg_engagement:
-            Number.parseFloat(stats.avg_engagement || '0') || 0,
+          avg_engagement: Number.parseFloat(stats.avg_engagement || '0') || 0,
           avg_score: Number.parseFloat(stats.avg_score || '0') || 0,
-          score_velocity:
-            Number.parseFloat(stats.score_velocity || '0') || 0,
+          score_velocity: Number.parseFloat(stats.score_velocity || '0') || 0,
           comment_velocity:
             Number.parseFloat(stats.comment_velocity || '0') || 0,
           combined_velocity:

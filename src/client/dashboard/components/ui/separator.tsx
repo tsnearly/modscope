@@ -86,7 +86,6 @@ const Separator = React.forwardRef<HTMLDivElement, SeparatorProps>(
             className
           )}
           ref={ref}
-          data-flux-separator=""
           aria-orientation={finalOrientation ?? undefined}
           role="separator"
           style={mergedStyle}
@@ -119,7 +118,6 @@ const Separator = React.forwardRef<HTMLDivElement, SeparatorProps>(
       <div
         ref={ref}
         role="separator"
-        data-flux-separator=""
         aria-orientation={finalOrientation ?? undefined}
         className={cn(
           separatorVariants({

@@ -2,6 +2,7 @@
 
 :root {
   /* Core Palette */
+  --currentFlair: #aabca5a5;
   --color-primary: #708877;
   --color-secondary: #bbcab7;
   --color-accent: #e8f4e5;

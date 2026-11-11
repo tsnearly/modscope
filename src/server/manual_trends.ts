@@ -1,32 +1,34 @@
 import { context, redis } from '@devvit/web/server';
-import { PostData } from '../shared/types/api';
-import { redisKey } from '../shared/core/constants';
+import { DAY_NAMES, redisKey } from '../shared/core/constants';
+import { PostData } from '../shared/types/api.types';
+import { logger } from './core/logger';
 
 /**
  * Manual Trend Seeder
  * PLAYTEST_BYPASS: Directly writes trend data from existing snapshot data into Redis.
  * Bypasses the full TrendingService completely — no timeouts, no scan filtering.
  */
-async function runManualMaterialization(
+async function runManualTrendAnalysis(
   subreddit: string = context.subredditName || 'unknown'
 ) {
   const SUBREDDIT = subreddit;
   const FUTURE_DATE = '2099-01-01T00:00:00.000Z';
 
-  console.log(
-    `[MANUAL_TRENDS] Starting direct Redis seed for r/${SUBREDDIT}...`
+  logger.info(
+    `Starting direct Redis seed for r/${SUBREDDIT}...`,
+    'ManualTrends'
   );
 
   try {
     await Promise.all([
-      redis.del(`trends:${SUBREDDIT}:subscriber_growth`),
-      redis.del(`trends:${SUBREDDIT}:engagement_avg`),
-      redis.del(`trends:${SUBREDDIT}:posting_heatmap`),
-      redis.del(`trends:${SUBREDDIT}:last_materialized`),
+      redis.del(redisKey.trendsTs('subscriber_growth')),
+      redis.del(redisKey.trendsTs('engagement_avg')),
+      redis.del(redisKey.trendsTs('posting_heatmap')),
+      redis.del(redisKey.trendsStatic()),
     ]);
 
     // --- Step 1: Gather ALL scan IDs for this subreddit from the timeline ---
-    const timelineRaw = await redis.zRange('global:snapshots:timeline', 0, -1);
+    const timelineRaw = await redis.zRange(redisKey.snapshotsTimeline(), 0, -1);
 
     interface ScanEntry {
       scanId: number;
@@ -56,14 +58,17 @@ async function runManualMaterialization(
     }
 
     if (scans.length === 0) {
-      console.error(
-        `[MANUAL_TRENDS] No scans for r/${SUBREDDIT} found in global timeline. Aborting.`
+      logger.error(
+        `No scans for r/${SUBREDDIT} found in global timeline. Aborting.`,
+        undefined,
+        'ManualTrends'
       );
       return;
     }
 
-    console.log(
-      `[MANUAL_TRENDS] Found ${scans.length} scan(s) to seed trends from.`
+    logger.info(
+      `Found ${scans.length} scan(s) to seed trends from.`,
+      'ManualTrends'
     );
     scans.sort((a, b) => a.timestamp - b.timestamp);
 
@@ -72,31 +77,48 @@ async function runManualMaterialization(
       const stats = await redis.hGetAll(redisKey.scanStats(scan.scanId));
       const subscribers = parseInt(stats?.subscribers || '0', 10);
       if (subscribers > 0) {
-        await redis.zAdd(redisKey.trendsSubscriberGrowth(SUBREDDIT), {
+        await redis.zAdd(redisKey.trendsTs('subscriber_growth'), {
           score: scan.timestamp,
           member: `${scan.timestamp}:${subscribers}`,
         });
       }
     }
-    console.log(`[MANUAL_TRENDS] ✓ Subscriber growth seeded.`);
+    logger.info('✓ Subscriber growth seeded.', 'ManualTrends');
 
     // --- Step 3: Write engagement over time ZSET directly (from scan stats avg_engagement) ---
     for (const scan of scans) {
       const stats = await redis.hGetAll(redisKey.scanStats(scan.scanId));
       const avgEng = parseFloat(stats?.avg_engagement || '0');
       if (avgEng > 0) {
-        await redis.zAdd(redisKey.trendsEngagementAvg(SUBREDDIT), {
+        await redis.zAdd(redisKey.trendsTs('engagement_avg'), {
           score: scan.timestamp,
           member: `${scan.timestamp}:${avgEng.toFixed(2)}`,
         });
       }
     }
-    console.log(`[MANUAL_TRENDS] ✓ Engagement over time seeded.`);
+    logger.info('✓ Engagement over time seeded.', 'ManualTrends');
 
-    // --- Step 4: Build posting heatmap from analysis pool of all scans ---
+    // --- Step 4: Build posting heatmap and word cloud from analysis pool of all scans ---
     const heatmapCounts: Record<string, number> = {};
+    const globalWordCloud: Record<string, number> = {};
+    const seenPostKeys = new Set<string>();
+
+    const stopWords = new Set([
+      'an', 'a', 'the', 'and', 'for', 'with', 'got', 'here', 'from', 'about',
+      'quiz', 'trivia', 'knowledge', 'games', 'game', 'questions', 'question',
+      'answers', 'answer', 'test', 'challenge', 'round', 'results', 'score',
+      'random', 'general', 'discussion', 'opinion', 'help', 'easy', 'medium',
+      'harder', 'easier', 'hardest', 'easiest', 'hard', 'advanced', 'beginner',
+      'levels', 'level', 'short', 'long', 'large', 'small', 'tiny', 'today',
+      'modern', 'classic', 'forgotten', 'popular', 'famous', 'edition', 'version',
+      'series', 'episode', 'fun', 'enjoy', 'guess', 'day', 'todays', 'play',
+      'start', 'quick', 'basic', 'lowest', 'weird', 'odd', 'pointless', 'gooo',
+      'dropped', 'just', 'more', 'some', 'what', 'when', 'which', 'who',
+      'will', 'your', 'this', 'that', 'have', 'been', 'were', 'they', 'their'
+    ]);
+
     for (const scan of scans) {
-      const rawData = await redis.get(`scan:${scan.scanId}:data`);
+      const rawData = await redis.get(redisKey.scanData(scan.scanId));
       if (!rawData) continue;
 
       try {
@@ -104,34 +126,77 @@ async function runManualMaterialization(
         const pool: PostData[] = (parsed?.analysis_pool || []) as PostData[];
 
         for (const post of pool) {
+          const postKey =
+            (post as any).id ||
+            (post as any).postId ||
+            (post as any).postInternalId ||
+            post.url ||
+            JSON.stringify(post);
+
+          if (!seenPostKeys.has(postKey)) {
+            seenPostKeys.add(postKey);
+            const titleText = (post.title || '')
+              .replace(/[^\w\s']/g, ' ')
+              .toLowerCase();
+            const words = titleText.split(/\s+/);
+            for (const word of words) {
+              if (
+                word &&
+                word.length > 2 &&
+                !stopWords.has(word) &&
+                isNaN(Number(word))
+              ) {
+                globalWordCloud[word] = (globalWordCloud[word] || 0) + 1;
+              }
+            }
+          }
+
           const dt = new Date(post.created_utc * 1000);
-          // Use UTC time to match TrendingService bucketing
-          const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-          const day = dayNames[dt.getUTCDay()];
+          const day = DAY_NAMES[dt.getUTCDay()];
           const hour = dt.getUTCHours();
           const key = `${day}-${hour.toString().padStart(2, '0')}`;
           heatmapCounts[key] =
             (heatmapCounts[key] || 0) + (post.engagement_score ?? 1);
         }
       } catch (e) {
-        console.warn(
-          `[MANUAL_TRENDS] Failed to parse scan ${scan.scanId} data:`,
-          e
+        logger.warn(
+          `Failed to parse scan ${scan.scanId} data: ${String(e)}`,
+          'ManualTrends'
         );
       }
     }
 
-    // Write heatmap as a Redis hash
-    const heatmapKey = `trends:${SUBREDDIT}:posting_heatmap`;
-    for (const [dayHour, delta] of Object.entries(heatmapCounts)) {
-      await redis.hSet(heatmapKey, { [dayHour]: delta.toString() });
+    // Write heatmap as structured velocity buckets
+    const heatmapBins: Record<
+      string,
+      { countA: number; countB: number; delta: number; velocity: number }
+    > = {};
+    for (let day = 0; day < 7; day++) {
+      for (let hour = 0; hour < 24; hour++) {
+        const bucket = `${DAY_NAMES[day]}-${hour.toString().padStart(2, '0')}`;
+        const count = heatmapCounts[bucket] || 0;
+        heatmapBins[bucket] = {
+          countA: count,
+          countB: 0,
+          delta: count,
+          velocity: Number((count / Math.max(1, scans.length)).toFixed(2)),
+        };
+      }
     }
-    console.log(
-      `[MANUAL_TRENDS] ✓ Posting heatmap seeded (${Object.keys(heatmapCounts).length} cells).`
+
+    const serializedHeatmap: Record<string, string> = {};
+    for (const [bucket, bin] of Object.entries(heatmapBins)) {
+      serializedHeatmap[bucket] = JSON.stringify(bin);
+    }
+
+    await redis.hSet(redisKey.trendsTs('posting_heatmap'), serializedHeatmap);
+    logger.info(
+      `✓ Posting heatmap seeded (${Object.keys(heatmapBins).length} cells).`,
+      'ManualTrends'
     );
 
     // --- Step 5: Calculate and seed best_posting_times ZSET ---
-    const bestTimesKey = `trends:${SUBREDDIT}:best_posting_times`;
+    const bestTimesKey = redisKey.trendsTs('best_posting_times');
     const bins = Object.entries(heatmapCounts)
       .map(([key, count]) => ({
         key,
@@ -145,7 +210,7 @@ async function runManualMaterialization(
         member: key,
       });
     }
-    console.log(`[MANUAL_TRENDS] ✓ Best posting times seeded.`);
+    logger.info('✓ Best posting times seeded.', 'ManualTrends');
 
     // --- Step 6: Seed best_times_timeline for charting ---
     const bestTimesTimeline = [
@@ -158,11 +223,10 @@ async function runManualMaterialization(
       },
     ];
 
-    await redis.set(
-      `trends:${SUBREDDIT}:best_times_timeline`,
-      JSON.stringify(bestTimesTimeline)
-    );
-    console.log(`[MANUAL_TRENDS] ✓ Best times timeline seeded.`);
+    await redis.hSet(redisKey.trendsStatic(), {
+      bestTimesTimeline: JSON.stringify(bestTimesTimeline),
+    });
+    logger.info('✓ Best times timeline seeded.', 'ManualTrends');
 
     // --- Step 7: Seed best_times_changes for trend analysis ---
     const bestTimesChanges = {
@@ -174,65 +238,133 @@ async function runManualMaterialization(
       })),
     };
 
-    await redis.set(
-      `trends:${SUBREDDIT}:best_times_changes`,
-      JSON.stringify(bestTimesChanges)
-    );
-    console.log(`[MANUAL_TRENDS] ✓ Best times changes seeded.`);
+    await redis.hSet(redisKey.trendsStatic(), {
+      bestTimesChanges: JSON.stringify(bestTimesChanges),
+    });
+    logger.info('✓ Best times changes seeded.', 'ManualTrends');
 
     // --- Step 8: Calculate and seed global_aggregates ---
-    const globalStats = {
-      postsTotal: 0,
-      commentsTotal: 0,
-      engagementTotal: 0,
-      scoreTotal: 0,
-    };
+    let totalPpd = 0;
+    let totalCpd = 0;
+    let totalEng = 0;
+    let totalScore = 0;
+    let totalVelocity = 0;
+    let statsCount = 0;
+    let latestSubscribers = 0;
+    let latestActive = 0;
 
     for (const scan of scans) {
-      const stats = await redis.hGetAll(`run:${scan.scanId}:stats`);
-      globalStats.postsTotal += parseInt(stats?.posts_found || '0', 10);
-      globalStats.commentsTotal += parseInt(stats?.total_comments || '0', 10);
-      globalStats.engagementTotal += parseInt(
-        stats?.total_engagement || '0',
-        10
-      );
-      globalStats.scoreTotal += parseInt(stats?.total_score || '0', 10);
+      const stats = await redis.hGetAll(redisKey.scanStats(scan.scanId));
+      if (stats) {
+        totalPpd += parseFloat(stats.posts_per_day || '0');
+        totalCpd += parseFloat(stats.comments_per_day || '0');
+        totalEng += parseFloat(stats.avg_engagement || '0');
+        totalScore += parseFloat(stats.avg_score || '0');
+        totalVelocity += parseFloat(stats.combined_velocity || stats.score_velocity || '0');
+        statsCount++;
+        const subs = parseInt(stats.subscribers || '0', 10);
+        if (subs > 0) latestSubscribers = subs;
+        const act = parseInt(stats.active || stats.active_users || '0', 10);
+        if (act > 0) latestActive = act;
+      }
     }
 
-    // Top 3 best posting times from the ZSET
-    const topBestPostingTimes = bins.slice(0, 3).map((bin) => ({
-      dayHour: bin.key,
-      score: bin.velocity,
-    }));
+    const finalWordCloud = Object.fromEntries(
+      Object.entries(globalWordCloud)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 150)
+    );
 
-    // Placeholder global word cloud (empty for now, can be populated from scan data if needed)
-    const globalWordCloud: Record<string, number> = {};
+    // Top 3 best posting times from the ZSET
+    const topBestPostingTimes = bins.slice(0, 3).map((bin) => {
+      const [day, hourStr] = bin.key.split('-');
+      const hour = Number(hourStr) || 0;
+      return {
+        day: day || 'Unknown',
+        hour,
+        hour_fmt: `${hour % 12 || 12} ${hour < 12 ? 'AM' : 'PM'}`,
+        score: bin.velocity,
+        sortWeight: bin.velocity,
+        count: bin.velocity,
+      };
+    });
+
+    const globalStats = {
+      posts_per_day: statsCount > 0 ? Number((totalPpd / statsCount).toFixed(2)) : 0,
+      comments_per_day: statsCount > 0 ? Number((totalCpd / statsCount).toFixed(2)) : 0,
+      avg_engagement: statsCount > 0 ? Number((totalEng / statsCount).toFixed(2)) : 0,
+      avg_score: statsCount > 0 ? Number((totalScore / statsCount).toFixed(2)) : 0,
+      velocity_24h: statsCount > 0 ? Number((totalVelocity / statsCount).toFixed(2)) : 0,
+      subscribers: latestSubscribers,
+      active_users: latestActive,
+    };
 
     const globalAggregates = {
-      globalWordCloud,
+      globalWordCloud: finalWordCloud,
       globalBestPostingTimes: topBestPostingTimes,
       globalStats,
     };
 
-    await redis.set(
-      `trends:${SUBREDDIT}:global_aggregates`,
-      JSON.stringify(globalAggregates)
-    );
-    console.log(`[MANUAL_TRENDS] ✓ Global aggregates seeded.`);
+    const serializedAggregates = JSON.stringify(globalAggregates);
 
-    // --- Step 9: Lock the last_materialized to far future ---
-    await redis.set(`trends:${SUBREDDIT}:last_materialized`, FUTURE_DATE);
+    await redis.hSet(redisKey.trendsStatic(), { globalAggregates: serializedAggregates });
+    logger.info('✓ Global aggregates seeded.', 'ManualTrends');
 
-    console.log(
-      `[MANUAL_TRENDS] ✓ All done! Trends seeded for r/${SUBREDDIT}. Locked to ${FUTURE_DATE}.`
+    // --- Step 9: Save materialized timestamp snapshot ---
+    const latestScanTs = scans[scans.length - 1]?.timestamp ?? Date.now();
+    const trendSnapshotPayload = {
+      subreddit: SUBREDDIT,
+      lastMaterialized: FUTURE_DATE,
+      stale: false,
+      subscriberGrowth: [],
+      growthRate: 0,
+      growthForecast: {
+        trendline: [],
+        forecast: [],
+        horizonDays: 30,
+        modelQuality: 1,
+      },
+      engagementOverTime: [],
+      engagementAnomalies: [],
+      contentMix: [],
+      contentMixRecap: '',
+      postingHeatmap: Object.entries(heatmapBins).map(([dayHour, b]) => ({
+        dayHour,
+        delta: b.delta,
+        countA: b.countA,
+        countB: b.countB,
+        velocity: b.velocity,
+      })),
+      postingPatternRecap: '',
+      bestPostingTimesChange: {
+        timeline: bestTimesTimeline,
+        changeSummary: bestTimesChanges,
+      },
+      globalWordCloud: finalWordCloud,
+      globalBestPostingTimes: topBestPostingTimes,
+      globalStats,
+    };
+
+    await Promise.all([
+      redis.set(
+        redisKey.trendsMaterialized(latestScanTs),
+        JSON.stringify(trendSnapshotPayload)
+      ),
+      redis.zAdd(redisKey.trendsMaterializations(), {
+        score: latestScanTs,
+        member: String(latestScanTs),
+      }),
+      redis.hSet(redisKey.trendsStatic(), { lastMaterialized: FUTURE_DATE }),
+    ]);
+
+    logger.info(
+      `✓ All done! Trends seeded for r/${SUBREDDIT}. Locked to ${FUTURE_DATE}.`,
+      'ManualTrends'
     );
   } catch (error) {
-    console.error(
-      '[MANUAL_TRENDS] ❌ Failed:',
-      error instanceof Error ? error.message : String(error)
-    );
+    logger.error('Failed:', error, 'ManualTrends');
     throw error;
   }
 }
 
-export { runManualMaterialization };
+export { runManualTrendAnalysis };

@@ -1,13 +1,27 @@
 import { getWebViewMode, requestExpandedMode } from '@devvit/web/client';
-import React, { useEffect, useMemo, useState } from 'react';
-import type { AnalyticsSnapshot, PostData } from '../../../shared/types/api';
+import { subDays } from 'date-fns';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import type {
+  AnalyticsSnapshot,
+  PostData,
+} from '../../../shared/types/api.types';
+import { MS_PER_DAY } from '../../../shared/core/constants';
+import { formatSafe } from '../../../shared/utils/dateUtils';
+import {
+  getPostUrlFromId,
+  isExternalUrl,
+} from '../../../shared/utils/postHelpers';
 import { useSettings } from '../hooks/useSettings';
 import {
   getDataGroupingIcon,
   getPostDetailIcon,
   type IconContext,
 } from '../utils/iconMappings';
-import { DAYS, formatPostListDateTime, formatScanDate } from '../utils/reportFormatting';
+import {
+  DAYS,
+  formatPostListDateTime,
+  formatScanDate,
+} from '../utils/reportFormatting';
 import { markStartup } from '../utils/startupMarkers';
 import { ActivityView } from './ActivityView';
 import { BestPostingTimesChangeChart } from './BestPostingTimesChangeChart';
@@ -30,13 +44,7 @@ import { Tooltip } from './ui/tooltip';
 import { UsersView } from './UsersView';
 
 type ReportTab =
-  | 'overview'
-  | 'timing'
-  | 'posts'
-  | 'users'
-  | 'content'
-  | 'activity'
-  | 'trends';
+  'overview' | 'timing' | 'posts' | 'users' | 'content' | 'activity' | 'trends';
 
 /**
  * Converts a label string to M/D/YYYY format.
@@ -130,18 +138,26 @@ export const compactTooltipProps = {
   },
 };
 
-interface ReportViewProps {
+export interface ReportViewProps {
   data?: AnalyticsSnapshot | undefined;
   isPrintMode?: boolean;
   onPrint?: () => void;
   officialAccounts?: string[];
+  hideInternalTabBar?: boolean;
+  activeTab?: ReportTab;
+  onTabChange?: (tab: ReportTab, e?: React.MouseEvent) => void;
+  onTabsAvailable?: (tabs: Array<{ tab: ReportTab; label: string }>) => void;
 }
 
-function ReportView({
+export function ReportView({
   data: propData,
   isPrintMode = false,
   onPrint,
   officialAccounts: liveOfficialAccounts = [],
+  hideInternalTabBar = false,
+  activeTab: controlledActiveTab,
+  onTabChange: onControlledTabChange,
+  onTabsAvailable,
 }: ReportViewProps = {}) {
   const EXPANDED_TAB_STORAGE_KEY = 'modscope:launch-intent';
   const EXPANDED_TAB_SESSION_KEY = 'modscope:launch-intent:session';
@@ -196,7 +212,9 @@ function ReportView({
     const rawIntent =
       localStorage.getItem(EXPANDED_TAB_STORAGE_KEY) ||
       sessionStorage.getItem(EXPANDED_TAB_SESSION_KEY) ||
-      (cookieEntry ? decodeURIComponent(cookieEntry.split('=').slice(1).join('=')) : null);
+      (cookieEntry
+        ? decodeURIComponent(cookieEntry.split('=').slice(1).join('='))
+        : null);
 
     const clearAllIntentStores = () => {
       localStorage.removeItem(EXPANDED_TAB_STORAGE_KEY);
@@ -244,7 +262,14 @@ function ReportView({
     return intent;
   };
 
-  const [activeTab, setActiveTab] = useState<ReportTab>('overview');
+  const [internalActiveTab, setInternalActiveTab] =
+    useState<ReportTab>('overview');
+  const activeTab =
+    controlledActiveTab !== undefined ? controlledActiveTab : internalActiveTab;
+  const setActiveTab = (tab: ReportTab) => {
+    setInternalActiveTab(tab);
+    onControlledTabChange?.(tab);
+  };
   const [hasExpandedLaunchIntent, setHasExpandedLaunchIntent] =
     useState<boolean>(false);
   const [webViewMode, setWebViewMode] = useState<'inline' | 'expanded'>(() => {
@@ -254,7 +279,10 @@ function ReportView({
 
     return resolveWebViewMode();
   });
-  const [viewportSize, setViewportSize] = useState<{ width: number; height: number }>(() => ({
+  const [viewportSize, setViewportSize] = useState<{
+    width: number;
+    height: number;
+  }>(() => ({
     width: typeof window !== 'undefined' ? window.innerWidth : 0,
     height: typeof window !== 'undefined' ? window.innerHeight : 0,
   }));
@@ -294,7 +322,16 @@ function ReportView({
   const [trendsData, setTrendsData] = useState<any>(null);
   const [trendsLoadedKey, setTrendsLoadedKey] = useState<string | null>(null);
   const [precisionMuted, setPrecisionMuted] = useState(false);
+  const [reportCustomEmojis, setReportCustomEmojis] = useState<Record<string, string>>({});
   const trendsCacheKey = `${analytics?.meta?.subreddit || 'unknown'}:${analytics?.meta?.scanDate || 'unknown'}`;
+  const effectiveCustomEmojis = useMemo(
+    () => ({
+      ...(analytics?.meta?.customEmojis || {}),
+      ...(trendsData?.customEmojis || {}),
+      ...reportCustomEmojis,
+    }),
+    [analytics?.meta?.customEmojis, trendsData?.customEmojis, reportCustomEmojis]
+  );
 
   const useTrendPrecisionData = useMemo(() => {
     if (precisionMuted) return false;
@@ -332,8 +369,6 @@ function ReportView({
 
   // Activity tab state - for toggling chart series visibility
   const [hiddenSeries, setHiddenSeries] = useState<Record<string, boolean>>({});
-
-
 
   const consumeServerLaunchIntent = async (): Promise<ReportTab | null> => {
     if (!isExpandedEntrypoint) {
@@ -445,75 +480,55 @@ function ReportView({
         'Content-Type': 'application/json',
       },
       body: payload,
-      keepalive: true,
-    })
-      .then(async (response) => {
-        if (!response.ok || typeof window === 'undefined') {
-          return;
-        }
-
-        const bodyJson = (await response.json().catch(() => null)) as
-          | { intentId?: string | null }
-          | null;
-        if (typeof bodyJson?.intentId === 'string' && bodyJson.intentId) {
-          window.__MODSCOPE_LAUNCH_INTENT_ID__ = bodyJson.intentId;
-          window.__MODSCOPE_LAUNCH_INTENT_TAB__ = tab;
-        }
-      })
-      .catch(() => {
-        // Fall back to local handoff only when server intent persistence fails.
-      });
+    }).catch(() => {
+      // Best-effort intent sync only
+    });
   };
 
   useEffect(() => {
-    if (typeof window === 'undefined' || isPrintMode || !isExpandedEntrypoint) {
+    if (!isExpandedEntrypoint || isPrintMode) {
       return;
     }
 
-    let cancelled = false;
+    let mounted = true;
+    let lateSync: number | undefined;
 
-    const hydrateFromServerIntent = async () => {
-      const serverTab = await consumeServerLaunchIntent();
-      if (cancelled || !serverTab) {
+    void consumeServerLaunchIntent().then((serverTab) => {
+      if (!mounted || !serverTab) {
         return;
       }
 
-      setWebViewMode('expanded');
       setActiveTab(serverTab);
       setHasExpandedLaunchIntent(false);
-    };
+    });
 
-    const syncWebViewMode = () => {
-      setWebViewMode(resolveWebViewMode());
-    };
-    const syncViewport = () => {
-      setViewportSize({ width: window.innerWidth, height: window.innerHeight });
-      if ('matchMedia' in window) {
-        setIsCoarsePointer(window.matchMedia('(pointer: coarse)').matches);
-      }
-    };
-
-    window.addEventListener('focus', syncWebViewMode);
-    window.addEventListener('pageshow', syncWebViewMode);
-    window.addEventListener('resize', syncViewport);
-    document.addEventListener('visibilitychange', syncWebViewMode);
-    syncWebViewMode();
-    syncViewport();
-    void hydrateFromServerIntent();
-
-    const delayedSync = window.setTimeout(syncWebViewMode, 150);
-    const lateSync = window.setTimeout(syncWebViewMode, 600);
     const delayedIntentHydration = window.setTimeout(() => {
-      void hydrateFromServerIntent();
-    }, 220);
+      if (!mounted) {
+        return;
+      }
+
+      const pendingIntent = readLaunchIntent();
+      if (!pendingIntent) {
+        return;
+      }
+
+      lateSync = window.setTimeout(() => {
+        if (!mounted) {
+          return;
+        }
+
+        const lateIntent = consumeLaunchIntent();
+        if (!lateIntent) {
+          return;
+        }
+
+        setActiveTab(lateIntent.tab);
+        setHasExpandedLaunchIntent(false);
+      }, 160);
+    }, 40);
 
     return () => {
-      cancelled = true;
-      window.removeEventListener('focus', syncWebViewMode);
-      window.removeEventListener('pageshow', syncWebViewMode);
-      window.removeEventListener('resize', syncViewport);
-      document.removeEventListener('visibilitychange', syncWebViewMode);
-      window.clearTimeout(delayedSync);
+      mounted = false;
       window.clearTimeout(lateSync);
       window.clearTimeout(delayedIntentHydration);
     };
@@ -530,7 +545,11 @@ function ReportView({
   }, [webViewMode, isPrintMode]);
 
   useEffect(() => {
-    if (typeof window === 'undefined' || isPrintMode || webViewMode !== 'expanded') {
+    if (
+      typeof window === 'undefined' ||
+      isPrintMode ||
+      webViewMode !== 'expanded'
+    ) {
       return;
     }
 
@@ -573,14 +592,27 @@ function ReportView({
     };
   }, [activeTab, webViewMode, isPrintMode]);
 
+  const onTabsAvailableRef = useRef(onTabsAvailable);
+  onTabsAvailableRef.current = onTabsAvailable;
+
+  useEffect(() => {
+    if (onTabsAvailableRef.current) {
+      const availableTabs = VALID_REPORT_TABS.map((tab) => ({
+        tab,
+        label: tab.charAt(0).toUpperCase() + tab.slice(1),
+      }));
+      onTabsAvailableRef.current(availableTabs);
+    }
+  }, []);
+
   const isInlineConstrained =
     !isPrintMode && webViewMode === 'inline' && !hasExpandedLaunchIntent;
   const useCompactInlineOverview =
     isInlineConstrained &&
-    (isCoarsePointer ||
-      viewportSize.width <= INLINE_COMPACT_MAX_WIDTH);
+    (isCoarsePointer || viewportSize.width <= INLINE_COMPACT_MAX_WIDTH);
 
   const handleTabChange = (tab: ReportTab, event?: React.MouseEvent) => {
+    onControlledTabChange?.(tab, event);
     if (
       isInlineConstrained &&
       !INLINE_ALLOWED_TABS.includes(tab) &&
@@ -588,20 +620,16 @@ function ReportView({
     ) {
       if (event) {
         const intentPayload = JSON.stringify({ tab, ts: Date.now() });
-        localStorage.setItem(
-          EXPANDED_TAB_STORAGE_KEY,
-          intentPayload
-        );
+        localStorage.setItem(EXPANDED_TAB_STORAGE_KEY, intentPayload);
         sessionStorage.setItem(EXPANDED_TAB_SESSION_KEY, intentPayload);
         document.cookie = `${EXPANDED_TAB_COOKIE_KEY}=${encodeURIComponent(intentPayload)}; Max-Age=15; Path=/; SameSite=Lax`;
         persistServerLaunchIntent(tab);
-        setHasExpandedLaunchIntent(true);
         requestExpandedMode(event as unknown as PointerEvent, 'expanded');
+        return;
       }
-      return;
     }
 
-    setActiveTab(tab);
+    setInternalActiveTab(tab);
   };
 
   // Calculate dynamic activity heatmap with quantile thresholds
@@ -694,7 +722,7 @@ function ReportView({
 
     let mounted = true;
 
-    if (!shouldLoadTrends) {
+    if (!shouldLoadTrends || !analytics) {
       return () => {
         mounted = false;
       };
@@ -743,6 +771,18 @@ function ReportView({
     };
 
     void loadTrends();
+
+    if (!analytics?.meta?.customEmojis || Object.keys(analytics.meta.customEmojis).length === 0) {
+      fetch('/api/metricpost/flairs')
+        .then((res) => (res.ok ? res.json() : null))
+        .then((flairData) => {
+          if (mounted && flairData?.customEmojis && Object.keys(flairData.customEmojis).length > 0) {
+            setReportCustomEmojis((prev) => ({ ...prev, ...flairData.customEmojis }));
+          }
+        })
+        .catch(() => {});
+    }
+
     return () => {
       mounted = false;
     };
@@ -773,8 +813,10 @@ function ReportView({
   const hasPrecisionData = useMemo(() => {
     if (trendsLoadedKey !== trendsCacheKey || !trendsData) return false;
     return !!(
-      (trendsData.globalWordCloud && Object.keys(trendsData.globalWordCloud).length > 0) ||
-      (trendsData.globalBestPostingTimes && trendsData.globalBestPostingTimes.length > 0) ||
+      (trendsData.globalWordCloud &&
+        Object.keys(trendsData.globalWordCloud).length > 0) ||
+      (trendsData.globalBestPostingTimes &&
+        trendsData.globalBestPostingTimes.length > 0) ||
       trendsData.globalStats
     );
   }, [trendsData, trendsLoadedKey, trendsCacheKey]);
@@ -821,7 +863,9 @@ function ReportView({
             style={{
               fontSize: '9px',
               fontWeight: 500,
-              color: precisionMuted ? 'var(--text-muted)' : 'var(--text-secondary)',
+              color: precisionMuted
+                ? 'var(--text-muted)'
+                : 'var(--text-secondary)',
               letterSpacing: '-0.01em',
               textDecoration: 'underline',
               textDecorationStyle: 'dotted',
@@ -836,17 +880,19 @@ function ReportView({
 
   if (!analytics) {
     return (
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          height: '100%',
-          padding: '20px',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <p style={{ color: '#64748b' }}>Loading report data...</p>
+      <div className="flex flex-col items-center justify-center h-full p-8 text-center bg-slate-50 border border-slate-200 rounded-lg m-4">
+        <Icon
+          name="mono-analysis-chart"
+          size={48}
+          className="text-slate-400 mb-4"
+        />
+        <h2 className="text-lg font-bold text-slate-800 mb-2">
+          No Snapshot Data Available
+        </h2>
+        <p className="text-sm text-slate-500 mb-4 max-w-sm">
+          Run a snapshot analysis or select an existing snapshot from the
+          Snapshots tab to view the community report.
+        </p>
       </div>
     );
   }
@@ -871,7 +917,7 @@ function ReportView({
         </h2>
         <p className="text-gray-500 text-sm max-w-md mb-8">
           The requested snapshot appears to be corrupted or was not fully
-          ingested into the new database schema.
+          ingested into the database.
         </p>
         <div className="flex gap-4">
           <Button
@@ -892,14 +938,18 @@ function ReportView({
     );
   }
 
-  const tabs: Array<{ tab: ReportTab; label: string }> = [
+  const tabs: Array<{ tab: ReportTab; label: string; disabled?: boolean }> = [
     { tab: 'overview' as ReportTab, label: 'Overview' },
     { tab: 'timing' as ReportTab, label: 'Timing' },
     { tab: 'posts' as ReportTab, label: 'Posts' },
     { tab: 'users' as ReportTab, label: 'Users' },
     { tab: 'content' as ReportTab, label: 'Content' },
     { tab: 'activity' as ReportTab, label: 'Activity' },
-    { tab: 'trends' as ReportTab, label: 'Trends' },
+    {
+      tab: 'trends' as ReportTab,
+      label: 'Trends',
+      disabled: (reportSettings as any).includeTrendDataset === false,
+    },
   ].filter((t) => {
     // Filter tabs based on report settings
     if (t.tab === 'overview' && reportSettings.showOverview === false) {
@@ -930,7 +980,11 @@ function ReportView({
     ) {
       return false;
     }
-    if (t.tab === 'trends' && !isPrintMode && (!hasRenderableTrendData || precisionMuted)) {
+    if (
+      t.tab === 'trends' &&
+      !isPrintMode &&
+      (!hasRenderableTrendData || precisionMuted)
+    ) {
       return false;
     }
     return true;
@@ -938,18 +992,69 @@ function ReportView({
 
   // Calculate best posting times
   const getBestTimes = () => {
-    if (useTrendPrecisionData && trendsData?.globalBestPostingTimes) {
-      return trendsData.globalBestPostingTimes
+    if (useTrendPrecisionData && Array.isArray(trendsData?.globalBestPostingTimes) && trendsData.globalBestPostingTimes.length > 0) {
+      const timeline = trendsData?.bestPostingTimesChange?.timeline;
+      if (timeline && timeline.length > 0) {
+        const latestPoint = timeline[timeline.length - 1];
+        const anchorTimestamp = latestPoint?.timestamp || Date.now();
+        const cutoffTs = anchorTimestamp - 30 * MS_PER_DAY;
+        const validTimeline = timeline.filter(
+          (t: any) => t.timestamp >= cutoffTs && t.timestamp <= anchorTimestamp
+        );
+        const segmentSize = Math.max(1, Math.floor(validTimeline.length / 2));
+        const latePeriod = validTimeline.slice(-segmentSize);
+
+        const windowSlotAccum = new Map<string, number[]>();
+
+        for (const entry of latePeriod) {
+          for (const slot of entry.topSlots || []) {
+            if (!windowSlotAccum.has(slot.dayHour)) {
+              windowSlotAccum.set(slot.dayHour, []);
+            }
+            windowSlotAccum.get(slot.dayHour)!.push(slot.score);
+          }
+        }
+
+        const avg = (arr: number[]) =>
+          arr.length > 0 ? arr.reduce((s, v) => s + v, 0) / arr.length : 0;
+
+        const timelineEvaluated = Array.from(windowSlotAccum.entries())
+          .map(([dayHour, scores]) => {
+            const parts = dayHour.split('-');
+            const day = parts[0] || 'Unknown';
+            const hour = parseInt(parts[1] || '0', 10);
+            return {
+              day,
+              hour,
+              hour_fmt: `${hour % 12 || 12} ${hour < 12 ? 'AM' : 'PM'}`,
+              score: Math.round(avg(scores)),
+            };
+          })
+          .filter((s) => s.score > 0)
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 3);
+
+        if (timelineEvaluated.length > 0) {
+          return timelineEvaluated;
+        }
+      }
+
+      const results = trendsData.globalBestPostingTimes
         .map((slot: any) => ({
           day: slot.day,
           hour: slot.hour,
           hour_fmt: slot.hour_fmt,
-          score: Math.round(slot.score),
-          sortWeight: slot.sortWeight,
+          score: Math.round(slot.score || 0),
+          sortWeight: slot.sortWeight || 0,
           count: slot.count,
         }))
-        .sort((a: any, b: any) => b.sortWeight - a.sortWeight)
+        .filter((slot: any) => slot.score > 0)
+        .sort((a: any, b: any) => (b.sortWeight || b.score) - (a.sortWeight || a.score))
         .slice(0, 3);
+
+      if (results.length > 0) {
+        return results;
+      }
     }
 
     const pool = analytics?.analysisPool;
@@ -1040,7 +1145,9 @@ function ReportView({
     }
 
     const uniquePosts = Array.from(
-      new Map(pool.map((p: PostData) => [p.url, p])).values()
+      new Map(
+        pool.map((p: PostData & { postId?: string }) => [p.id || p.postId || p.url, p])
+      ).values()
     );
 
     const stopWords = new Set([
@@ -1189,16 +1296,13 @@ function ReportView({
     const analysisDays = reportSettings?.trendAnalysisDays || 90;
 
     for (let i = 0; i < analysisDays; i++) {
-      const d = new Date(referenceDate);
-      d.setDate(d.getDate() - i);
-      const dateStr = d.toISOString().split('T')[0]!;
+      const d = subDays(referenceDate, i);
+      const dateStr = formatSafe(d, 'yyyy-MM-dd');
       dateCounts[dateStr] = { posts: 0, comments: 0 };
     }
 
     allPosts.forEach((post: PostData) => {
-      const dateStr = new Date(post.created_utc * 1000)
-        .toISOString()
-        .split('T')[0]!;
+      const dateStr = formatSafe(post.created_utc * 1000, 'yyyy-MM-dd');
       if (dateCounts[dateStr]) {
         dateCounts[dateStr].posts += 1;
         dateCounts[dateStr].comments += post.comments;
@@ -1312,7 +1416,8 @@ function ReportView({
           display: 'flex',
           flexDirection: 'column',
           gap: '20px',
-          padding: '0 4px',
+          padding: '12px',
+          paddingBottom: 'max(48px, calc(16px + var(--safe-area-bottom)))',
         }}
       >
         {staleWarning}
@@ -1323,7 +1428,11 @@ function ReportView({
             trendAnalysisDays={reportSettings.trendAnalysisDays || 90}
             iconContext={iconContext}
             isPrintMode={isPrintMode}
-            snapshotTimestamp={analytics?.meta?.scanDate ? new Date(analytics.meta.scanDate).getTime() : undefined}
+            snapshotTimestamp={
+              analytics?.meta?.scanDate
+                ? new Date(analytics.meta.scanDate).getTime()
+                : undefined
+            }
           />
         )}
 
@@ -1333,7 +1442,11 @@ function ReportView({
             trendAnalysisDays={reportSettings.trendAnalysisDays || 90}
             iconContext={iconContext}
             isPrintMode={isPrintMode}
-            snapshotTimestamp={analytics?.meta?.scanDate ? new Date(analytics.meta.scanDate).getTime() : undefined}
+            snapshotTimestamp={
+              analytics?.meta?.scanDate
+                ? new Date(analytics.meta.scanDate).getTime()
+                : undefined
+            }
           />
         )}
 
@@ -1343,7 +1456,12 @@ function ReportView({
             trendAnalysisDays={reportSettings.trendAnalysisDays || 90}
             iconContext={iconContext}
             isPrintMode={isPrintMode}
-            snapshotTimestamp={analytics?.meta?.scanDate ? new Date(analytics.meta.scanDate).getTime() : undefined}
+            snapshotTimestamp={
+              analytics?.meta?.scanDate
+                ? new Date(analytics.meta.scanDate).getTime()
+                : undefined
+            }
+            customEmojis={effectiveCustomEmojis}
           />
         )}
 
@@ -1353,7 +1471,11 @@ function ReportView({
             trendAnalysisDays={reportSettings.trendAnalysisDays || 90}
             iconContext={iconContext}
             isPrintMode={isPrintMode}
-            snapshotTimestamp={analytics?.meta?.scanDate ? new Date(analytics.meta.scanDate).getTime() : undefined}
+            snapshotTimestamp={
+              analytics?.meta?.scanDate
+                ? new Date(analytics.meta.scanDate).getTime()
+                : undefined
+            }
           />
         )}
 
@@ -1362,7 +1484,11 @@ function ReportView({
             trendsData={trendsData}
             iconContext={iconContext}
             isPrintMode={isPrintMode}
-            snapshotTimestamp={analytics?.meta?.scanDate ? new Date(analytics.meta.scanDate).getTime() : undefined}
+            snapshotTimestamp={
+              analytics?.meta?.scanDate
+                ? new Date(analytics.meta.scanDate).getTime()
+                : undefined
+            }
           />
         )}
       </div>
@@ -1377,43 +1503,45 @@ function ReportView({
       {!isPrintMode && (
         <>
           {/* Header - Fixed Height */}
-          <div className="flex-shrink-0 bg-transparent border-b border-border">
-            <EntityTitle
-              icon="mono-trend.png"
-              title="ModScope Analytics"
-              subtitle={`r/${analytics.meta?.subreddit || 'Unknown'} • ${formatScanDate(analytics.meta?.scanDate)}`}
-              className="p-1"
-              actions={
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-500 font-medium whitespace-nowrap">
-                      Exclude Official Content
-                    </span>
-                    <Checkbox
-                      checked={excludeOfficial}
-                      onCheckedChange={(checked) =>
-                        updateSettings({
-                          ...settings,
-                          settings: {
-                            ...settings.settings,
-                            excludeOfficial: checked as boolean,
-                          },
-                        })
-                      }
-                    />
+          {!hideInternalTabBar && (
+            <div className="flex-shrink-0 bg-transparent border-b border-border">
+              <EntityTitle
+                icon="mono-trend.png"
+                title="ModScope Analytics"
+                subtitle={`r/${analytics.meta?.subreddit || 'Unknown'} • ${formatScanDate(analytics.meta?.scanDate)}${analytics.meta?.scanId ?? (analytics as any)?.scanId ? ` [#${analytics.meta?.scanId ?? (analytics as any)?.scanId}]` : ''}`}
+                className="p-1"
+                actions={
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500 font-medium whitespace-nowrap">
+                        Exclude Official Content
+                      </span>
+                      <Checkbox
+                        checked={excludeOfficial}
+                        onCheckedChange={(checked) =>
+                          updateSettings({
+                            ...settings,
+                            settings: {
+                              ...settings.settings,
+                              excludeOfficial: checked as boolean,
+                            },
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="icon"
+                        onClick={() => onPrint?.()}
+                        icon="mono-html"
+                        iconSize={24}
+                      />
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="icon"
-                      onClick={() => onPrint?.()}
-                      icon="mono-html"
-                      iconSize={24}
-                    />
-                  </div>
-                </div>
-              }
-            />
-          </div>
+                }
+              />
+            </div>
+          )}
 
           <Tabs
             value={activeTab}
@@ -1421,67 +1549,77 @@ function ReportView({
             className="report-tabs-wrapper flex-1 flex flex-col min-h-0 overflow-hidden"
           >
             {/* Tab Bar - top on mobile, bottom on desktop via CSS order */}
-            <div
-              className="report-tabs-bar flex-shrink-0 border-b border-border px-1 flex items-end justify-start z-50 gap-0.5 overflow-x-auto overflow-y-hidden"
-              style={{
-                background: 'var(--color-accent)',
-                paddingTop: '4px',
-                paddingBottom: isInlineConstrained ? '4px' : 'calc(6px + var(--safe-area-bottom))',
-              }}
-            >
-              {tabs.map((t) => {
-                const isActive = activeTab === t.tab;
-                const opensFullscreen = isInlineConstrained && t.tab !== 'overview';
+            {!hideInternalTabBar && (
+              <div
+                className="report-tabs-bar flex-shrink-0 border-b border-border px-1 flex items-end justify-start z-50 gap-0.5 overflow-x-auto overflow-y-hidden"
+                style={{
+                  background: 'var(--color-accent)',
+                  paddingTop: '4px',
+                  paddingBottom: isInlineConstrained
+                    ? '4px'
+                    : 'calc(6px + var(--safe-area-bottom))',
+                }}
+              >
+                {tabs.map((t) => {
+                  const isActive = activeTab === t.tab;
+                  const opensFullscreen =
+                    isInlineConstrained && t.tab !== 'overview';
 
-                const tabButton = (
-                  <button
-                    onClick={(e) => handleTabChange(t.tab, e)}
-                    className={`
-                                            relative px-3 py-1 text-xs font-medium transition-all
-                                            border-t border-l border-r rounded-t-lg mt-auto mb-0 mx-0.5
-                                            min-w-[50px] flex justify-center items-center whitespace-nowrap
-                                            ${
-                                              isActive
-                                                ? `h-[28px] ${isInlineConstrained ? 'translate-y-[1px]' : 'translate-y-[-1px]'} z-10 pb-0.5 shadow-sm`
-                                                : 'bg-card border-transparent text-muted-foreground hover:text-foreground hover:bg-muted h-[24px] pb-0.5'
-                                            }
-                                        `}
-                    style={
-                      isActive
-                        ? {
-                            backgroundColor: 'var(--tab-active-bg)',
-                            borderColor: 'var(--tab-active-border)',
-                            color: 'var(--tab-active-text)',
-                          }
-                        : {}
-                    }
-                  >
-                    {t.label}
-                    {opensFullscreen && (
-                      <span className="ml-1 opacity-70" aria-hidden="true">
-                        ↗
-                      </span>
-                    )}
-                    {isActive && (
-                      <div
-                        className={`absolute ${isInlineConstrained ? 'bottom-[-1px]' : 'top-[-1px]'} left-0 right-0 h-[1px]`}
-                        style={{ backgroundColor: 'var(--tab-active-bg)' }}
-                      />
-                    )}
-                  </button>
-                );
+                  const tabButton = (
+                    <button
+                      onClick={(e) => { if (!t.disabled) handleTabChange(t.tab, e); }}
+                      title={t.disabled ? 'Trend dataset is disabled for this report' : ''}
+                      className={`
+                                              relative px-3 py-1 text-xs font-medium transition-all
+                                              border-t border-l border-r rounded-t-lg mt-auto mb-0 mx-0.5
+                                              min-w-[50px] flex justify-center items-center whitespace-nowrap
+                                              ${
+                                                isActive
+                                                  ? `h-[28px] ${isInlineConstrained ? 'translate-y-[1px]' : 'translate-y-[-1px]'} z-10 pb-0.5 shadow-sm`
+                                                  : 'bg-card border-transparent text-muted-foreground hover:text-foreground hover:bg-muted h-[24px] pb-0.5'
+                                              }
+                                          `}
+                      style={{
+                        opacity: t.disabled ? 0.4 : 1,
+                        cursor: t.disabled ? 'not-allowed' : 'pointer',
+                        ...(isActive
+                          ? {
+                              backgroundColor: 'var(--tab-active-bg)',
+                              borderColor: 'var(--tab-active-border)',
+                              color: 'var(--tab-active-text)',
+                            }
+                          : {}),
+                      }}
+                    >
+                      {t.label}
+                      {opensFullscreen && (
+                        <span className="ml-1 opacity-70" aria-hidden="true">
+                          ↗
+                        </span>
+                      )}
+                      {isActive && (
+                        <div
+                          className={`absolute ${isInlineConstrained ? 'bottom-[-1px]' : 'top-[-1px]'} left-0 right-0 h-[1px]`}
+                          style={{ backgroundColor: 'var(--tab-active-bg)' }}
+                        />
+                      )}
+                    </button>
+                  );
 
-                if (!opensFullscreen) {
-                  return <React.Fragment key={t.tab}>{tabButton}</React.Fragment>;
-                }
+                  if (!opensFullscreen) {
+                    return (
+                      <React.Fragment key={t.tab}>{tabButton}</React.Fragment>
+                    );
+                  }
 
-                return (
-                  <Tooltip key={t.tab} content="Open Full Screen" side="top">
-                    {tabButton}
-                  </Tooltip>
-                );
-              })}
-            </div>
+                  return (
+                    <Tooltip key={t.tab} content="Open Full Screen" side="top">
+                      {tabButton}
+                    </Tooltip>
+                  );
+                })}
+              </div>
+            )}
 
             {/* Scrollable Content Area */}
             <div className="report-tabs-content flex-1 overflow-hidden">
@@ -1539,26 +1677,26 @@ function ReportView({
                     />
                   )}
                   {activeTab === t.tab && t.tab === 'activity' && (
-                      <ActivityView
-                        activityTrendData={getActivityTrend()}
-                        engagementVsScoreData={getEngagementVsScore()}
-                        hiddenSeries={hiddenSeries}
-                        onToggleSeries={(dataKey) =>
-                          setHiddenSeries((prev) => ({
-                            ...prev,
-                            [dataKey]: !prev[dataKey],
-                          }))
-                        }
-                        iconContext={iconContext}
-                        isPrintMode={isPrintMode}
-                        tabKey={activeTab}
-                        compactTooltipProps={compactTooltipProps}
-                        referenceTimestamp={
-                          analytics?.meta?.scanDate
-                            ? new Date(analytics.meta.scanDate).getTime()
-                            : undefined
-                        }
-                      />
+                    <ActivityView
+                      activityTrendData={getActivityTrend()}
+                      engagementVsScoreData={getEngagementVsScore()}
+                      hiddenSeries={hiddenSeries}
+                      onToggleSeries={(dataKey) =>
+                        setHiddenSeries((prev) => ({
+                          ...prev,
+                          [dataKey]: !prev[dataKey],
+                        }))
+                      }
+                      iconContext={iconContext}
+                      isPrintMode={isPrintMode}
+                      tabKey={activeTab}
+                      compactTooltipProps={compactTooltipProps}
+                      referenceTimestamp={
+                        analytics?.meta?.scanDate
+                          ? new Date(analytics.meta.scanDate).getTime()
+                          : undefined
+                      }
+                    />
                   )}
                   {activeTab === t.tab &&
                     t.tab === 'trends' &&
@@ -1573,8 +1711,9 @@ function ReportView({
       {/* Print Report Layout — Rendered offscreen for HTML capture */}
       {isPrintMode &&
         (() => {
-
-          const trendGlobalStats = useTrendPrecisionData ? trendsData?.globalStats : undefined;
+          const trendGlobalStats = useTrendPrecisionData
+            ? trendsData?.globalStats
+            : undefined;
 
           return (
             <div className="w-full flex justify-center pb-8 overflow-x-auto print:overflow-visible">
@@ -1610,34 +1749,40 @@ function ReportView({
                     {
                       label: 'Subscribers',
                       value: Number(
-                        trendGlobalStats?.subscribers ?? analytics.stats.subscribers
+                        trendGlobalStats?.subscribers ??
+                          analytics.stats.subscribers
                       ).toLocaleString(),
                     },
-                    { 
-                      label: 'Active Users', 
-                      value: trendGlobalStats?.active_users ?? analytics.stats.active 
+                    {
+                      label: 'Active Users',
+                      value:
+                        trendGlobalStats?.active_users ??
+                        analytics.stats.active,
                     },
                     { label: 'Rules', value: analytics.stats.rules_count },
                     {
                       label: 'Avg Score',
-                      value: trendGlobalStats?.avg_score !== undefined
-                        ? Number(trendGlobalStats.avg_score).toFixed(2)
-                        : typeof analytics.stats.avg_score === 'number'
-                          ? Number(analytics.stats.avg_score).toFixed(2)
-                          : analytics.stats.avg_score,
+                      value:
+                        trendGlobalStats?.avg_score !== undefined
+                          ? Number(trendGlobalStats.avg_score).toFixed(2)
+                          : typeof analytics.stats.avg_score === 'number'
+                            ? Number(analytics.stats.avg_score).toFixed(2)
+                            : analytics.stats.avg_score,
                       color: 'text-blue-700',
                     },
                     {
                       label: 'Posts/Day',
-                      value: trendGlobalStats?.posts_per_day !== undefined
-                        ? Number(trendGlobalStats.posts_per_day).toFixed(1)
-                        : analytics.stats.posts_per_day,
+                      value:
+                        trendGlobalStats?.posts_per_day !== undefined
+                          ? Number(trendGlobalStats.posts_per_day).toFixed(1)
+                          : analytics.stats.posts_per_day,
                     },
                     {
                       label: 'Comments/Day',
-                      value: trendGlobalStats?.comments_per_day !== undefined
-                        ? Number(trendGlobalStats.comments_per_day).toFixed(1)
-                        : analytics.stats.comments_per_day,
+                      value:
+                        trendGlobalStats?.comments_per_day !== undefined
+                          ? Number(trendGlobalStats.comments_per_day).toFixed(1)
+                          : analytics.stats.comments_per_day,
                     },
                     {
                       label: 'Velocity (24h)',
@@ -1645,11 +1790,12 @@ function ReportView({
                     },
                     {
                       label: 'Avg Engagement',
-                      value: trendGlobalStats?.avg_engagement !== undefined
-                        ? Number(trendGlobalStats.avg_engagement).toFixed(2)
-                        : typeof analytics.stats.avg_engagement === 'number'
-                          ? Number(analytics.stats.avg_engagement).toFixed(2)
-                          : analytics.stats.avg_engagement,
+                      value:
+                        trendGlobalStats?.avg_engagement !== undefined
+                          ? Number(trendGlobalStats.avg_engagement).toFixed(2)
+                          : typeof analytics.stats.avg_engagement === 'number'
+                            ? Number(analytics.stats.avg_engagement).toFixed(2)
+                            : analytics.stats.avg_engagement,
                       color: 'text-blue-700',
                     },
                   ].map((m, i) => (
@@ -1998,7 +2144,27 @@ function ReportView({
                                   className="border-b border-slate-100 pb-3"
                                 >
                                   <div className="text-slate-900 leading-snug mb-1 line-clamp-2">
-                                    {post.title}
+                                    {(() => {
+                                      const external =
+                                        post.url && isExternalUrl(post.url);
+                                      const built = getPostUrlFromId(
+                                        post.id || post.url
+                                      );
+                                      const href = external
+                                        ? post.url
+                                        : built || post.url;
+                                      if (!href) return post.title;
+                                      return (
+                                        <a
+                                          href={href}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-slate-900"
+                                        >
+                                          {post.title}
+                                        </a>
+                                      );
+                                    })()}
                                   </div>
                                   <div className="flex items-center gap-4 text-[10px] font-black uppercase text-slate-400">
                                     <span className="flex items-center gap-1 text-slate-700">
@@ -2058,7 +2224,7 @@ function ReportView({
                                       </span>
                                     )}
                                     <span>
-                                      • {post.author} •{' '}
+                                      • {post.author || '[Deleted User]'} •{' '}
                                       {formatPostListDateTime(post.created_utc)}
                                     </span>
                                   </div>
@@ -2130,7 +2296,11 @@ function ReportView({
                             }
                             iconContext={iconContext}
                             isPrintMode={isPrintMode}
-                            snapshotTimestamp={analytics?.meta?.scanDate ? new Date(analytics.meta.scanDate).getTime() : undefined}
+                            snapshotTimestamp={
+                              analytics?.meta?.scanDate
+                                ? new Date(analytics.meta.scanDate).getTime()
+                                : undefined
+                            }
                           />
                         )}
 
@@ -2139,7 +2309,11 @@ function ReportView({
                             trendsData={trendsData}
                             iconContext={iconContext}
                             isPrintMode={isPrintMode}
-                            snapshotTimestamp={analytics?.meta?.scanDate ? new Date(analytics.meta.scanDate).getTime() : undefined}
+                            snapshotTimestamp={
+                              analytics?.meta?.scanDate
+                                ? new Date(analytics.meta.scanDate).getTime()
+                                : undefined
+                            }
                           />
                         )}
 
@@ -2148,7 +2322,12 @@ function ReportView({
                             trendsData={trendsData}
                             iconContext={iconContext}
                             isPrintMode={isPrintMode}
-                            snapshotTimestamp={analytics?.meta?.scanDate ? new Date(analytics.meta.scanDate).getTime() : undefined}
+                            snapshotTimestamp={
+                              analytics?.meta?.scanDate
+                                ? new Date(analytics.meta.scanDate).getTime()
+                                : undefined
+                            }
+                            customEmojis={effectiveCustomEmojis}
                           />
                         )}
 

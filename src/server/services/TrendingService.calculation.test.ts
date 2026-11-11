@@ -6,11 +6,41 @@ import { MS_PER_DAY } from '../../shared/core/constants';
 class MockRedisClient {
   private data: Map<string, any> = new Map();
 
-  async zRange(key: string, start: number, stop: number): Promise<string[]> {
+  async zRange(
+    key: string,
+    start: number | string,
+    stop: number | string,
+    options?: { REV?: boolean; BYSCORE?: boolean; by?: string }
+  ): Promise<string[]> {
     const zset = this.data.get(key) || [];
-    // Handle -1 to mean "all items"
-    const actualStop = stop === -1 ? zset.length : stop + 1;
-    return zset.slice(start, actualStop).map((item: any) => item.member);
+    if (options?.BYSCORE || options?.by === 'score') {
+      const minScore =
+        typeof start === 'string' && start === '-inf'
+          ? -Infinity
+          : Number(start);
+      const maxScore =
+        typeof stop === 'string' && (stop === '+inf' || stop === 'inf')
+          ? Infinity
+          : Number(stop);
+      return zset
+        .filter((item: any) => item.score >= minScore && item.score <= maxScore)
+        .sort((a: any, b: any) =>
+          options?.REV ? b.score - a.score : a.score - b.score
+        )
+        .map((item: any) => item.member);
+    }
+    const sorted = zset.sort((a: any, b: any) =>
+      options?.REV ? b.score - a.score : a.score - b.score
+    );
+    const numStart = Number(start);
+    const numStop = Number(stop);
+    const actualStart =
+      numStart < 0 ? Math.max(0, sorted.length + numStart) : numStart;
+    const actualStop =
+      numStop < 0 ? sorted.length + numStop + 1 : numStop + 1;
+    return sorted
+      .slice(actualStart, actualStop)
+      .map((item: any) => item.member);
   }
 
   async zCard(key: string): Promise<number> {
@@ -34,7 +64,7 @@ class MockRedisClient {
     return this.data.get(key) || {};
   }
 
-  async trackOperation(op: string, fn: () => Promise<any>): Promise<any> {
+  async trackOperation(_op: string, fn: () => Promise<any>): Promise<any> {
     return fn();
   }
 

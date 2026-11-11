@@ -1,14 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
   CalculationSettings,
-  UserSettings,
-  StorageSettings,
-  ReportSettings,
   DEFAULT_CALCULATION_SETTINGS,
-  DEFAULT_USER_SETTINGS,
-  DEFAULT_STORAGE_SETTINGS,
   DEFAULT_REPORT_SETTINGS,
-} from '../../../shared/types/settings';
+  DEFAULT_STORAGE_SETTINGS,
+  DEFAULT_USER_SETTINGS,
+  ReportSettings,
+  StorageSettings,
+  UserSettings,
+  DictionarySettings,
+  DEFAULT_DICTIONARY_SETTINGS,
+} from '../../../shared/types/settings.types';
 import { useTheme } from '../../hooks/useTheme';
 
 export function useSettings() {
@@ -17,11 +19,13 @@ export function useSettings() {
     display: UserSettings;
     storage: StorageSettings;
     report: ReportSettings;
+    dictionary: DictionarySettings;
   }>({
     settings: DEFAULT_CALCULATION_SETTINGS,
     display: DEFAULT_USER_SETTINGS,
     storage: DEFAULT_STORAGE_SETTINGS,
     report: DEFAULT_REPORT_SETTINGS,
+    dictionary: DEFAULT_DICTIONARY_SETTINGS,
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -36,12 +40,13 @@ export function useSettings() {
         }
         const data = await response.json();
 
-        // Backend returns { settings, display, storage, report }
+        // Backend returns { settings, display, storage, report, dictionary }
         const fetchedSettings = {
           settings: data.settings || DEFAULT_CALCULATION_SETTINGS,
           display: data.display || DEFAULT_USER_SETTINGS,
           storage: data.storage || DEFAULT_STORAGE_SETTINGS,
           report: data.report || DEFAULT_REPORT_SETTINGS,
+          dictionary: data.dictionary || DEFAULT_DICTIONARY_SETTINGS,
         };
         setSettings(fetchedSettings);
 
@@ -65,6 +70,7 @@ export function useSettings() {
     display?: UserSettings;
     storage?: StorageSettings;
     report?: ReportSettings;
+    dictionary?: DictionarySettings;
   }) => {
     try {
       const response = await fetch('/api/settings', {
@@ -81,6 +87,7 @@ export function useSettings() {
         display: newSettings.display || prev.display,
         storage: newSettings.storage || prev.storage,
         report: newSettings.report || prev.report,
+        dictionary: newSettings.dictionary || prev.dictionary,
       }));
 
       // Sync theme if it changed

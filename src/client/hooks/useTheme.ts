@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   DEFAULT_USER_SETTINGS,
   UserSettings,
-} from '../../shared/types/settings';
+} from '../../shared/types/settings.types';
 
 export type Theme =
   | 'modscopeflow'
@@ -14,42 +14,72 @@ export type Theme =
   | 'rosemeadow'
   | 'upvoted';
 
-export function useTheme() {
-  const [theme, setTheme] = useState<Theme>(() => {
+let currentTheme: Theme = (() => {
+  if (typeof window !== 'undefined') {
     const saved = localStorage.getItem('modscope_settings');
     if (saved) {
       try {
         const parsed = JSON.parse(saved) as UserSettings;
-        return parsed.theme || 'modscopeflow';
+        if (parsed.theme) return parsed.theme as Theme;
       } catch (e) {
-        return 'modscopeflow';
+        // ignore
       }
     }
-    return 'modscopeflow';
-  });
+  }
+  return 'modscopeflow';
+})();
+
+const listeners = new Set<(theme: Theme) => void>();
+
+function applyThemeToDom(theme: Theme) {
+  if (typeof document !== 'undefined') {
+    document.documentElement.setAttribute('data-theme', theme);
+  }
+}
+
+if (typeof document !== 'undefined') {
+  applyThemeToDom(currentTheme);
+}
+
+export function useTheme() {
+  const [theme, setTheme] = useState<Theme>(currentTheme);
 
   useEffect(() => {
-    // Apply theme to document
-    document.documentElement.setAttribute('data-theme', theme);
-  }, [theme]);
+    const listener = (newTheme: Theme) => {
+      setTheme(newTheme);
+    };
+    listeners.add(listener);
+    return () => {
+      listeners.delete(listener);
+    };
+  }, []);
 
-  const changeTheme = (newTheme: Theme) => {
-    setTheme(newTheme);
-    // Persist immediately for smoother reload
-    const saved = localStorage.getItem('modscope_settings');
-    let settings: UserSettings;
-    if (saved) {
-      try {
-        settings = JSON.parse(saved);
-        settings.theme = newTheme;
-      } catch (e) {
-        settings = { ...DEFAULT_USER_SETTINGS, theme: newTheme };
+  const changeTheme = useCallback(
+    (newTheme: Theme, options?: { persist?: boolean }) => {
+      currentTheme = newTheme;
+      applyThemeToDom(newTheme);
+
+      const shouldPersist = options?.persist ?? true;
+      if (shouldPersist) {
+        const saved = localStorage.getItem('modscope_settings');
+        let settings: UserSettings;
+        if (saved) {
+          try {
+            settings = JSON.parse(saved);
+            settings.theme = newTheme;
+          } catch (e) {
+            settings = { ...DEFAULT_USER_SETTINGS, theme: newTheme };
+          }
+        } else {
+          settings = { ...DEFAULT_USER_SETTINGS, theme: newTheme };
+        }
+        localStorage.setItem('modscope_settings', JSON.stringify(settings));
       }
-    } else {
-      settings = { ...DEFAULT_USER_SETTINGS, theme: newTheme };
-    }
-    localStorage.setItem('modscope_settings', JSON.stringify(settings));
-  };
+
+      listeners.forEach((listener) => listener(newTheme));
+    },
+    []
+  );
 
   return { theme, changeTheme };
 }

@@ -6,12 +6,18 @@ export type StartupMarkerName =
   | 'react-root-created'
   | 'react-render-start'
   | 'app-mounted'
+  | 'upgrade-check-start'
+  | 'upgrade-check-complete'
+  | 'upgrade-blocked'
+  | 'upgrade-owner-running'
+  | 'upgrade-complete'
   | 'init-load-start'
   | 'init-load-complete'
   | 'launch-intent-peek-start'
   | 'launch-intent-peek-complete'
   | 'launch-intent-consume-start'
-  | 'launch-intent-consume-complete';
+  | 'launch-intent-consume-complete'
+  | 'metric';
 
 export interface StartupMarkerEvent {
   name: StartupMarkerName;
@@ -49,7 +55,9 @@ export const markStartup = (
 ): void => {
   const entrypoint =
     options.entrypoint ??
-    (typeof window !== 'undefined' ? window.__MODSCOPE_ENTRYPOINT__ : undefined);
+    (typeof window !== 'undefined'
+      ? window.__MODSCOPE_ENTRYPOINT__
+      : undefined);
 
   const now = Date.now();
   const marker: StartupMarkerEvent = {
@@ -66,7 +74,10 @@ export const markStartup = (
 
   getTimeline().push(marker);
 
-  if (typeof performance !== 'undefined' && typeof performance.mark === 'function') {
+  if (
+    typeof performance !== 'undefined' &&
+    typeof performance.mark === 'function'
+  ) {
     const suffix = options.detail ? `:${options.detail}` : '';
     const entrypointTag = entrypoint ? `:${entrypoint}` : '';
     performance.mark(`${APP_PREFIX}:${name}${entrypointTag}${suffix}`);

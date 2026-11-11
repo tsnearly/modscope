@@ -1,0 +1,91 @@
+I am discovering serious discrepancies in the capture and storage of the snapshots, especally within data normalization.  Let's look at this example.  Post #1vdj2l7 first appears in the 8/3/2026 snapshot [scanId #144].  The entry for this post is shown below:
+
+		{
+          "id": "t3_1vdj2l7",
+          "title": "Can You Find the Silent Letter?",
+          "url": "https://www.reddit.com/r/QuizPlanetGame/comments/1vdj2l7/can_you_find_the_silent_letter/",
+          "created_utc": 1785679804,
+          "author": "aellanovalie",
+          "is_self": false,
+          "score": 30,
+          "comments": 58,
+          "flair": "✍️ Community Quiz",
+          "over_18": false,
+          "max_depth": 2,
+          "creator_replies": 0,
+          "engagement_score": 469.32
+        },
+
+Please note that it shows no replies by the post creator.  It also has a calculated engagement score of 469.32.  Now let's look at the next snapshot and this same post.
+
+        {
+          "id": "t3_1vdj2l7",
+          "title": "Can You Find the Silent Letter?",
+          "url": "https://www.reddit.com/r/QuizPlanetGame/comments/1vdj2l7/can_you_find_the_silent_letter/",
+          "created_utc": 1785679804,
+          "author": "aellanovalie",
+          "is_self": false,
+          "score": 42,
+          "comments": 69,
+          "flair": "✍️ Community Quiz",
+          "over_18": false,
+          "max_depth": 2,
+          "creator_replies": 0,
+          "engagement_score": 449.4
+        },
+
+The data shows an increaed number of comments and more upvotes than the previous day.  And yet somehow its calculated engagement score is actually lower.  That makes no sense whatsoever.  And also the max deoth still shows 2.  But I can clearly see that on 8/2/2026 the OP replied to two different comments.  And by 8/3/2026 there were two different comment threads that had four levels deep.  On the next day's snapshot taken on 8/5/2026, the post shows an increase in comments and the engageent score has gone to just barely a smidge above what it was originally.
+
+        {
+          "id": "t3_1vdj2l7",
+          "title": "Can You Find the Silent Letter?",
+          "url": "https://www.reddit.com/r/QuizPlanetGame/comments/1vdj2l7/can_you_find_the_silent_letter/",
+          "created_utc": 1785679804,
+          "author": "aellanovalie",
+          "is_self": false,
+          "score": 43,
+          "comments": 73,
+          "flair": "✍️ Community Quiz",
+          "over_18": false,
+          "max_depth": 2,
+          "creator_replies": 0,
+          "engagement_score": 472.44
+        },
+
+I have looked at the next day's snapshot and see the number of comments has once again increased, the enagement score seems more appropriate than that weird blip when it actually dropped.  And the max depth still does not show an increase.
+
+        {
+          "id": "t3_1vdj2l7",
+          "title": "Can You Find the Silent Letter?",
+          "url": "https://www.reddit.com/r/QuizPlanetGame/comments/1vdj2l7/can_you_find_the_silent_letter/",
+          "created_utc": 1785679804,
+          "author": "aellanovalie",
+          "is_self": false,
+          "score": 43,
+          "comments": 75,
+          "flair": "✍️ Community Quiz",
+          "over_18": false,
+          "max_depth": 2,
+          "creator_replies": 0,
+          "engagement_score": 482.92
+        },
+
+When I pull the post entry from the most current snapshot taen on 8/24/2026, the comment totals of 81 is the same when I look at the post myself.  Oddly, just the increase of six more comments really shot the engagement score up.  That seems unstable or something.  But much, much worse is the fact that the max depth is still showing two, but I can clearly see that two comment threads on this post goes to four levels.  But that is never reflected in the snapshot data.  That is a HUGE problem.  That means we are not capturing data accurately.  That calls into question the entire project and what information it presents to the moderators.
+
+        {
+          "id": "t3_1vdj2l7",
+          "title": "Can You Find the Silent Letter?",
+          "url": "https://www.reddit.com/r/QuizPlanetGame/comments/1vdj2l7/can_you_find_the_silent_letter/",
+          "created_utc": 1785679804,
+          "author": "aellanovalie",
+          "is_self": false,
+          "score": 49,
+          "comments": 81,
+          "flair": "✍️ Community Quiz",
+          "over_18": false,
+          "max_depth": 2,
+          "creator_replies": 0,
+          "engagement_score": 526.92
+        },
+
+And with the schema upgrade to v2, the url field was supposed to be greatly simplified in when and how it was being saved.  But I suspect the url field in all of redis was never altered one bit.  And how can I be certain tat the exported JSON from the select snapshots I chose to export through the Owner Utilities actually looked up the author [username] by referencing a new internal identification entry.  And the same could be said about the title.  How can I be certain that the post title was actually stored in the new identification table and not buried whole, repeatedly the 10-12 times per snapshot where the targeted post appeared on multiple lists and within the snapshot pool.  I think the console logging needs to automatically dump all read objects ingested from redis.  I also think a logger object needs to be created and utilized for dumping output in a consistent manner to the console.  It should also be able to accommodate passing it the collction of objects just read-in from redis and automatically dump those to the console in a structured, indented style.

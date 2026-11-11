@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { getDataGroupingIcon } from '../utils/iconMappings';
 import { Chart } from './ui/chart';
 import { Icon } from './ui/icon';
 import { NonIdealState } from './ui/non-ideal-state';
 import { Tooltip } from './ui/tooltip';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 type PostingHeatmapCell = {
   dayHour: string;
@@ -195,9 +196,16 @@ export function PostingActivityHeatmapChart({
   iconContext,
   trendAnalysisDays = 90,
 }: PostingActivityHeatmapChartProps) {
+  const isMobile = useIsMobile();
   const [hiddenCategories, setHiddenCategories] = useState<
     Record<string, boolean>
   >({});
+  const [tappedCell, setTappedCell] = useState<{
+    cell: PostingHeatmapCell | null;
+    dayIndex: number;
+    hourIndex: number;
+  } | null>(null);
+  const heatmapContainerRef = useRef<HTMLDivElement>(null);
   const postingHeatmap = trendsData.postingHeatmap || [];
 
   const { heatmapGrid, maxAbsValue } = useMemo(() => {
@@ -444,19 +452,24 @@ export function PostingActivityHeatmapChart({
           size={16}
         />
       }
-      height={420}
+      height="auto"
     >
       <div className="space-y-4">
         {renderLegend()}
 
         <div
-          className="mx-auto"
-          style={{ width: '100%', maxWidth: '1000px', overflowX: 'hidden' }}
+          ref={heatmapContainerRef}
+          className="mx-auto w-full min-w-0"
+          style={{ maxWidth: '1000px', overflowX: 'auto', overflowY: 'hidden' }}
+          onClick={(e) => {
+            // Dismiss tap tooltip when clicking the heatmap background (not a cell)
+            if (e.target === heatmapContainerRef.current) setTappedCell(null);
+          }}
         >
-          <div style={{ width: '100%' }}>
+          <div style={{ width: '100%', minWidth: '420px' }}>
             <div
               className="grid gap-1 mb-2"
-              style={{ gridTemplateColumns: '40px repeat(24, 1fr)' }}
+              style={{ gridTemplateColumns: '40px repeat(24, minmax(0, 1fr))' }}
             >
               <div className="text-xs font-small text-muted-foreground"></div>
               {Array.from({ length: 24 }, (_, hour) => (
@@ -475,51 +488,163 @@ export function PostingActivityHeatmapChart({
               <div
                 key={dayIndex}
                 className="grid gap-1 mb-1"
-                style={{ gridTemplateColumns: '40px repeat(24, 1fr)' }}
+                style={{
+                  gridTemplateColumns: '40px repeat(24, minmax(0, 1fr))',
+                }}
               >
                 <div className="text-xs font-small text-muted-foreground text-right pr-2 flex items-center justify-end">
                   {DAYS[dayIndex]}
                 </div>
 
-                {dayRow.map((cell, hourIndex) => (
-                  <Tooltip
-                    key={hourIndex}
-                    delayDuration={80}
-                    content={
-                      <HeatmapTooltip
-                        cell={cell}
-                        dayIndex={dayIndex}
-                        hourIndex={hourIndex}
-                      />
-                    }
-                  >
-                    <div
-                      style={{
-                        aspectRatio: '1',
-                        borderRadius: '2px',
-                        backgroundColor: cell
-                          ? getCellColor(cell.delta)
-                          : 'var(--color-bg)',
-                        border: '1px solid var(--color-border)',
-                        opacity: 0.9,
-                        cursor: 'default',
-                      }}
-                      aria-label={
-                        cell
-                          ? formatHeatmapTooltipLine(cell, dayIndex, hourIndex)
-                          : `${FULL_DAYS[dayIndex] || 'Unknown day'} - ${formatHourLabel(hourIndex)}\nNo Data`
+                {dayRow.map((cell, hourIndex) => {
+                  const isTapped =
+                    tappedCell?.dayIndex === dayIndex &&
+                    tappedCell?.hourIndex === hourIndex;
+                  return (
+                    <Tooltip
+                      key={hourIndex}
+                      delayDuration={80}
+                      content={
+                        <HeatmapTooltip
+                          cell={cell}
+                          dayIndex={dayIndex}
+                          hourIndex={hourIndex}
+                        />
                       }
-                    />
-                  </Tooltip>
-                ))}
+                    >
+                      <div
+                        style={{
+                          aspectRatio: '1',
+                          borderRadius: '2px',
+                          backgroundColor: cell
+                            ? getCellColor(cell.delta)
+                            : 'var(--color-bg)',
+                          border:
+                            isMobile && isTapped
+                              ? '1.5px solid var(--color-primary)'
+                              : '1px solid var(--color-border)',
+                          opacity: 0.9,
+                          cursor: isMobile ? 'pointer' : 'default',
+                          outline:
+                            isMobile && isTapped
+                              ? '1px solid var(--color-primary)'
+                              : 'none',
+                        }}
+                        aria-label={
+                          cell
+                            ? formatHeatmapTooltipLine(
+                                cell,
+                                dayIndex,
+                                hourIndex
+                              )
+                            : `${FULL_DAYS[dayIndex] || 'Unknown day'} - ${formatHourLabel(hourIndex)}\nNo Data`
+                        }
+                        onClick={
+                          isMobile
+                            ? (e) => {
+                                e.stopPropagation();
+                                setTappedCell(
+                                  isTapped ? null : { cell, dayIndex, hourIndex }
+                                );
+                              }
+                            : undefined
+                        }
+                      />
+                    </Tooltip>
+                  );
+                })}
               </div>
             ))}
           </div>
         </div>
 
+        {/* Mobile tap-info bar — shows cell detail when a cell is tapped */}
+        {isMobile && tappedCell !== null && (
+          <div
+            className="mt-2 px-3 py-2 rounded-md"
+            style={{
+              background: 'var(--color-surface)',
+              border: '1px solid var(--color-border)',
+              fontSize: '11px',
+              color: 'var(--text-secondary)',
+              lineHeight: 1.6,
+            }}
+          >
+            <div
+              style={{
+                fontWeight: 700,
+                marginBottom: '2px',
+                color: 'var(--text-primary)',
+              }}
+            >
+              {FULL_DAYS[tappedCell.dayIndex] || 'Unknown day'} —{' '}
+              {formatHourLabel(tappedCell.hourIndex)}
+            </div>
+            {tappedCell.cell ? (
+              <>
+                {typeof tappedCell.cell.countA === 'number' && (
+                  <div>
+                    Recent window: <strong>{tappedCell.cell.countA}</strong>{' '}
+                    posts
+                  </div>
+                )}
+                {typeof tappedCell.cell.countB === 'number' && (
+                  <div>
+                    Historical window: <strong>{tappedCell.cell.countB}</strong>{' '}
+                    posts
+                  </div>
+                )}
+                <div>
+                  Net change:{' '}
+                  <strong
+                    style={{
+                      color:
+                        tappedCell.cell.delta > 0
+                          ? 'var(--color-success, #16a34a)'
+                          : tappedCell.cell.delta < 0
+                            ? 'var(--color-error, #dc2626)'
+                            : 'inherit',
+                    }}
+                  >
+                    {tappedCell.cell.delta > 0 ? '+' : ''}
+                    {formatDeltaValue(tappedCell.cell.delta)} post
+                    {Math.abs(tappedCell.cell.delta) === 1 ? '' : 's'}
+                  </strong>
+                </div>
+                {typeof tappedCell.cell.velocity === 'number' && (
+                  <div>
+                    Avg. velocity:{' '}
+                    <strong>
+                      {tappedCell.cell.velocity > 0 ? '+' : ''}
+                      {formatDeltaValue(tappedCell.cell.velocity)} posts/day
+                    </strong>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div>No data for this slot.</div>
+            )}
+            <button
+              onClick={() => setTappedCell(null)}
+              style={{
+                marginTop: '4px',
+                fontSize: '10px',
+                color: 'var(--text-muted)',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: 0,
+                textDecoration: 'underline',
+              }}
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
         {localizedRecap && (
           <div className="mt-3 px-3 py-2 bg-muted/50 rounded-md">
-            <p className="text-sm text-muted-foreground text-center">
+            <p className="text-sm text-muted-foreground text-center break-words leading-relaxed">
               {localizedRecap}
             </p>
           </div>

@@ -38,13 +38,11 @@ export function Chart({
             </h3>
           )}
           {headerRight && (
-            <div className="ml-auto flex-shrink-0">
-              {headerRight}
-            </div>
+            <div className="ml-auto flex-shrink-0">{headerRight}</div>
           )}
         </div>
       )}
-      <div className="px-0 sm:px-1 flex-1 relative min-h-0 w-full overflow-hidden">
+      <div className="px-0 sm:px-1 flex-1 relative min-h-0 w-full min-w-0 overflow-visible">
         {children}
       </div>
     </div>

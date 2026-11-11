@@ -62,23 +62,13 @@ export function EntityTitle({
           ))}
         <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
           <h2
-            style={{
-              fontSize: '1.125rem',
-              fontWeight: 600,
-              color: 'var(--text-primary)',
-              margin: 0,
-              lineHeight: 1.2,
-            }}
+            className="text-xs sm:text-sm md:text-base font-bold sm:font-semibold leading-tight text-[var(--text-primary)] m-0"
           >
             {title}
           </h2>
           {subtitle && (
             <p
-              style={{
-                fontSize: '0.875rem',
-                color: 'var(--text-muted)',
-                margin: '2px 0 0 0',
-              }}
+              className="text-[10px] sm:text-xs text-[var(--text-muted)] mt-0.5 m-0 leading-tight"
             >
               {subtitle}
             </p>

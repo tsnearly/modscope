@@ -2,6 +2,7 @@
 
 A native, data-driven community insight and moderation assistant developed for Reddit! Install the app, generate real-time performance snapshots for your community, and use the insights to proactively manage your subreddit. ModScope tracks post lifecycles, user engagement trajectories, and community rhythms directly inside your Reddit mod interface.
 
+
 ## Supported Features
 
 - **Time-Series Analytics**: Understand deeply how posts perform over time with rich historical tracking.
@@ -93,7 +94,7 @@ At the top right of the report, use the **Export HTML** button to open the print
 
 You can also toggle the **Exclude Official Content** button to filter out mod-distinguished or stickied posts, ensuring your data reflects organic user engagement.
 
-The Report view is broken down into several tabs at the bottom:
+The Report view is broken down into several subsections accessible via the horizontal navbar:
 
 - **Overview**: A high-level dashboard showing top posts, community momentum, and general health indicators.
 - **Top Metrics**: Detailed charts tracking upvotes, comments, and algorithmic engagement scores over time.
@@ -138,7 +139,8 @@ ModScope supports a custom UI engine designed for different modding environments
 | **Nocturne**      | Dark mode for low-light, late-night queue clearing punctuated by a single jolt of electric yellow |
 | **Rose Meadow**   | A sophisticated, deep crimson and rose-tinted palette for a premium aesthetic                     |
 | **Springtime**    | Soft, high-vibrancy pastels                                                                       |
-| **Upvoted**       | Cooler, sharper, feels like we belong                                                       |
+| **Upvoted**       | Cooler, sharper, feels like we belong                                                             |
+
 ---
 
 ### About ModScope
@@ -152,6 +154,35 @@ _Note: ModScope runs entirely within the Devvit ecosystem. It requires no extern
 ---
 
 ## Changelog
+
+## v1.5 [in development]
+
+### 1. **Data Storage Overhaul & Privacy Compliance**
+
+- **Identity translation layer**: Separated post titles and author names from timeseries static shards into dedicated `identity:post` and `identity:user` Redis hash stores, eliminating redundant PII storage.
+- **O(1) Anonymization**: Enabled instant user account anonymization by updating a single user lookup record, automatically resolving username fields across all historical posts.
+- **Real-time Deletion Sync**: Hooked into Reddit event triggers (`onPostDelete`, `onPostUpdate`) to handle post and user account anonymizations dynamically, backed by a rate-limit-aware fallback polling sweep.
+
+### 2. **Chained Upgrade Infrastructure**
+
+- **Ordered Schema Ledger**: Implemented transaction-safe multi-version database migrations via ordered patches, managed under a distributed lock (`system:upgradeLock`) and a non-dismissible UI status modal.
+- **Resumable Multi-Stage Execution**: Patches utilize staging namespaces, checkpointed execution, and pre-commit validation checks to guarantee zero data loss and automated rollbacks on failure.
+
+### 3. **Public Community Metric Posts**
+
+- **Scheduled Widget Publishing**: Added background cron schedules and a moderator approval queue to publish a curated community health widget directly to the subreddit.
+- **Interactive Forward-Facing UI**: Built a public inline dashboard variant featuring configurable views for top contributors/influencers, subscriber milestones, activity trends, flair distribution, and notification subscriptions.
+
+## v.1.0.10
+
+1. Report Layout & Mobile Usability
+
+   Scroll Unification: Minor cleanup of scroll activation between mobile devices, desktop, in-line, and expanded windows.
+
+2. Framework Updates
+
+   Core & UI: Upgraded framework and UI libraries to support the latest Devvit SDK.
+   Dependency Updates: Updated various Node.js and Vite dependencies.
 
 ## v1.0.8
 

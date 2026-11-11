@@ -91,8 +91,8 @@ export function Section({
           <div className="flex flex-col overflow-hidden">
             <h3
               className={cn(
-                'font-semibold text-foreground truncate',
-                compact ? 'text-sm' : 'text-base'
+                'font-bold sm:font-semibold text-foreground truncate',
+                compact ? 'text-xs sm:text-sm' : 'text-sm sm:text-base'
               )}
             >
               {title}
@@ -101,7 +101,7 @@ export function Section({
               <span
                 className={cn(
                   'text-muted-foreground truncate',
-                  compact ? 'text-xs' : 'text-sm'
+                  compact ? 'text-[10px] sm:text-xs' : 'text-xs sm:text-sm'
                 )}
               >
                 {subtitle}
@@ -126,9 +126,6 @@ export function Section({
         <div
           className={cn(
             'flex flex-col w-full transition-all duration-200 ease-in-out'
-            // Indent content if collapsible to align with title (optional, but good for hierarchy)
-            // collapsible && !compact ? "pl-6" : ""
-            // Actually, let's keep it flush for card usage
           )}
         >
           {children}
@@ -150,7 +147,7 @@ export function SectionCard({
 }: SectionCardProps) {
   return (
     <Card className={cn('overflow-hidden bg-background', className)} {...props}>
-      <div className={cn(compact ? 'p-3' : 'p-4')}>{children}</div>
+      <div className={cn(compact ? 'p-2 sm:p-3' : 'p-2 sm:p-4')}>{children}</div>
     </Card>
   );
 }

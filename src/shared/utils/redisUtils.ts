@@ -1,8 +1,9 @@
 /**
  * Shared Redis utility functions used by both SnapshotService and TrendingService.
  */
-
 import { MS_PER_DAY, TREND_CHUNK_ZSET_WRITE } from '../core/constants';
+import { logger } from '../core/logger';
+import { getIsoTimestamp } from './dateUtils';
 
 // ---------------------------------------------------------------------------
 // Type helpers
@@ -45,19 +46,28 @@ export function parseZSetMembers(
   for (const member of members) {
     try {
       if (typeof member !== 'string') {
-        console.warn(`[REDIS] Skipping non-string ZSET member in ${key}: ${typeof member}`);
+        logger.warn(
+          `Skipping non-string ZSET member in ${key}: ${typeof member}`,
+          'Redis:redisUtils'
+        );
         continue;
       }
 
       const parts = member.split(':');
       if (parts.length !== 2) {
-        console.warn(`[REDIS] Skipping malformed ZSET member in ${key}: ${member}`);
+        logger.warn(
+          `Skipping malformed ZSET member in ${key}: ${member}`,
+          'Redis:redisUtils'
+        );
         continue;
       }
 
       const [timestampStr, valueStr] = parts;
       if (!timestampStr || !valueStr) {
-        console.warn(`[REDIS] Skipping ZSET member with empty parts in ${key}: ${member}`);
+        logger.warn(
+          `Skipping ZSET member with empty parts in ${key}: ${member}`,
+          'Redis:redisUtils'
+        );
         continue;
       }
 
@@ -65,18 +75,27 @@ export function parseZSetMembers(
       const value = valueParser(valueStr);
 
       if (isNaN(timestamp) || isNaN(value)) {
-        console.warn(`[REDIS] Skipping ZSET member with invalid data in ${key}: ${member}`);
+        logger.warn(
+          `Skipping ZSET member with invalid data in ${key}: ${member}`,
+          'Redis:redisUtils'
+        );
         continue;
       }
 
       if (timestamp < 0 || timestamp > futureLimit) {
-        console.warn(`[REDIS] Skipping ZSET member with unreasonable timestamp in ${key}: ${member}`);
+        logger.warn(
+          `Skipping ZSET member with unreasonable timestamp in ${key}: ${member}`,
+          'Redis:redisUtils'
+        );
         continue;
       }
 
       results.push({ timestamp, value });
     } catch (error) {
-      console.warn(`[REDIS] Error parsing ZSET member in ${key}: ${member}`, error);
+      logger.warn(
+        `Error parsing ZSET member in ${key}: ${member}: ${String(error)}`,
+        'Redis:redisUtils'
+      );
     }
   }
 
@@ -97,17 +116,17 @@ export function parseHashEntries<T>(
   for (const [field, rawValue] of Object.entries(hashData || {})) {
     try {
       if (!field) {
-        console.warn(`[REDIS] Skipping hash entry with empty field in ${key}`);
+        logger.warn(`Skipping hash entry with empty field in ${key}`, `Redis:redisUtils`);
         continue;
       }
 
       if (keyValidator && !keyValidator(field)) {
-        console.warn(`[REDIS] Skipping hash entry with invalid field in ${key}: ${field}`);
+        logger.warn(`Skipping hash entry with invalid field in ${key}: ${field}`, `Redis:redisUtils`);
         continue;
       }
 
       if (typeof rawValue !== 'string' || rawValue.length === 0) {
-        console.warn(`[REDIS] Skipping hash entry with empty value in ${key}: ${field}`);
+        logger.warn(`Skipping hash entry with empty value in ${key}: ${field}`, `Redis:redisUtils`);
         continue;
       }
 
@@ -115,19 +134,19 @@ export function parseHashEntries<T>(
 
       if (typeof parsedValue === 'number') {
         if (!Number.isFinite(parsedValue) || Number.isNaN(parsedValue)) {
-          console.warn(`[REDIS] Skipping hash entry with invalid numeric value in ${key}: ${field}=${rawValue}`);
+          logger.warn(`Skipping hash entry with invalid numeric value in ${key}: ${field}=${rawValue}`, `Redis:redisUtils`);
           continue;
         }
 
         if (parsedValue < 0 && key.includes(':flair_distribution:')) {
-          console.warn(`[REDIS] Skipping negative flair value in ${key}: ${field}=${rawValue}`);
+          logger.warn(`Skipping negative flair value in ${key}: ${field}=${rawValue}`, `Redis:redisUtils`);
           continue;
         }
       }
 
       result[field] = parsedValue;
     } catch (error) {
-      console.warn(`[REDIS] Skipping hash entry with invalid value in ${key}: ${field}=${rawValue}`, error);
+      logger.warn(`Skipping hash entry with invalid value in ${key}: ${field}=${rawValue}: ${String(error)}`, `Redis:redisUtils`);
     }
   }
 
@@ -144,7 +163,12 @@ export function parseHashEntries<T>(
  * Redis command-size limits.
  */
 export async function writeTsZSet(
-  redis: { zAdd: (key: string, entry: { score: number; member: string }) => Promise<unknown> },
+  redis: {
+    zAdd: (
+      key: string,
+      entry: { score: number; member: string }
+    ) => Promise<unknown>;
+  },
   key: string,
   data: Array<{ timestamp: number; value: number | string }>,
   chunkSize = TREND_CHUNK_ZSET_WRITE

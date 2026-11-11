@@ -113,8 +113,8 @@ export function RadioItem({
   }
 
   const isChecked = context.value === value;
-  const inputId =
-    id || `radio-${value}-${Math.random().toString(36).substr(2, 9)}`;
+  const generatedId = React.useId();
+  const inputId = id || generatedId;
   const { variant } = context;
   // Merge own disabled with group-level disabled from context
   const disabled = ownDisabled ?? context.disabled;
@@ -124,39 +124,39 @@ export function RadioItem({
       <label
         htmlFor={inputId}
         className={cn(
-          'relative flex cursor-pointer rounded-lg border bg-white p-6 shadow-sm focus:outline-none transition-all',
+          'relative flex cursor-pointer rounded-lg border bg-background p-4 shadow-sm focus:outline-none transition-all',
           isChecked
             ? 'border-primary ring-1 ring-primary bg-primary/10'
-            : 'border-gray-200 hover:border-gray-300',
+            : 'border-border hover:border-border/80',
           disabled && 'opacity-50 cursor-not-allowed',
           className
         )}
       >
         <div className="flex w-full items-start justify-between">
-          <div className="flex items-start gap-4">
+          <div className="flex items-start gap-3">
             {icon && (
               <div
                 className={cn(
-                  'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border',
+                  'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border mt-0.5',
                   isChecked
-                    ? 'bg-primary text-white border-primary'
-                    : 'bg-gray-50 border-gray-100 text-gray-400'
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-muted/40 border-border text-muted-foreground'
                 )}
               >
-                <Icon name={icon} size={24} />
+                <Icon name={icon} size={20} />
               </div>
             )}
             <div>
               <span
                 className={cn(
                   'block text-sm font-bold',
-                  isChecked ? 'text-primary' : 'text-gray-900'
+                  isChecked ? 'text-primary' : 'text-foreground'
                 )}
               >
                 {label}
               </span>
               {description && (
-                <span className="mt-1 block text-xs text-gray-500 leading-relaxed">
+                <span className="mt-1 block text-xs text-muted-foreground leading-relaxed">
                   {description}
                 </span>
               )}
@@ -164,13 +164,15 @@ export function RadioItem({
           </div>
           <div
             className={cn(
-              'h-5 w-5 shrink-0 rounded-full border flex items-center justify-center transition-colors mt-0.5',
+              'h-4 w-4 shrink-0 rounded-full border flex items-center justify-center transition-colors mt-0.5 ml-2',
               isChecked
                 ? 'bg-primary border-primary'
-                : 'bg-white border-gray-300'
+                : 'bg-background border-border'
             )}
           >
-            {isChecked && <div className="h-2 w-2 rounded-full bg-white" />}
+            {isChecked && (
+              <div className="h-1.5 w-1.5 rounded-full bg-primary-foreground" />
+            )}
           </div>
         </div>
         <input

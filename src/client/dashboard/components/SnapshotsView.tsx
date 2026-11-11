@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { UserSettings } from '../../../shared/types/settings.types';
+import { formatScanDate } from '../../../shared/utils/dateUtils';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { EntityTitle } from './ui/entity-title';
@@ -11,8 +13,75 @@ import {
   TableHeader,
   TableRow,
 } from './ui/table';
-import { Tooltip } from './ui/tooltip';
 import { useToast } from './ui/toast';
+import { Tooltip } from './ui/tooltip';
+
+export type SnapshotColumnKey =
+  | 'scanDate'
+  | 'subreddit'
+  | 'subscribers'
+  | 'posts'
+  | 'comments'
+  | 'engagement'
+  | 'score'
+  | 'pool';
+
+export const DEFAULT_SNAPSHOT_COLUMN_WIDTHS: Record<SnapshotColumnKey, number> = {
+  scanDate: 160,
+  subreddit: 140,
+  subscribers: 100,
+  posts: 90,
+  comments: 95,
+  engagement: 110,
+  score: 90,
+  pool: 80,
+};
+
+export const MIN_SNAPSHOT_COLUMN_WIDTHS: Record<SnapshotColumnKey, number> = {
+  scanDate: 60,
+  subreddit: 50,
+  subscribers: 45,
+  posts: 40,
+  comments: 45,
+  engagement: 50,
+  score: 40,
+  pool: 40,
+};
+
+export const SNAPSHOT_COLUMN_WIDTHS_STORAGE_KEY = 'modscope:snapshots:columnWidths';
+
+const getInitialColumnWidths = (): Record<SnapshotColumnKey, number> => {
+  if (typeof window !== 'undefined') {
+    try {
+      // 1. Check dedicated localStorage key first
+      const dedicatedSaved = localStorage.getItem(SNAPSHOT_COLUMN_WIDTHS_STORAGE_KEY);
+      if (dedicatedSaved) {
+        const parsed = JSON.parse(dedicatedSaved);
+        if (parsed && typeof parsed === 'object') {
+          return {
+            ...DEFAULT_SNAPSHOT_COLUMN_WIDTHS,
+            ...parsed,
+          };
+        }
+      }
+
+      // 2. Fallback to modscope_settings
+      const saved = localStorage.getItem('modscope_settings');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.snapshotColumnWidths) {
+          return {
+            ...DEFAULT_SNAPSHOT_COLUMN_WIDTHS,
+            ...parsed.snapshotColumnWidths,
+          };
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return { ...DEFAULT_SNAPSHOT_COLUMN_WIDTHS };
+};
 
 interface Snapshot {
   scanId: number;
@@ -30,8 +99,9 @@ interface SnapshotsViewProps {
   snapshots: Snapshot[];
   loading: boolean;
   onSelectSnapshot: (scanId: number) => Promise<boolean>;
-  onDeleteSnapshot?: (scanId: number) => Promise<boolean>;
-  onRefresh?: () => Promise<void>;
+  onDeleteSnapshot?: ((scanId: number) => Promise<boolean>) | undefined;
+  onRefresh?: (() => Promise<void>) | undefined;
+  isReadOnly?: boolean | undefined;
 }
 
 export function SnapshotsView({
@@ -40,35 +110,8 @@ export function SnapshotsView({
   onSelectSnapshot,
   onDeleteSnapshot,
   onRefresh,
+  isReadOnly = false,
 }: SnapshotsViewProps) {
-  const formatDate = (dateStr: string) => {
-    if (!dateStr) {
-      return '';
-    }
-    try {
-      // Assume the passed string represents UTC if it lacks a timezone indicator
-      const d = new Date(
-        dateStr.includes(' ') && !dateStr.includes('Z')
-          ? dateStr.replace(' ', 'T') + 'Z'
-          : dateStr
-      );
-      if (isNaN(d.getTime())) {
-        return dateStr;
-      }
-
-      const mm = String(d.getMonth() + 1).padStart(2, '0');
-      const dd = String(d.getDate()).padStart(2, '0');
-      const yyyy = d.getFullYear();
-      const time = d.toLocaleTimeString(undefined, {
-        hour: 'numeric',
-        minute: '2-digit',
-        second: '2-digit',
-      });
-      return `${mm}/${dd}/${yyyy}\n${time}`;
-    } catch {
-      return dateStr;
-    }
-  };
   const [snapshots, setSnapshots] = useState<Snapshot[]>(snapshotsProp);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -76,10 +119,136 @@ export function SnapshotsView({
   const [bootstrapping, setBootstrapping] = useState(false);
   const [pendingDelete, setPendingDelete] = useState(false);
   const [pendingClear, setPendingClear] = useState(false);
+  const [prevSnapshotsProp, setPrevSnapshotsProp] = useState(snapshotsProp);
+  if (prevSnapshotsProp !== snapshotsProp) {
+    setPrevSnapshotsProp(snapshotsProp);
+    setSnapshots(snapshotsProp);
+  }
+
+  const [columnWidths, setColumnWidths] = useState<Record<SnapshotColumnKey, number>>(getInitialColumnWidths);
+  const columnWidthsRef = useRef(columnWidths);
+  columnWidthsRef.current = columnWidths;
+
+  const persistColumnWidths = useCallback((newWidths: Record<SnapshotColumnKey, number>) => {
+    try {
+      localStorage.setItem(
+        SNAPSHOT_COLUMN_WIDTHS_STORAGE_KEY,
+        JSON.stringify(newWidths)
+      );
+      const saved = localStorage.getItem('modscope_settings');
+      const parsed = saved ? JSON.parse(saved) : { theme: 'modscopeflow' };
+      parsed.snapshotColumnWidths = newWidths;
+      localStorage.setItem('modscope_settings', JSON.stringify(parsed));
+    } catch (err) {
+      console.error('Failed to save column widths to localStorage:', err);
+    }
+
+    fetch('/api/settings')
+      .then((res) => (res.ok ? res.json() : Promise.reject('Failed to fetch settings')))
+      .then((data) => {
+        const updatedDisplay = data.display || { theme: 'modscopeflow' };
+        updatedDisplay.snapshotColumnWidths = newWidths;
+        return fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ display: updatedDisplay }),
+        });
+      })
+      .catch((err) => {
+        console.warn('Failed to sync column widths to server:', err);
+      });
+  }, []);
 
   useEffect(() => {
-    setSnapshots(snapshotsProp);
-  }, [snapshotsProp]);
+    let isMounted = true;
+    const fetchStoredSettings = async () => {
+      try {
+        const res = await fetch('/api/settings');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data?.display?.snapshotColumnWidths && isMounted) {
+          const remoteWidths = data.display.snapshotColumnWidths;
+          const merged = {
+            ...DEFAULT_SNAPSHOT_COLUMN_WIDTHS,
+            ...remoteWidths,
+          };
+          setColumnWidths(merged);
+          columnWidthsRef.current = merged;
+          try {
+            localStorage.setItem(
+              SNAPSHOT_COLUMN_WIDTHS_STORAGE_KEY,
+              JSON.stringify(merged)
+            );
+            const saved = localStorage.getItem('modscope_settings');
+            const parsed = saved ? JSON.parse(saved) : {};
+            parsed.snapshotColumnWidths = merged;
+            localStorage.setItem('modscope_settings', JSON.stringify(parsed));
+          } catch {
+            // ignore
+          }
+        }
+      } catch {
+        // ignore
+      }
+    };
+    void fetchStoredSettings();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const handleResizeStart = useCallback(
+    (colKey: SnapshotColumnKey, e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const startX = e.clientX;
+      const startWidth = columnWidthsRef.current[colKey];
+      const minWidth = MIN_SNAPSHOT_COLUMN_WIDTHS[colKey] ?? 50;
+
+      const onMouseMove = (moveEvent: MouseEvent) => {
+        moveEvent.preventDefault();
+        const delta = moveEvent.clientX - startX;
+        const newWidth = Math.max(minWidth, Math.round(startWidth + delta));
+        setColumnWidths((prev) => {
+          const updated = { ...prev, [colKey]: newWidth };
+          columnWidthsRef.current = updated;
+          return updated;
+        });
+      };
+
+      const onMouseUp = () => {
+        window.removeEventListener('mousemove', onMouseMove);
+        window.removeEventListener('mouseup', onMouseUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        persistColumnWidths(columnWidthsRef.current);
+      };
+
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      window.addEventListener('mousemove', onMouseMove);
+      window.addEventListener('mouseup', onMouseUp);
+    },
+    [persistColumnWidths]
+  );
+
+  const handleResetColumnWidth = useCallback(
+    (colKey: SnapshotColumnKey, e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setColumnWidths((prev) => {
+        const updated = {
+          ...prev,
+          [colKey]: DEFAULT_SNAPSHOT_COLUMN_WIDTHS[colKey],
+        };
+        columnWidthsRef.current = updated;
+        persistColumnWidths(updated);
+        return updated;
+      });
+    },
+    [persistColumnWidths]
+  );
 
   const { showToast } = useToast();
 
@@ -118,12 +287,27 @@ export function SnapshotsView({
     };
 
     window.addEventListener('message', handleMessage);
-    registerWebView();
+    void registerWebView();
 
     return () => {
       window.removeEventListener('message', handleMessage);
     };
   }, [selectedId, showToast, registerWebView]);
+
+  const onRefreshRef = useRef(onRefresh);
+  onRefreshRef.current = onRefresh;
+
+  useEffect(() => {
+    if (onRefreshRef.current) {
+      void onRefreshRef.current();
+    }
+    const interval = setInterval(() => {
+      if (onRefreshRef.current) {
+        void onRefreshRef.current();
+      }
+    }, 15000);
+    return () => clearInterval(interval);
+  }, []);
 
   const fetchSnapshots = async () => {
     if (onRefresh) {
@@ -187,16 +371,17 @@ export function SnapshotsView({
         try {
           const res = await fetch('/api/history');
           if (!res.ok) return;
-          const history: any[] = await res.json();
-          const entry = history.find((h: any) => h.id === deleteEntryId);
+          const history: Array<{
+            id?: string;
+            status?: string;
+            details?: string;
+          }> = await res.json();
+          const entry = history.find((h) => h.id === deleteEntryId);
           if (!entry) return;
 
           if (entry.status === 'completed' || entry.status === 'success') {
             clearInterval(intervalId);
-            showToast(
-              `Snapshot #${scanId} deleted successfully.`,
-              'success'
-            );
+            showToast(`Snapshot #${scanId} deleted successfully.`, 'success');
           } else if (entry.status === 'failed') {
             clearInterval(intervalId);
             showToast(
@@ -214,7 +399,7 @@ export function SnapshotsView({
   );
 
   const handleDelete = async () => {
-    if (selectedId === null) {
+    if (isReadOnly || selectedId === null) {
       return;
     }
     try {
@@ -313,6 +498,8 @@ export function SnapshotsView({
     );
   }
 
+  const totalTableWidth = Object.values(columnWidths).reduce((a, b) => a + b, 0);
+
   return (
     <div className="snapshots-view h-full flex flex-col bg-[var(--color-surface)] text-left">
       <EntityTitle
@@ -320,12 +507,32 @@ export function SnapshotsView({
         iconColor="var(--color-text)"
         title="Data Snapshots"
         subtitle="Manage and view historical analysis data"
-        className="mb-4 p-4 bg-transparent border-b border-border flex-shrink-0"
+        className="mb-2 p-2 sm:mb-4 sm:p-4 bg-transparent border-b border-border flex-shrink-0"
+        actions={
+          <div className="flex gap-1.5 sm:gap-2">
+            <Button
+              onClick={fetchSnapshots}
+              className="text-xs h-7 sm:h-8 px-2 sm:px-3"
+              icon="lucide:refresh-ccw"
+              variant="outline"
+            >
+              Refresh
+            </Button>
+            <Button
+              onClick={handleViewReport}
+              disabled={selectedId === null}
+              className="text-xs h-7 sm:h-8 px-2 sm:px-3"
+              icon="lucide:bar-chart-2"
+            >
+              View<span className="snapshot-btn-label"> Report</span>
+            </Button>
+          </div>
+        }
       />
-      <div className="flex-1 px-6 pb-6 pt-2 min-h-0 flex flex-col">
+      <div className="flex-1 px-2 pb-2 pt-1 sm:px-6 sm:pb-6 sm:pt-2 min-h-0 flex flex-col">
         <Card className="flex-1 flex flex-col min-h-0 overflow-hidden bg-background">
-          <div className="flex-1 flex flex-col min-h-0 p-4">
-            <div className="mb-4">
+          <div className="flex-1 flex flex-col min-h-0 p-2 sm:p-4">
+            <div className="mb-2 sm:mb-4">
               <EntityTitle
                 icon="mono-time-passing.png"
                 iconColor="var(--color-primary)"
@@ -334,47 +541,113 @@ export function SnapshotsView({
               />
             </div>
 
-            <Table containerClassName="overflow-auto min-h-0">
+            <Table
+              containerClassName="overflow-auto min-h-0"
+              className="table-fixed min-w-full"
+              style={{ minWidth: `${totalTableWidth}px` }}
+            >
+              <colgroup>
+                <col style={{ width: `${columnWidths.scanDate}px` }} />
+                <col style={{ width: `${columnWidths.subreddit}px` }} />
+                <col style={{ width: `${columnWidths.subscribers}px` }} />
+                <col style={{ width: `${columnWidths.posts}px` }} />
+                <col style={{ width: `${columnWidths.comments}px` }} />
+                <col style={{ width: `${columnWidths.engagement}px` }} />
+                <col style={{ width: `${columnWidths.score}px` }} />
+                <col style={{ width: `${columnWidths.pool}px` }} />
+                <col />
+              </colgroup>
               <TableHeader className="bg-background sticky top-0 z-10 shadow-sm">
                 <TableRow>
-                  <TableHead className="w-[160px] text-center">
+                  <TableHead
+                    className="text-center"
+                    style={{ width: `${columnWidths.scanDate}px` }}
+                    resizable
+                    onResizeStart={(e) => handleResizeStart('scanDate', e)}
+                    onResizeDoubleClick={(e) => handleResetColumnWidth('scanDate', e)}
+                  >
                     <Tooltip content="All dates & times have been converted to your local timezone — {userLocalTimezoneLabel}">
-                      <span>Scan Date</span>
+                      <span className="truncate block min-w-0">Scan Date</span>
                     </Tooltip>
                   </TableHead>
-                  <TableHead className="w-[140px] whitespace-nowrap text-center">
-                    Subreddit
+                  <TableHead
+                    className="whitespace-nowrap text-center"
+                    style={{ width: `${columnWidths.subreddit}px` }}
+                    resizable
+                    onResizeStart={(e) => handleResizeStart('subreddit', e)}
+                    onResizeDoubleClick={(e) => handleResetColumnWidth('subreddit', e)}
+                  >
+                    <Tooltip content="Subreddit">
+                      <span className="truncate block min-w-0">Subreddit</span>
+                    </Tooltip>
                   </TableHead>
-                  <TableHead className="w-[100px] text-right">
+                  <TableHead
+                    className="text-right"
+                    style={{ width: `${columnWidths.subscribers}px` }}
+                    resizable
+                    onResizeStart={(e) => handleResizeStart('subscribers', e)}
+                    onResizeDoubleClick={(e) => handleResetColumnWidth('subscribers', e)}
+                  >
                     <Tooltip content="Total number of subscribers">
-                      <span>Subscribers</span>
+                      <span className="truncate block min-w-0">Subs</span>
                     </Tooltip>
                   </TableHead>
-                  <TableHead className="w-[100px] text-right">
+                  <TableHead
+                    className="text-right"
+                    style={{ width: `${columnWidths.posts}px` }}
+                    resizable
+                    onResizeStart={(e) => handleResizeStart('posts', e)}
+                    onResizeDoubleClick={(e) => handleResetColumnWidth('posts', e)}
+                  >
                     <Tooltip content="Average number of posts per day">
-                      <span>Posts/Day</span>
+                      <span className="truncate block min-w-0">Posts</span>
                     </Tooltip>
                   </TableHead>
-                  <TableHead className="w-[100px] text-right">
+                  <TableHead
+                    className="text-right"
+                    style={{ width: `${columnWidths.comments}px` }}
+                    resizable
+                    onResizeStart={(e) => handleResizeStart('comments', e)}
+                    onResizeDoubleClick={(e) => handleResetColumnWidth('comments', e)}
+                  >
                     <Tooltip content="Average number of comments per day">
-                      <span>Comments/Day</span>
+                      <span className="truncate block min-w-0">Comments</span>
                     </Tooltip>
                   </TableHead>
-                  <TableHead className="w-[100px] text-right">
+                  <TableHead
+                    className="text-right"
+                    style={{ width: `${columnWidths.engagement}px` }}
+                    resizable
+                    onResizeStart={(e) => handleResizeStart('engagement', e)}
+                    onResizeDoubleClick={(e) => handleResetColumnWidth('engagement', e)}
+                  >
                     <Tooltip content="Average calculated engagement per post">
-                      <span>Avg Engagement</span>
+                      <span className="truncate block min-w-0">Engagement</span>
                     </Tooltip>
                   </TableHead>
-                  <TableHead className="w-[100px] text-right">
+                  <TableHead
+                    className="text-right"
+                    style={{ width: `${columnWidths.score}px` }}
+                    resizable
+                    onResizeStart={(e) => handleResizeStart('score', e)}
+                    onResizeDoubleClick={(e) => handleResetColumnWidth('score', e)}
+                  >
                     <Tooltip content="Average upvotes per post">
-                      <span>Avg Score</span>
+                      <span className="truncate block min-w-0">Score</span>
                     </Tooltip>
                   </TableHead>
-                  <TableHead className="w-[80px] text-right">
+                  <TableHead
+                    className="text-right"
+                    style={{ width: `${columnWidths.pool}px` }}
+                    resizable
+                    onResizeStart={(e) => handleResizeStart('pool', e)}
+                    onResizeDoubleClick={(e) => handleResetColumnWidth('pool', e)}
+                  >
                     <Tooltip content="Total number of posts in analysis pool">
-                      <span>Pool</span>
+                      <span className="truncate block min-w-0">Pool</span>
                     </Tooltip>
                   </TableHead>
+                  <TableHead className="p-0 border-0 pointer-events-none" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -397,30 +670,31 @@ export function SnapshotsView({
                         : {}
                     }
                   >
-                    <TableCell className="py-1.5 text-xs">
-                      {formatDate(snapshot.scanDate)}
+                    <TableCell className="py-1.5 text-xs text-center whitespace-pre-line overflow-hidden">
+                      {formatScanDate(snapshot.scanDate, '\n')}
                     </TableCell>
-                    <TableCell className="py-1.5 text-xs">
+                    <TableCell className="py-1.5 text-xs text-center truncate">
                       r/{snapshot.subreddit}
                     </TableCell>
-                    <TableCell className="py-1.5 text-xs text-right">
+                    <TableCell className="py-1.5 text-xs text-right truncate">
                       {snapshot.subscribers}
                     </TableCell>
-                    <TableCell className="py-1.5 text-xs text-right">
+                    <TableCell className="py-1.5 text-xs text-right truncate">
                       {snapshot.postsPerDay.toFixed(1)}
                     </TableCell>
-                    <TableCell className="py-1.5 text-xs text-right">
+                    <TableCell className="py-1.5 text-xs text-right truncate">
                       {snapshot.commentsPerDay.toFixed(1)}
                     </TableCell>
-                    <TableCell className="py-1.5 text-xs text-right">
+                    <TableCell className="py-1.5 text-xs text-right truncate">
                       {snapshot.avgEngagement?.toFixed(1) ?? '—'}
                     </TableCell>
-                    <TableCell className="py-1.5 text-xs text-right">
+                    <TableCell className="py-1.5 text-xs text-right truncate">
                       {snapshot.avgScore?.toFixed(1) ?? '—'}
                     </TableCell>
-                    <TableCell className="py-1.5 text-xs text-right">
+                    <TableCell className="py-1.5 text-xs text-right truncate">
                       {snapshot.poolSize ?? '—'}
                     </TableCell>
+                    <TableCell className="p-0 border-0 pointer-events-none" />
                   </TableRow>
                 ))}
               </TableBody>
@@ -452,10 +726,11 @@ export function SnapshotsView({
                 ) : (
                   <Button
                     onClick={() => setPendingDelete(true)}
-                    disabled={bootstrapping || selectedId === null}
+                    disabled={isReadOnly || bootstrapping || selectedId === null}
                     variant="outline"
                     className="border-red-500/30 text-red-400 hover:bg-red-500/10 text-xs"
                     icon="lucide:trash-2"
+                    title={isReadOnly ? 'Deleting snapshots is disabled in showcase mode' : undefined}
                   >
                     Delete
                   </Button>
@@ -496,21 +771,6 @@ export function SnapshotsView({
                   Clear<span className="snapshot-btn-label"> All</span>
                 </Button>
               )}
-              <Button
-                onClick={fetchSnapshots}
-                className="text-xs"
-                icon="lucide:refresh-ccw"
-              >
-                Refresh
-              </Button>
-              <Button
-                onClick={handleViewReport}
-                disabled={selectedId === null}
-                className="text-xs"
-                icon="lucide:bar-chart-2"
-              >
-                View<span className="snapshot-btn-label"> Report</span>
-              </Button>
             </div>
           </div>
         </Card>

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   lockMock: vi.fn(),
-  stickyMock: vi.fn(),
+  hideMock: vi.fn(),
   distinguishMock: vi.fn(),
   approveMock: vi.fn(),
   submitCustomPostMock: vi.fn(),
@@ -23,6 +23,7 @@ vi.mock('@devvit/web/server', () => ({
 }));
 
 import { createPost } from './post';
+import { redisKey } from '../../shared/core/constants';
 
 describe('createPost', () => {
   beforeEach(() => {
@@ -34,13 +35,13 @@ describe('createPost', () => {
       id: 't3_devpost',
       approve: mocks.approveMock,
       distinguish: mocks.distinguishMock,
-      sticky: mocks.stickyMock,
+      hide: mocks.hideMock,
       lock: mocks.lockMock,
     });
 
     mocks.approveMock.mockResolvedValue(undefined);
     mocks.distinguishMock.mockResolvedValue(undefined);
-    mocks.stickyMock.mockResolvedValue(undefined);
+    mocks.hideMock.mockResolvedValue(undefined);
     mocks.lockMock.mockResolvedValue(undefined);
   });
 
@@ -50,10 +51,10 @@ describe('createPost', () => {
     expect(mocks.submitCustomPostMock).toHaveBeenCalledTimes(1);
     expect(mocks.approveMock).toHaveBeenCalledTimes(1);
     expect(mocks.distinguishMock).toHaveBeenCalledTimes(1);
-    expect(mocks.stickyMock).toHaveBeenCalledTimes(1);
+    expect(mocks.hideMock).toHaveBeenCalledTimes(1);
     expect(mocks.lockMock).not.toHaveBeenCalled();
     expect(mocks.redisSetMock).toHaveBeenCalledWith(
-      'modscope:launcherPostId:v2',
+      redisKey.launcherPost(),
       't3_devpost'
     );
   });

@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react';
 import {
-    Area,
-    AreaChart,
-    CartesianGrid,
-    Tooltip as RechartsTooltip,
-    ResponsiveContainer,
-    XAxis,
-    YAxis,
+  Area,
+  AreaChart,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  ResponsiveContainer,
+  XAxis,
+  YAxis,
 } from 'recharts';
 import { getDataGroupingIcon, type IconContext } from '../utils/iconMappings';
 import { Chart } from './ui/chart';
@@ -58,7 +58,11 @@ export function ActivityView({
   const filteredActivityData = useMemo(() => {
     if (!activityTrendData || activityTrendData.length === 0) return [];
 
-    const daysMap: Record<TimeRange, number> = { '7d': 7, '30d': 30, '90d': 90 };
+    const daysMap: Record<TimeRange, number> = {
+      '7d': 7,
+      '30d': 30,
+      '90d': 90,
+    };
     const daysToShow = daysMap[activityTimeRange];
 
     // Find the latest date in data as the reference point
@@ -74,12 +78,16 @@ export function ActivityView({
 
     return activityTrendData.filter((d) => {
       const ts = new Date(`${d.date}T12:00:00Z`).getTime();
-      return !isNaN(ts) && ts >= cutoffMs && ts <= (referenceTimestamp ?? Infinity);
+      return (
+        !isNaN(ts) && ts >= cutoffMs && ts <= (referenceTimestamp ?? Infinity)
+      );
     });
   }, [activityTrendData, activityTimeRange, referenceTimestamp]);
 
   // Resolve colors: theme-compliant for screen, hardcoded for print
-  const primaryColor = isPrintMode ? PRINT_COLORS.primary : 'var(--chart-primary)';
+  const primaryColor = isPrintMode
+    ? PRINT_COLORS.primary
+    : 'var(--chart-primary)';
   const accentColor = isPrintMode ? PRINT_COLORS.accent : 'var(--chart-accent)';
 
   const timeRangeLabel: Record<TimeRange, string> = {
@@ -160,14 +168,34 @@ export function ActivityView({
 
   const renderActivityLegend = () =>
     renderLegend([
-      { key: 'posts', label: 'Avg Posts', color: primaryColor, hidden: isPostsHidden },
-      { key: 'comments', label: 'Avg Comments', color: accentColor, hidden: isCommentsHidden },
+      {
+        key: 'posts',
+        label: 'Avg Posts',
+        color: primaryColor,
+        hidden: isPostsHidden,
+      },
+      {
+        key: 'comments',
+        label: 'Avg Comments',
+        color: accentColor,
+        hidden: isCommentsHidden,
+      },
     ]);
 
   const renderEngagementLegend = () =>
     renderLegend([
-      { key: 'score', label: 'Avg Score', color: primaryColor, hidden: isScoreHidden },
-      { key: 'engagement', label: 'Avg Engagement', color: accentColor, hidden: isEngagementHidden },
+      {
+        key: 'score',
+        label: 'Avg Score',
+        color: primaryColor,
+        hidden: isScoreHidden,
+      },
+      {
+        key: 'engagement',
+        label: 'Avg Engagement',
+        color: accentColor,
+        hidden: isEngagementHidden,
+      },
     ]);
 
   return (
@@ -177,7 +205,8 @@ export function ActivityView({
         display: 'flex',
         flexDirection: 'column',
         gap: '20px',
-        padding: '0 4px',
+        padding: '12px',
+        paddingBottom: 'max(48px, calc(16px + var(--safe-area-bottom)))',
       }}
     >
       <Chart
@@ -207,7 +236,11 @@ export function ActivityView({
             position: 'relative',
           }}
         >
-          <ResponsiveContainer key={`${tabKey}-${activityTimeRange}`} width="100%" height="100%">
+          <ResponsiveContainer
+            key={`${tabKey}-${activityTimeRange}`}
+            width="100%"
+            height="100%"
+          >
             <AreaChart
               data={filteredActivityData}
               margin={{ top: 10, right: 0, left: 0, bottom: 5 }}
@@ -226,11 +259,7 @@ export function ActivityView({
                   />
                 </linearGradient>
                 <linearGradient id="fillComments" x1="0" y1="0" x2="0" y2="1">
-                  <stop
-                    offset="5%"
-                    stopColor={accentColor}
-                    stopOpacity={0.8}
-                  />
+                  <stop offset="5%" stopColor={accentColor} stopOpacity={0.8} />
                   <stop
                     offset="95%"
                     stopColor={accentColor}
@@ -342,11 +371,7 @@ export function ActivityView({
                   />
                 </linearGradient>
                 <linearGradient id="fillEngagement" x1="0" y1="0" x2="0" y2="1">
-                  <stop
-                    offset="5%"
-                    stopColor={accentColor}
-                    stopOpacity={0.8}
-                  />
+                  <stop offset="5%" stopColor={accentColor} stopOpacity={0.8} />
                   <stop
                     offset="95%"
                     stopColor={accentColor}

@@ -1,6 +1,6 @@
 /**
  * Checkbox & CheckboxGroup
- * FluxUI-style reusable components
+ * Reusable checkbox components
  *
  * Props — Checkbox:
  *   label        {string}                      – rendered <label> text

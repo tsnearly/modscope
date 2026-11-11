@@ -46,7 +46,6 @@ export function DatePicker({
               setDate(d);
               setOpen(false);
             }}
-            initialFocus
           />
         </div>
       </DialogContent>

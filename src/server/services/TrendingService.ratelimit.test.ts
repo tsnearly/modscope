@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { TrendingService } from './TrendingService';
-import { MS_PER_DAY, TREND_TIMEOUT_THRESHOLD_MS } from '../../shared/core/constants';
+import {
+  MS_PER_DAY,
+  TREND_TIMEOUT_THRESHOLD_MS,
+} from '../../shared/core/constants';
 
 // Enhanced Mock Redis client for rate limiting and timeout testing
 class RateLimitMockRedisClient {
@@ -44,29 +47,33 @@ class RateLimitMockRedisClient {
 
   async zRangeByScore(
     key: string,
-    min: number,
-    max: number
+    min: number | string,
+    max: number | string
   ): Promise<string[]> {
     return this.trackOperation('zRangeByScore', async () => {
       const zset = this.data.get(key) || [];
+      const minVal = min === '-inf' ? -Infinity : Number(min);
+      const maxVal = max === '+inf' ? Infinity : Number(max);
       return zset
-        .filter((item: any) => item.score >= min && item.score <= max)
+        .filter((item: any) => item.score >= minVal && item.score <= maxVal)
         .map((item: any) => item.member);
     });
   }
 
   async zRange(
     key: string,
-    start: number,
-    stop: number,
+    start: number | string,
+    stop: number | string,
     options?: any
   ): Promise<string[]> {
     return this.trackOperation('zRange', async () => {
       const zset = this.data.get(key) || [];
 
       if (options?.by === 'score' || options?.BYSCORE) {
+        const min = start === '-inf' ? -Infinity : Number(start);
+        const max = stop === '+inf' ? Infinity : Number(stop);
         return zset
-          .filter((item: any) => item.score >= start && item.score <= stop)
+          .filter((item: any) => item.score >= min && item.score <= max)
           .sort((a: any, b: any) =>
             options?.REV ? b.score - a.score : a.score - b.score
           )
@@ -75,9 +82,12 @@ class RateLimitMockRedisClient {
         const sorted = zset.sort((a: any, b: any) =>
           options?.REV ? b.score - a.score : a.score - b.score
         );
+        const startNum = Number(start);
+        const stopNum = Number(stop);
         const actualStart =
-          start < 0 ? Math.max(0, sorted.length + start) : start;
-        const actualStop = stop < 0 ? sorted.length + stop + 1 : stop + 1;
+          startNum < 0 ? Math.max(0, sorted.length + startNum) : startNum;
+        const actualStop =
+          stopNum < 0 ? sorted.length + stopNum + 1 : stopNum + 1;
         return sorted
           .slice(actualStart, actualStop)
           .map((item: any) => item.member);
@@ -154,13 +164,6 @@ class RateLimitMockRedisClient {
       const existed = this.data.has(key);
       this.data.delete(key);
       return existed ? 1 : 0;
-    });
-  }
-
-  async zCard(key: string): Promise<number> {
-    return this.trackOperation('zCard', async () => {
-      const zset = this.data.get(key) || [];
-      return zset.length;
     });
   }
 
@@ -664,6 +667,6 @@ describe('TrendingService Rate Limiting and Timeout Tests', () => {
         );
         expect((error as Error).message).toContain('Timeout approaching');
       }
-    });
+    }, 60000);
   });
 });

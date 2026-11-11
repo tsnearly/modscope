@@ -1,18 +1,47 @@
 import { context, reddit, redis, scheduler } from '@devvit/web/server';
-import type { OnAppInstallRequest, OnAppUpgradeRequest, TriggerResponse } from '@devvit/web/shared';
-import type { Context } from 'hono';
-import { Hono } from 'hono';
+import type {
+  OnAppInstallRequest,
+  OnAppUpgradeRequest,
+  TriggerResponse,
+} from '@devvit/web/shared';
+import { Context, Hono } from 'hono';
+import {
+  MS_PER_HOUR,
+  MS_PER_MINUTE,
+  MS_PER_SECOND,
+  redisKey,
+} from '../../shared/core/constants';
+import { metricPostKeys } from '../../shared/types/metricPost.types';
 import {
   DEFAULT_CALCULATION_SETTINGS,
   DEFAULT_STORAGE_SETTINGS,
   ReportingSchedule,
-} from '../../shared/types/settings';
-import { MS_PER_HOUR, redisKey } from '../../shared/core/constants';
+} from '../../shared/types/settings.types';
+import { buildCronExpression } from '../../shared/utils/cronHelpers';
+import { logger } from '../core/logger';
+import {
+  METRIC_SNAP_DELETED_GRACE_HOURS,
+  METRIC_SNAP_INDEX_KEY,
+} from '../core/metricSnapshot.types';
 import { createPost } from '../core/post';
+import { retry } from '../core/retry';
 import { DataRetrievalService } from '../services/DataRetrievalService';
+import { IdentityService } from '../services/IdentityService';
+import { MetricPostPublisher } from '../services/MetricPostPublisher';
+import { MetricPostService } from '../services/MetricPostService';
+import { MetricSnapshotService } from '../services/MetricSnapshotService';
 import { NormalizationService } from '../services/NormalizationService';
 import { ReportingService } from '../services/ReportingService';
+import {
+  PatchRunner,
+  releaseUpgradeLock,
+} from '../services/SchemaUpgradeService';
+import type { LiveStatsSlice } from '../services/SidebarContentBuilder';
+import { HistoryService } from '../services/HistoryService';
+import { SchedulerService } from '../services/SchedulerService';
+import { SidebarSyncService } from '../services/SidebarSyncService';
 import { SnapshotService } from '../services/SnapshotService';
+import { UpdateService } from '../services/UpdateService';
 import { TrendingService } from '../services/TrendingService';
 
 export const triggers = new Hono();
@@ -23,43 +52,313 @@ const snapshotter = new SnapshotService(normalizer);
 const trendMaterializer = new TrendingService(storage);
 const retriever = new DataRetrievalService(storage);
 
+const identityService = new IdentityService(storage);
+const historyService = new HistoryService(storage);
+const schedulerService = new SchedulerService(scheduler, storage);
+
+/**
+ * Delete-trigger cache invalidation AND identity anonymization.
+ * Devvit exposes PostDelete and CommentDelete, not a separate UserDelete event.
+ * We use deletion payloads as the signal to clear any cached identity/title data
+ * that might otherwise keep showing removed content.
+ *
+ * This previously only cleared the deprecated usernameCache/postTitleCache
+ * hashes — it never touched identity:post/identity:user at all, meaning the
+ * real-time half of the compliance sync wasn't actually wired to the system
+ * everything else was built around. It now does both: a post-level deletion
+ * anonymizes that post's identity record; an author-level deletion signal
+ * (author now reads '[deleted]'/'[removed]') anonymizes the user record,
+ * which cascades to every post that user has ever made via the identity
+ * split — one write here, not one per post.
+ *
+ * A dormant post whose author deletes their account without any other
+ * event ever touching that post is NOT caught here — Devvit doesn't emit a
+ * per-post event for account-level deletion of content nobody is currently
+ * interacting with. That gap is what the periodic re-verification sweep
+ * exists to close; this trigger path and that sweep are complementary, not
+ * redundant with each other.
+ */
+async function invalidateDeletedContentCaches(
+  kind: 'post' | 'comment',
+  payload: Record<string, unknown>,
+  subreddit: string
+): Promise<void> {
+  const postId = String(
+    payload.postId ||
+      payload.id ||
+      payload.t3_id ||
+      (payload.post as Record<string, unknown> | undefined)?.id ||
+      (payload.post as Record<string, unknown> | undefined)?.name ||
+      ''
+  ).trim();
+
+  const authorCandidates = [
+    payload.authorId,
+    payload.author_id,
+    payload.t2_id,
+    payload.authorName,
+    payload.author,
+    (payload.post as Record<string, unknown> | undefined)?.authorId,
+    (payload.post as Record<string, unknown> | undefined)?.author,
+    (payload.comment as Record<string, unknown> | undefined)?.authorId,
+    (payload.comment as Record<string, unknown> | undefined)?.author,
+  ]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean);
+
+  const deletionMarked = [
+    payload.deleted,
+    payload.isDeleted,
+    payload.removed,
+    payload.isRemoved,
+    payload.authorDeleted,
+    payload.authorRemoved,
+    payload.body === '[deleted]',
+    payload.body === '[removed]',
+    payload.author === '[deleted]',
+    payload.author === '[removed]',
+    payload.authorName === '[deleted]',
+    payload.authorName === '[removed]',
+  ].some(Boolean);
+
+  const titleKeysToRemove = new Set<string>();
+  if (postId) titleKeysToRemove.add(postId);
+  if (kind === 'post' && typeof payload.name === 'string')
+    titleKeysToRemove.add(payload.name);
+
+  const usernameKeysToRemove = deletionMarked
+    ? new Set(authorCandidates)
+    : new Set<string>();
+
+  const ops: Promise<unknown>[] = [];
+  for (const key of titleKeysToRemove) {
+    ops.push(storage.hDel(redisKey.postTitleCache(subreddit), [key]));
+  }
+  for (const key of usernameKeysToRemove) {
+    ops.push(storage.hDel(redisKey.usernameCache(subreddit), [key]));
+  }
+
+  // The actual compliance write — anonymize the real identity records, not
+  // just the deprecated caches above (kept only so a not-yet-migrated
+  // install's old read path still reflects the deletion until its backfill
+  // patch has run).
+  if (kind === 'post' && postId) {
+    const postFullname = postId.startsWith('t3_') ? postId : `t3_${postId}`;
+    const postInternalId = await storage.get(
+      redisKey.postFullnameToInternalId(postFullname)
+    );
+    if (postInternalId) {
+      ops.push(identityService.anonymizePost(postInternalId));
+    }
+  }
+
+  if (deletionMarked) {
+    for (const candidate of authorCandidates) {
+      const userFullname = candidate.startsWith('t2_')
+        ? candidate
+        : `t2_${candidate}`;
+      let userInternalId = await storage.get(
+        redisKey.userFullnameToInternalId(userFullname)
+      );
+      if (!userInternalId) {
+        userInternalId = await storage.get(
+          redisKey.usernameToInternalId(candidate)
+        );
+      }
+      if (userInternalId) {
+        // One write, regardless of how many posts this user has made —
+        // that's the entire point of the identity split.
+        ops.push(identityService.anonymizeUser(userInternalId));
+        break; // only one real user among the candidates; no need to keep trying alternates once found
+      }
+    }
+  }
+
+  if (ops.length > 0) {
+    await Promise.all(ops);
+  }
+}
+
+async function handleDeleteEvent(kind: 'post' | 'comment', c: any) {
+  const subreddit = getSubreddit();
+  const payload = (await c.req.json().catch(() => ({}))) as Record<
+    string,
+    unknown
+  >;
+  const dedupeId = String(
+    payload.postId ||
+      payload.id ||
+      payload.t3_id ||
+      payload.commentId ||
+      payload.t1_id ||
+      payload.name ||
+      'unknown'
+  );
+
+  if (await isDuplicateTrigger(`delete-${kind}`, `${subreddit}:${dedupeId}`)) {
+    return c.json(
+      { status: 'success', message: 'Duplicate trigger skipped' },
+      200
+    );
+  }
+
+  try {
+    await invalidateDeletedContentCaches(kind, payload, subreddit);
+    logger.info(`Processed ${kind} delete for r/${subreddit}`, 'TriggerRoutes');
+
+    // Extend post-deletion routine to manage MetricSnapshot lifecycle
+    if (kind === 'post') {
+      const redditPostId = String(
+        payload.postId || payload.id || payload.t3_id || payload.name || ''
+      ).trim();
+
+      let metricId: string | null = null;
+      try {
+        const p = (payload as any).post;
+        if (p && typeof p.getMetadata === 'function') {
+          const meta = await p.getMetadata();
+          metricId = meta?.modscope_metric_id || null;
+        } else if (typeof (reddit as any).getPostMetadata === 'function') {
+          const meta = await (reddit as any).getPostMetadata(redditPostId);
+          metricId = meta?.modscope_metric_id || null;
+        }
+      } catch {
+        /* skip API error and fall back to Redis lookup */
+      }
+
+      if (!metricId && redditPostId) {
+        const barePostId = redditPostId.replace(/^t3_/, '');
+        metricId =
+          (await storage.get(
+            `modscope:${subreddit}:postmeta:${barePostId}:modscope_metric_id`
+          )) ||
+          (await storage.get(
+            `modscope:${subreddit}:postmeta:${redditPostId}:modscope_metric_id`
+          )) ||
+          null;
+      }
+
+      if (metricId) {
+        logger.info(
+          `Metric Post deleted: post ${redditPostId}, metricId ${metricId}`,
+          'TriggerRoutes'
+        );
+
+        const snapshotService = new MetricSnapshotService(storage);
+        await snapshotService.markDeleted(subreddit, metricId);
+
+        try {
+          const runAt = new Date(
+            Date.now() + METRIC_SNAP_DELETED_GRACE_HOURS * MS_PER_HOUR
+          );
+          await scheduler.runJob({
+            name: 'purge-expired-deletions',
+            runAt,
+            data: {
+              subreddit,
+              metricId,
+            },
+          });
+        } catch (schedErr) {
+          logger.warn(
+            `Failed to schedule purge-expired-deletions job for r/${subreddit}: ${String(schedErr)}`,
+            'TriggerRoutes'
+          );
+        }
+      }
+    }
+
+    return c.json({ status: 'success' });
+  } catch (err) {
+    logger.error(`${kind} delete failed:`, err, 'TriggerRoutes');
+    return c.json({ status: 'error', message: String(err) }, 500);
+  }
+}
+
+triggers.post('/on-post-delete', async (c) => handleDeleteEvent('post', c));
+triggers.post('/on-comment-delete', async (c) =>
+  handleDeleteEvent('comment', c)
+);
+
+async function handleUpdateEvent(kind: 'post', c: any) {
+  const subreddit = getSubreddit();
+  const payload = (await c.req.json().catch(() => ({}))) as Record<
+    string,
+    unknown
+  >;
+  const dedupeId = String(
+    payload.postId ||
+      payload.id ||
+      payload.t3_id ||
+      (payload.post as Record<string, unknown> | undefined)?.id ||
+      (payload.post as Record<string, unknown> | undefined)?.name ||
+      'unknown'
+  );
+
+  if (await isDuplicateTrigger(`update-${kind}`, `${subreddit}:${dedupeId}`)) {
+    return c.json(
+      { status: 'success', message: 'Duplicate trigger skipped' },
+      200
+    );
+  }
+
+  try {
+    await invalidateDeletedContentCaches(kind, payload, subreddit);
+    logger.info(`Processed ${kind} update for r/${subreddit}`, 'TriggerRoutes');
+    return c.json({ status: 'success' });
+  } catch (err) {
+    logger.error(`${kind} update failed:`, err, 'TriggerRoutes');
+    return c.json({ status: 'error', message: String(err) }, 500);
+  }
+}
+
+triggers.post('/on-post-update', async (c) => handleUpdateEvent('post', c));
+
+// Legacy internal aliases used by scheduler-style plumbing.
+triggers.post('/tasks/on-post-delete', async (c) =>
+  handleDeleteEvent('post', c)
+);
+triggers.post('/tasks/on-comment-delete', async (c) =>
+  handleDeleteEvent('comment', c)
+);
+triggers.post('/tasks/on-post-update', async (c) =>
+  handleUpdateEvent('post', c)
+);
+
 // Helper for DATA_SUBREDDIT
 const getSubreddit = () => context.subredditName || 'unknown';
 
-const calculateReportCron = (schedule: ReportingSchedule): string => {
-  const { hour, minute, scheduleType, dayOfWeek, dayOfMonth } = schedule;
-  const mm = minute || 0;
-  const hh = hour || 9;
-
-  switch (scheduleType) {
-    case 'daily':
-      return `${mm} ${hh} * * *`;
-    case 'weekly': {
-      let daysStr = '1';
-      if (Array.isArray(dayOfWeek) && dayOfWeek.length > 0) {
-        daysStr = [...dayOfWeek].sort((a, b) => a - b).join(',');
-      } else if (typeof dayOfWeek === 'number') {
-        daysStr = String(dayOfWeek);
-      }
-      return `${mm} ${hh} * * ${daysStr}`;
-    }
-    case 'monthly':
-      return `${mm} ${hh} ${dayOfMonth ?? 1} * *`;
-    default:
-      return `${mm} ${hh} * * *`;
+export function extractSubredditName(val: unknown, fallback?: string): string {
+  if (typeof val === 'string' && val.trim() && val !== '[object Object]') {
+    return val.trim();
   }
-};
+  if (typeof val === 'object' && val !== null) {
+    const obj = val as Record<string, unknown>;
+    if (typeof obj.name === 'string' && obj.name.trim()) return obj.name.trim();
+    if (typeof obj.subredditName === 'string' && obj.subredditName.trim()) return obj.subredditName.trim();
+    if (typeof obj.subreddit === 'string' && obj.subreddit.trim()) return obj.subreddit.trim();
+    if (typeof obj.data === 'object' && obj.data !== null) {
+      return extractSubredditName(obj.data, fallback);
+    }
+  }
+  const fallbackStr = typeof fallback === 'string' && fallback !== '[object Object]' ? fallback : '';
+  const ctxName = typeof context?.subredditName === 'string' ? context.subredditName : '';
+  return fallbackStr || ctxName || 'modscope_dev';
+}
 
-async function isDuplicateTrigger(trigger: string, id: string): Promise<boolean> {
+async function isDuplicateTrigger(
+  trigger: string,
+  id: string
+): Promise<boolean> {
   const lockKey = redisKey.triggerDedup(trigger, id);
   try {
     const result = await redis.set(lockKey, '1', {
       nx: true,
-      expiration: new Date(Date.now() + 90 * 1000),
+      expiration: new Date(Date.now() + 90 * MS_PER_SECOND),
     });
     return !result;
   } catch (err) {
-    console.error(`isDuplicateTrigger lock error for ${trigger}:${id}:`, err);
+    logger.error(`isDuplicateTrigger lock error for ${trigger}:${id}:`, err, 'TriggerRoutes');
     return false;
   }
 }
@@ -73,8 +372,11 @@ triggers.post('/on-app-install', async (c) => {
 
   // Deduplicate app installation/update trigger events
   if (await isDuplicateTrigger('app-install', _subreddit)) {
-    console.log(`[TRIGGER] r/${_subreddit} Skip duplicate app-install trigger`);
-    return c.json<TriggerResponse>({ status: 'success', message: 'Duplicate trigger skipped' }, 200);
+    logger.info(`r/${_subreddit} Skip duplicate app-install trigger`, 'TriggerRoutes');
+    return c.json<TriggerResponse>(
+      { status: 'success', message: 'Duplicate trigger skipped' },
+      200
+    );
   }
 
   try {
@@ -83,46 +385,14 @@ triggers.post('/on-app-install', async (c) => {
     // Capture installed version so the next check-for-updates doesn't
     // immediately notify about the version just installed.
     const currentVersion = context.appVersion ?? 'unknown';
-    await redis.set(redisKey.lastNotifiedVersion(_subreddit), currentVersion);
+    await redis.set(redisKey.lastNotifiedVersion(), currentVersion);
 
     return c.json({ status: 'success', postId: post.id });
   } catch (error) {
-    console.error('[TRIGGER] on-app-install failed:', error);
+    logger.error('on-app-install failed:', error, 'TriggerRoutes');
     return c.json({ status: 'error', message: 'Failed to create post' }, 500);
   }
 });
-
-async function retry<T>(
-  fn: () => Promise<T>,
-  retries = 3,
-  delay = 500,
-  contextName = 'operation'
-): Promise<T> {
-  let attempt = 0;
-  while (true) {
-    try {
-      return await fn();
-    } catch (error: any) {
-      attempt++;
-      const msg = String(error?.message ?? error);
-      const isTransient =
-        msg.includes('timeout') ||
-        msg.includes('tcp') ||
-        msg.includes('connection') ||
-        msg.includes('UNKNOWN') ||
-        msg.includes('i/o');
-
-      if (attempt >= retries || !isTransient) {
-        throw error;
-      }
-      const backoff = delay * Math.pow(2, attempt - 1);
-      console.warn(
-        `[RETRY] Transient failure in ${contextName} (attempt ${attempt}/${retries}). Retrying in ${backoff}ms. Error: ${msg}`
-      );
-      await new Promise((resolve) => setTimeout(resolve, backoff));
-    }
-  }
-}
 
 /**
  * Trigger: App Upgrade
@@ -135,287 +405,41 @@ triggers.post('/on-app-upgrade', async (c) => {
   const _subreddit = _input.subreddit?.name || 'global';
 
   if (await isDuplicateTrigger('app-upgrade', _subreddit)) {
-    console.log(`[TRIGGER] on-app-upgrade: Skip duplicate trigger`);
-    return c.json({ status: 'success', message: 'Duplicate trigger skipped' }, 200);
+    logger.info('on-app-upgrade: Skip duplicate trigger', 'TriggerRoutes');
+    return c.json(
+      { status: 'success', message: 'Duplicate trigger skipped' },
+      200
+    );
   }
 
   try {
-    const activeJobIds = await retry(
-      () => redis.zRange(redisKey.jobsActive(), 0, -1),
-      3,
-      300,
-      'zRange(jobsActive)'
-    );
-
-    // Pull scheduler state once, outside the loop
-    const scheduledJobs = await retry(
-      () => scheduler.listJobs(),
-      3,
-      300,
-      'listJobs'
-    );
-
-    let restored = 0;
-    let removed = 0;
-    let skipped = 0;
-    let limitHit = false;
-
-    console.log(`[TRIGGER] r/${_subreddit} on-app-upgrade: Found ${scheduledJobs.length} jobs in scheduler. Proactively clearing for re-sync.`);
-
-    // 1. Proactively clear any existing jobs that might be from the old version
-    // but haven't been purged yet by Devvit.
-    for (const job of scheduledJobs) {
-      if (job.name === 'snapshot-worker' || job.name === 'report-worker' || job.name.startsWith('report-worker:')) {
-        await retry(
-          () => scheduler.cancelJob(job.id),
-          2,
-          200,
-          `cancelJob(${job.id})`
-        ).catch(() => { });
-      }
-    }
-
-    for (const entry of activeJobIds) {
-      if (limitHit) {
-        skipped++;
-        continue;
-      }
-
-      const jobId =
-        typeof entry === 'string' ? entry : (entry as any)?.member;
-      if (!jobId) continue;
-
-      const jobHash = await retry(
-        () => redis.hGetAll(redisKey.job(jobId)),
-        3,
-        200,
-        `hGetAll(job:${jobId})`
-      );
-      if (!jobHash || jobHash.status !== 'active') {
-        await retry(
-          () => redis.zRem(redisKey.jobsActive(), [jobId]),
-          3,
-          200,
-          `zRem(jobsActive:${jobId})`
-        );
-        removed++;
-        continue;
-      }
-
-      // Skip expired one-time jobs
-      if (jobHash.cron === 'once' && jobHash.nextRun) {
-        const runTime = parseInt(jobHash.nextRun, 10);
-        if (Date.now() > runTime) {
-          await retry(
-            () => Promise.all([
-              redis.zRem(redisKey.jobsActive(), [jobId]),
-              redis.hSet(redisKey.job(jobId), { status: 'expired' })
-            ]),
-            3,
-            200,
-            `expireJobRedisState(${jobId})`
-          );
-          removed++;
-          continue;
-        }
-      }
-
-      // Always restore during upgrade to ensure persistence in the new version's scheduler.
-      // We already cleared old jobs above.
-
-      // Build scheduler config
-      const config: any = {
-        name: 'snapshot-worker',
-        data: { _subreddit, scheduleType: jobHash.scheduleType || 'custom' },
-      };
-      if (jobHash.cron && jobHash.cron !== 'once') {
-        config.cron = jobHash.cron;
-      } else if (jobHash.nextRun) {
-        config.runAt = new Date(parseInt(jobHash.nextRun, 10));
-      } else {
-        config.runAt = new Date(Date.now() + (0.25 * MS_PER_HOUR));
-      }
-
-      try {
-        // Try to cancel the old ID first to free scheduler quota
-        await retry(
-          () => scheduler.cancelJob(jobId),
-          2,
-          200,
-          `cancelJob(${jobId})`
-        ).catch(() => { });
-
-        const newJobId = await retry(
-          () => scheduler.runJob(config),
-          3,
-          300,
-          `runJob(snapshot-worker)`
-        );
-
-        await retry(
-          () => Promise.all([
-            redis.hSet(redisKey.job(newJobId), {
-              ...jobHash,
-              id: newJobId,
-              status: 'active',
-            }),
-            redis.zRem(redisKey.jobsActive(), [jobId]),
-            redis.zAdd(redisKey.jobsActive(), {
-              member: newJobId,
-              score: Date.now(),
-            })
-          ]),
-          3,
-          200,
-          `updateJobRedisState(${newJobId})`
-        );
-
-        restored++;
-      } catch (schedError: any) {
-        const msg = String(schedError.message ?? schedError);
-        if (msg.includes('limit exceeded')) {
-          console.warn(
-            `[TRIGGER] Cron limit reached during restoration; skipping remaining jobs.`
-          );
-          limitHit = true;
-          skipped++;
-          // Continue iterating just to count skipped items
-        } else {
-          throw schedError;
-        }
-      }
-    }
-
-    // Fallback: If no snapshot jobs were restored but a recurring frequency is set,
-    // ensure at least one snapshot worker exists.
-    if (restored === 0) {
-      const storageStr = await retry(
-        () => redis.get(redisKey.storage(_subreddit)),
-        3,
-        200,
-        'get(storage)'
-      );
-      if (storageStr) {
-        try {
-          const storageSettings = JSON.parse(storageStr);
-          const freq = storageSettings.snapshotFrequency || 'daily';
-          let cron = '30 5 * * *'; // default 5:30 AM
-          if (freq === '12hours') cron = '0 */12 * * *';
-          else if (freq === 'weekly') cron = '0 6 * * 1';
-          else if (freq === 'monthly') cron = '0 7 1 * *';
-
-          await retry(
-            () => scheduler.runJob({
-              name: 'snapshot-worker',
-              cron,
-              data: { _subreddit, scheduleType: freq },
-            }),
-            3,
-            300,
-            'runJob(default snapshot-worker)'
-          );
-          restored++;
-          console.log(`[TRIGGER] Restored default snapshot-worker for r/${_subreddit} (${freq})`);
-        } catch (e) {
-          console.warn(`[TRIGGER] Failed to restore default snapshot-worker:`, e);
-        }
-      }
-    }
-
-    let reportRestored = 0;
-    let reportSkipped = 0;
-    let reportLimitHit = false;
-
-    const reportSettingsStr = await retry(
-      () => storage.get(redisKey.report(_subreddit)),
-      3,
-      200,
-      'get(reportSettings)'
-    );
-    if (reportSettingsStr) {
-      try {
-        const reportSettings = JSON.parse(reportSettingsStr) as {
-          reportingSchedules?: ReportingSchedule[];
-        };
-
-        const reportingSchedules = Array.isArray(reportSettings.reportingSchedules)
-          ? reportSettings.reportingSchedules
-          : [];
-
-        for (const schedule of reportingSchedules) {
-          if (reportLimitHit) {
-            reportSkipped++;
-            continue;
-          }
-
-          if (!schedule?.enabled) {
-            continue;
-          }
-
-          const jobName = 'report-worker';
-          // Always restore during upgrade to ensure persistence in the new version's scheduler.
-
-          try {
-            await retry(
-              () => scheduler.runJob({
-                name: jobName,
-                cron: calculateReportCron(schedule),
-                data: {
-                  _subreddit,
-                  scheduleId: schedule.id,
-                },
-              }),
-              3,
-              300,
-              `runJob(report-worker:${schedule.id})`
-            );
-            reportRestored++;
-          } catch (schedError: any) {
-            const msg = String(schedError.message ?? schedError);
-            if (msg.includes('limit exceeded')) {
-              console.warn(
-                `[TRIGGER] Cron limit reached during report restoration; skipping remaining report jobs.`
-              );
-              reportLimitHit = true;
-              reportSkipped++;
-            } else {
-              throw schedError;
-            }
-          }
-        }
-      } catch (reportError) {
-        console.warn('[TRIGGER] Failed to restore report jobs:', reportError);
-      }
-    }
-
-    console.log(
-      `[TRIGGER] on-app-upgrade for r/${_subreddit}: restored=${restored}, removed=${removed}, skipped=${skipped}, reportRestored=${reportRestored}, reportSkipped=${reportSkipped}`
-    );
     return c.json({
       status: 'success',
-      restored,
-      removed,
-      skipped,
-      reportRestored,
-      reportSkipped,
+      restored: 0,
+      removed: 0,
+      skipped: 0,
+      reportRestored: 0,
+      reportSkipped: 0,
     });
   } catch (error) {
-    console.error('[TRIGGER] on-app-upgrade failed:', error);
+    logger.error('on-app-upgrade failed:', error, 'TriggerRoutes');
     return c.json({ status: 'error', message: String(error) }, 500);
   }
 });
 
-/**
- * Trigger: App Check for Updates (runs weekly via scheduler)
- */
 const handleCheckForUpdates = async (c: Context) => {
-  const currentVersion = context.appVersion ?? '1.0.7';
-  const _subreddit = context.subredditName || 'global';
-  if (await isDuplicateTrigger('check-for-updates', _subreddit)) {
-    console.log(`[TRIGGER] check-for-updates: Skip duplicate trigger`);
-    return c.json({ status: 'success', message: 'Duplicate trigger skipped' }, 200);
-  }
+  const _input = await c.req.json<OnAppUpgradeRequest>().catch(() => ({} as any));
+  const _subreddit = _input.subreddit?.name || context.subredditName || 'global';
+  const _subredditId = (_input.subreddit?.id || context.subredditId) as
+    `t5_${string}` | undefined;
 
+  if (await isDuplicateTrigger('check-for-updates', _subreddit)) {
+    logger.info('check-for-updates: Skip duplicate trigger', 'TriggerRoutes');
+    return c.json(
+      { status: 'success', message: 'Duplicate trigger skipped' },
+      200
+    );
+  }
 
   if (!_subreddit) {
     return c.json(
@@ -427,84 +451,25 @@ const handleCheckForUpdates = async (c: Context) => {
     );
   }
 
-  try {
-    const response = await fetch(
-      'https://raw.githubusercontent.com/tsnearly/modscope/refs/heads/main/version.json',
-      {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      }
-    );
+  const result = await UpdateService.performCheckForUpdates({
+    reddit,
+    redis,
+    subreddit: _subreddit,
+    subredditId: _subredditId,
+    appVersion: context.appVersion,
+    jobId: (context as any).jobId || 'check-for-updates',
+  });
 
-    if (!response.ok) {
-      throw new Error(`Version check failed with HTTP ${response.status}`);
-    }
-
-    const data = (await response.json()) as {
-      latest?: string;
-      version?: string;
-    };
-    const latestVersion = data.latest ?? data.version;
-
-    console.log(
-      `[UPDATE CHECK] Latest version: ${latestVersion}, Current version: ${currentVersion}`
-    );
-
-    if (!latestVersion || latestVersion === currentVersion) {
-      console.log('[UPDATE CHECK] ModScope is up to date.');
-      return c.json({
-        status: 'up-to-date',
-        currentVersion,
-        latestVersion: latestVersion ?? currentVersion,
-      });
-    }
-
-    const lastNotified = await redis.get(redisKey.lastNotifiedVersion(_subreddit));
-    if (lastNotified === latestVersion) {
-      return c.json({
-        status: 'already-notified',
-        currentVersion,
-        latestVersion,
-      });
-    }
-
-    await reddit.sendPrivateMessage({
-      to: `/r/${_subreddit}`,
-      subject: `ModScope Update Available: v${latestVersion}`,
-      text: [
-        `Hello r/${_subreddit} moderators,\n\nA new version of ModScope (v${latestVersion}) is available!`,
-        ``,
-        `- Installed version: \`v${currentVersion}\``,
-        `- Latest version: \`v${latestVersion}\``,
-        ``,
-        ``,
-        `Please [update](https://developers.reddit.com/apps/modscope/) to the latest version to enjoy new features and improvements.\n\nBest regards,\nThe ModScope Team`,
-      ].join('\n'),
-    });
-
-    await redis.set(redisKey.lastNotifiedVersion(_subreddit), latestVersion);
-
-    return c.json({
-      status: 'notified',
-      subreddit: _subreddit,
-      currentVersion,
-      latestVersion,
-    });
-  } catch (error) {
-    console.error('[UPDATE CHECK] Failed to check for updates:', error);
-    return c.json(
-      {
-        status: 'error',
-        message: error instanceof Error ? error.message : String(error),
-      },
-      500
-    );
-  }
+  return c.json(result, result.status === 'error' ? 500 : 200);
 };
 
-triggers.post('/tasks/check-for-updates', handleCheckForUpdates);
+triggers.post('/tasks/check-for-updates', async (c) => {
+  const subreddit = getSubreddit();
+  return historyService.wrapJobExecution(
+    { jobType: 'check-for-updates', subreddit },
+    async () => handleCheckForUpdates(c)
+  );
+});
 
 /**
  * Task: Snapshot Worker
@@ -512,14 +477,17 @@ triggers.post('/tasks/check-for-updates', handleCheckForUpdates);
 triggers.post('/tasks/snapshot-worker', async (c) => {
   const subId = context.subredditId || 'global';
   if (await isDuplicateTrigger('snapshot-worker', subId)) {
-    console.log(`[TRIGGER] snapshot-worker: Skip duplicate trigger`);
-    return c.json({ status: 'success', message: 'Duplicate trigger skipped' }, 200);
+    logger.info('snapshot-worker: Skip duplicate trigger', 'TriggerRoutes');
+    return c.json(
+      { status: 'success', message: 'Duplicate trigger skipped' },
+      200
+    );
   }
   const subreddit = getSubreddit();
   const startTime = Date.now();
-  const lockKey = redisKey.snapshotLock(subreddit);
+  const lockKey = redisKey.snapshotLock();
   const lockToken = `${startTime}-${Math.random().toString(36).slice(2, 10)}`;
-  const lockTtlMs = 10 * 60 * 1000;
+  const lockTtlMs = 10 * MS_PER_MINUTE;
 
   const parseLock = (
     raw: string | null | undefined
@@ -549,8 +517,9 @@ triggers.post('/tasks/snapshot-worker', async (c) => {
     const existingLockRaw = await redis.get(lockKey);
     const existingLock = parseLock(existingLockRaw ?? null);
     if (existingLock && existingLock.expiresAt > nowMs) {
-      console.warn(
-        `[WORKER] Skipping overlapping run for r/${subreddit}; active lock detected.`
+      logger.warn(
+        `Skipping overlapping run for r/${subreddit}; active lock detected.`,
+        'TriggerRoutes'
       );
       return c.json({ status: 'skipped', reason: 'overlap' });
     }
@@ -566,13 +535,14 @@ triggers.post('/tasks/snapshot-worker', async (c) => {
     const verifiedRaw = await redis.get(lockKey);
     const verifiedLock = parseLock(verifiedRaw ?? null);
     if (!verifiedLock || verifiedLock.token !== lockToken) {
-      console.warn(
-        `[WORKER] Skipping snapshot for r/${subreddit}; lock ownership verification failed.`
+      logger.warn(
+        `Skipping snapshot for r/${subreddit}; lock ownership verification failed.`,
+        'TriggerRoutes'
       );
       return c.json({ status: 'skipped', reason: 'lock-contention' });
     }
   } catch (lockError) {
-    console.warn('[WORKER] Lock evaluation failed; continuing:', lockError);
+    logger.warn(`Lock evaluation failed; continuing: ${String(lockError)}`, 'TriggerRoutes');
   }
 
   const isContinuation = c.req.query('continuation') === 'true';
@@ -581,37 +551,11 @@ triggers.post('/tasks/snapshot-worker', async (c) => {
     let settings = DEFAULT_CALCULATION_SETTINGS;
     let storageSettings = DEFAULT_STORAGE_SETTINGS;
     const [settingsStr, storageStr] = await Promise.all([
-      storage.get(redisKey.settings(subreddit)),
-      storage.get(redisKey.storage(subreddit)),
+      storage.get(redisKey.settings()),
+      storage.get(redisKey.storage()),
     ]);
     if (settingsStr) settings = JSON.parse(settingsStr);
     if (storageStr) storageSettings = JSON.parse(storageStr);
-
-    // Proactive job self-registration: ensure this running job is tracked in
-    // Redis so it survives the next app upgrade (Devvit clears the scheduler).
-    const jobId = (context as any).jobId;
-    if (jobId) {
-      try {
-        const existingHash = await redis.hGetAll(redisKey.job(jobId));
-        if (!existingHash || Object.keys(existingHash).length === 0) {
-          const jobHash: Record<string, string> = {
-            id: jobId,
-            name: 'snapshot-worker',
-            subreddit, // Store subreddit for upgrade resilience
-            scheduleType: 'captured',
-            createdAt: Date.now().toString(),
-            status: 'active',
-          };
-          await redis.hSet(redisKey.job(jobId), jobHash);
-          await redis.zAdd(redisKey.jobsActive(), { member: jobId, score: Date.now() });
-          console.log(
-            `[WORKER] Captured untracked job ${jobId} to Redis for upgrade resilience.`
-          );
-        }
-      } catch (captureErr) {
-        console.warn('[WORKER] Job self-registration failed:', captureErr);
-      }
-    }
 
     await snapshotter.runLifecycle(subreddit, settings, {
       isManual: false,
@@ -625,7 +569,7 @@ triggers.post('/tasks/snapshot-worker', async (c) => {
 
     return c.json({ status: 'success' });
   } catch (error) {
-    console.error('[WORKER] Snapshot lifecycle failed:', error);
+    logger.error('Snapshot lifecycle failed:', error, 'TriggerRoutes');
     return c.json({ error: String(error) });
   } finally {
     const lockVal = await redis.get(lockKey);
@@ -648,8 +592,8 @@ triggers.post('/tasks/delete-snapshot', async (c) => {
     try {
       const raw =
         typeof item === 'object' &&
-          item !== null &&
-          'member' in (item as Record<string, unknown>)
+        item !== null &&
+        'member' in (item as Record<string, unknown>)
           ? String((item as { member: unknown }).member)
           : String(item);
       return { raw, entry: JSON.parse(raw) };
@@ -685,26 +629,34 @@ triggers.post('/tasks/delete-snapshot', async (c) => {
         : undefined;
 
     if (!scanId) {
-      console.error(
-        '[TRIGGER] Invalid or missing scanId in delete_snapshot request',
+      logger.error(
+        'Invalid or missing scanId in delete_snapshot request',
         {
           scanIdFromQuery,
           bodyKeys: Object.keys(requestBody || {}),
-        }
+        },
+        'TriggerRoutes'
       );
       return c.json({ status: 'error', message: 'Invalid scanId' }, 400);
     }
 
     const subId = context.subredditId || 'global';
     if (await isDuplicateTrigger('delete-snapshot', `${subId}:${scanId}`)) {
-      console.log(`[TRIGGER] Suppressed duplicate delete-snapshot trigger for scan #${scanId}`);
-      return c.json({ status: 'success', message: 'Duplicate trigger skipped' }, 200);
+      logger.info(
+        `Suppressed duplicate delete-snapshot trigger for scan #${scanId}`,
+        'TriggerRoutes'
+      );
+      return c.json(
+        { status: 'success', message: 'Duplicate trigger skipped' },
+        200
+      );
     }
 
     const subreddit = getSubreddit();
 
-    console.log(
-      `[TRIGGER] Background deletion started for scan #${scanId} in r/${subreddit}`
+    logger.info(
+      `Background deletion started for scan #${scanId} in r/${subreddit}`,
+      'TriggerRoutes'
     );
 
     // 1. Perform deletion
@@ -719,7 +671,10 @@ triggers.post('/tasks/delete-snapshot', async (c) => {
         continue;
       }
       const { raw: oldEntryStr, entry } = parsed;
-      if (entry.id === `delete-${scanId}` && (entry.status === 'running' || entry.status === 'interrupted')) {
+      if (
+        entry.id === `delete-${scanId}` &&
+        (entry.status === 'running' || entry.status === 'interrupted')
+      ) {
         const endTime = Date.now();
         const startTime =
           typeof entry.startTime === 'number' ? entry.startTime : endTime;
@@ -740,12 +695,13 @@ triggers.post('/tasks/delete-snapshot', async (c) => {
     }
 
     if (!historyUpdated) {
-      console.warn(
-        `[TRIGGER] Could not find matching history entry for delete-${scanId}`
+      logger.warn(
+        `Could not find matching history entry for delete-${scanId}`,
+        'TriggerRoutes'
       );
     }
 
-    console.log(`[TRIGGER] Background deletion complete for scan #${scanId}`);
+    logger.info(`Background deletion complete for scan #${scanId}`, 'TriggerRoutes');
     return c.json({
       showToast: {
         text: 'Snapshot deleted successfully',
@@ -753,7 +709,7 @@ triggers.post('/tasks/delete-snapshot', async (c) => {
       },
     });
   } catch (error) {
-    console.error('[TRIGGER] Background deletion failed:', error);
+    logger.error('Background deletion failed:', error, 'TriggerRoutes');
 
     // Log failure to Job History if scanId is known
     try {
@@ -765,7 +721,10 @@ triggers.post('/tasks/delete-snapshot', async (c) => {
             continue;
           }
           const { raw: oldEntryStr, entry } = parsed;
-          if (entry.id === `delete-${scanId}` && (entry.status === 'running' || entry.status === 'interrupted')) {
+          if (
+            entry.id === `delete-${scanId}` &&
+            (entry.status === 'running' || entry.status === 'interrupted')
+          ) {
             const endTime = Date.now();
             const startTime =
               typeof entry.startTime === 'number' ? entry.startTime : endTime;
@@ -813,64 +772,689 @@ triggers.post('/tasks/report-worker', async (c) => {
     requestBody?.job?.data?.scheduleId;
 
   const subId = context.subredditId || 'global';
-  if (await isDuplicateTrigger('report-worker', `${subId}:${scheduleId || 'legacy'}`)) {
-    console.log(`[TRIGGER] Suppressed duplicate report-worker trigger for schedule #${scheduleId || 'legacy'}`);
-    return c.json({ status: 'success', message: 'Duplicate trigger skipped' }, 200);
+  if (
+    await isDuplicateTrigger(
+      'report-worker',
+      `${subId}:${scheduleId || 'legacy'}`
+    )
+  ) {
+    logger.info(
+      `Suppressed duplicate report-worker trigger for schedule #${scheduleId || 'legacy'}`,
+      'TriggerRoutes'
+    );
+    return c.json(
+      { status: 'success', message: 'Duplicate trigger skipped' },
+      200
+    );
   }
 
-  try {
-    const reportSettingsStr = await storage.get(
-      redisKey.report(subreddit)
-    );
-    if (!reportSettingsStr) {
-      return c.json({ status: 'skipped', reason: 'no-settings' });
-    }
-    const reportSettings = JSON.parse(reportSettingsStr);
+  return historyService.wrapJobExecution(
+    {
+      jobType: 'report-worker',
+      subreddit,
+      initialDetails: scheduleId
+        ? `Sending scheduled report #${scheduleId} for r/${subreddit}`
+        : `Sending automated report for r/${subreddit}`,
+    },
+    async (updateDetails) => {
+      const reportSettingsStr = await storage.get(redisKey.report());
+      if (!reportSettingsStr) {
+        return c.json({ status: 'skipped', reason: 'no-settings' });
+      }
+      const reportSettings = JSON.parse(reportSettingsStr);
 
-    let recipients: string[] = [];
+      let recipients: string[] = [];
 
-    if (scheduleId) {
-      const schedule = reportSettings.reportingSchedules?.find(
-        (s: any) => s.id === scheduleId
+      if (scheduleId) {
+        const schedule = reportSettings.reportingSchedules?.find(
+          (s: any) => s.id === scheduleId
+        );
+        if (!schedule || !schedule.enabled) {
+          return c.json({ status: 'skipped', reason: 'schedule-not-found' });
+        }
+        recipients = (schedule.recipients || '')
+          .split(',')
+          .map((r: string) => r.trim())
+          .filter(Boolean);
+      } else {
+        // Legacy fallback (or if scheduleId not provided for some reason)
+        if (!reportSettings.automatedReporting) {
+          return c.json({ status: 'skipped', reason: 'disabled' });
+        }
+        recipients = (reportSettings.reportingRecipients || '')
+          .split(',')
+          .map((r: string) => r.trim())
+          .filter(Boolean);
+      }
+
+      if (recipients.length === 0) {
+        return c.json({ status: 'skipped', reason: 'no-recipients' });
+      }
+
+      const latestScanRaw = await storage.get(redisKey.latestScan());
+      const latestScanId = parseInt(latestScanRaw || '0', 10);
+      if (!latestScanId) {
+        return c.json({ status: 'skipped', reason: 'no-scan' });
+      }
+
+      const snapshot = await retriever.getSnapshotById(latestScanId);
+      if (!snapshot) {
+        return c.json({ status: 'error', message: 'Snapshot not found' }, 404);
+      }
+
+      await updateDetails(
+        `Delivering report #${scheduleId || 'auto'} to ${recipients.length} recipients...`
       );
-      if (!schedule || !schedule.enabled) {
-        return c.json({ status: 'skipped', reason: 'schedule-not-found' });
+      await ReportingService.sendReport(snapshot, recipients, reportSettings);
+
+      return c.json({ status: 'success' });
+    }
+  );
+});
+
+/**
+ * Task: Metric Worker (Automated Community Metric Post)
+ */
+triggers.post('/tasks/metric-worker', async (c) => {
+  const subreddit = getSubreddit();
+  let requestBody: any = {};
+  try {
+    requestBody = await c.req.json();
+  } catch {
+    requestBody = {};
+  }
+
+  const rawSub =
+    requestBody?.subreddit || requestBody?.data?.subreddit || subreddit;
+  const targetSubreddit = extractSubredditName(rawSub, subreddit);
+  logger.info(`metric-worker triggered for r/${targetSubreddit}`, 'TriggerRoutes');
+
+  return historyService.wrapJobExecution(
+    {
+      jobType: 'metric-worker',
+      jobName: 'Metric Post Worker',
+      subreddit: targetSubreddit,
+      initialDetails: `Publishing community metrics post for r/${targetSubreddit}`,
+    },
+    async (updateDetails) => {
+      const rawConfig = await storage.get(metricPostKeys.config(targetSubreddit));
+      if (!rawConfig) {
+        return c.json({ status: 'skipped', reason: 'no-config' });
       }
-      recipients = (schedule.recipients || '')
-        .split(',')
-        .map((r: string) => r.trim())
-        .filter(Boolean);
-    } else {
-      // Legacy fallback (or if scheduleId not provided for some reason)
-      if (!reportSettings.automatedReporting) {
-        return c.json({ status: 'skipped', reason: 'disabled' });
+      const config = JSON.parse(rawConfig);
+      if (config.schedule && config.schedule.enabled === false) {
+        return c.json({ status: 'skipped', reason: 'scheduling-disabled' });
       }
-      recipients = (reportSettings.reportingRecipients || '')
-        .split(',')
-        .map((r: string) => r.trim())
-        .filter(Boolean);
+
+      const snapshot = await retriever.getLatestSnapshot(targetSubreddit);
+      if (!snapshot) {
+        return c.json({ status: 'skipped', reason: 'no-snapshot-data' });
+      }
+
+      await updateDetails('Generating and publishing metric post to subreddit...');
+      const publisher = new MetricPostPublisher(storage, reddit);
+      const result = await publisher.publish(
+        targetSubreddit,
+        snapshot,
+        config,
+        'auto-scheduler',
+        'scheduled'
+      );
+      return c.json({
+        status: result.success ? 'success' : 'skipped',
+        ...result,
+      });
+    }
+  );
+});
+
+/**
+ * Task: Purge Expired Deletions
+ */
+/**
+ * Task: apply pending schema patches.
+ * This is the handler ensureBootstrap() (api.ts) enqueues via
+ * scheduler.runJob({ name: 'apply-pending-schema-patches', ... }) once it has
+ * acquired the upgrade lock — Devvit's 30-second request timeout means the
+ * actual patch sequence can never run inline in that request, only here.
+ * Releases the lock in a finally block regardless of outcome, so a failed
+ * patch doesn't leave the app permanently locked for every session.
+ */
+const IDENTITY_REVERIFY_BATCH_SIZE = 25; // Safe amount to process before rate limits/timeout
+
+/**
+ * Task: seed the weekly identity re-verification queue.
+ * Runs once a week (see the identity-reverify-cron registration in
+ * on-app-upgrade above). Pulls every known userInternalId from the tracking
+ * set (maintained by IdentityService.resolveOrCreateUser — every user it
+ * creates or resolves is registered in identity:all-user-ids) and hands the
+ * whole list to the worker as a queue, then kicks off the first batch.
+ */
+triggers.post('/tasks/identity-reverify-cron', async (c) => {
+  const subreddit = getSubreddit();
+  return historyService.wrapJobExecution(
+    {
+      jobType: 'identity-reverify-cron',
+      subreddit,
+      initialDetails: 'Seeding weekly identity re-verification queue',
+    },
+    async () => {
+      const result = await IdentityService.seedReverifyQueue(storage, scheduler);
+      return c.json(result, result.status === 'error' ? 500 : 200);
+    }
+  );
+});
+
+/**
+ * Task: process one batch of the identity re-verification queue.
+ * Self-reschedules until the queue is empty, same pattern as
+ * purge-expired-deletions elsewhere in this file — a single run can't
+ * safely process an unbounded number of users against a rate-limited API.
+ *
+ * CONFIRMED against the real client (checked directly in node_modules,
+ * not assumed): reddit.getUserByUsername returns a User object with an
+ * isSuspended boolean field. No user returned at all means genuinely
+ * deleted; isSuspended: true means held, not anonymized; a thrown error
+ * is treated as a real API/network failure, not evidence of anything —
+ * the record is left untouched and re-checked next week rather than acted
+ * on from a guess.
+ */
+triggers.post('/tasks/identity-reverify-worker', async (c) => {
+  const subreddit = getSubreddit();
+  return historyService.wrapJobExecution(
+    {
+      jobType: 'identity-reverify-worker',
+      subreddit,
+      initialDetails: 'Processing identity re-verification batch',
+    },
+    async (updateDetails) => {
+      const queueKey = 'identity:reverify:queue';
+
+      try {
+        const rawBatch = await storage.zRange(
+      queueKey,
+      0,
+      IDENTITY_REVERIFY_BATCH_SIZE - 1
+    );
+    const batch = (rawBatch || []).map((entry: any) =>
+      typeof entry === 'object' && entry && 'member' in entry
+        ? entry.member
+        : String(entry)
+    );
+    if (!batch || batch.length === 0) {
+      logger.info(
+        'identity-reverify-worker: queue empty, weekly pass complete',
+        'IdentityReverify'
+      );
+      return c.json({ status: 'success', processed: 0, remaining: 0 });
     }
 
-    if (recipients.length === 0) {
-      return c.json({ status: 'skipped', reason: 'no-recipients' });
+    let anonymized = 0;
+    let stillActive = 0;
+    let suspended = 0;
+    let checkFailed = 0;
+
+    for (const userInternalId of batch) {
+      try {
+        const identity = await identityService.getUserIdentity(userInternalId);
+        if (
+          !identity ||
+          identity.userStatus === 'anonymized' ||
+          identity.userStatus === 'deleted'
+        ) {
+          continue; // already handled, nothing to re-check
+        }
+
+        try {
+          const user = await reddit.getUserByUsername(identity.username);
+
+          if (!user) {
+            // No user object returned at all — genuinely gone.
+            await identityService.anonymizeUser(userInternalId);
+            anonymized++;
+          } else if ((user as any).isSuspended) {
+            // Held, not anonymized — a suspension can be lifted, and Reddit
+            // itself still shows the real username for a suspended account
+            // (unlike a deleted one). Re-checked again next week; if it's
+            // still suspended after enough passes that's a product decision
+            // for later, not something to guess at here.
+            if (identity.userStatus !== 'suspended') {
+              await identityService.markUserSuspended(userInternalId);
+            }
+            suspended++;
+          } else {
+            stillActive++;
+            if (identity.userStatus === 'suspended') {
+              await identityService.restoreUserActive(userInternalId);
+            }
+          }
+        } catch (apiError) {
+          // A thrown error here is a real API/network failure, not evidence
+          // of deletion — Reddit's own client can fail for reasons that have
+          // nothing to do with the account's status. Leave the identity
+          // record untouched and let next week's pass try again, rather
+          // than anonymizing on a guess.
+          checkFailed++;
+          logger.warn(
+            `identity-reverify-worker: getUserByUsername failed for ${identity.username} (${userInternalId}), leaving unchanged: ${String(apiError)}`,
+            'IdentityReverify'
+          );
+        }
+      } catch (perUserError) {
+        logger.warn(
+          `identity-reverify-worker: failed checking ${userInternalId}: ${String(perUserError)}`,
+          'IdentityReverify'
+        );
+      }
     }
 
-    const latestScanRaw = await storage.get(redisKey.latestScan(subreddit));
-    const latestScanId = parseInt(latestScanRaw || '0', 10);
-    if (!latestScanId) {
-      return c.json({ status: 'skipped', reason: 'no-scan' });
+    await storage.zRem(queueKey, batch);
+    const remaining = await storage.zCard(queueKey);
+
+    logger.info(
+      `identity-reverify-worker: processed ${batch.length} (${anonymized} anonymized, ${suspended} suspended, ${stillActive} still active, ${checkFailed} check-failed), ${remaining} remaining`,
+      'IdentityReverify'
+    );
+
+    if (remaining > 0) {
+      await scheduler.runJob({
+        name: 'identity-reverify-worker',
+        runAt: new Date(Date.now() + 60000), // 1-minute spacing to stay well under rate limits
+      });
     }
 
-    const snapshot = await retriever.getSnapshotById(latestScanId);
-    if (!snapshot) {
-      return c.json({ status: 'error', message: 'Snapshot not found' }, 404);
-    }
+    const processedDetails = [];
+    if (anonymized > 0) processedDetails.push(`${anonymized} anonymized`);
+    if (suspended > 0) processedDetails.push(`${suspended} suspended`);
+    const processedStr = processedDetails.length > 0 ? ` (${processedDetails.join(', ')})` : '';
+    const remainingStr = remaining > 0 ? `${remaining} remaining` : `none remaining`;
+    await updateDetails(
+      `Processed ${batch.length}${processedStr}, ${remainingStr}`
+    );
 
-    await ReportingService.sendReport(snapshot, recipients, reportSettings);
-
-    return c.json({ status: 'success' });
+    return c.json({
+      status: 'success',
+      processed: batch.length,
+      anonymized,
+      suspended,
+      stillActive,
+      checkFailed,
+      remaining,
+    });
   } catch (error) {
-    console.error('[WORKER] Report worker failed:', error);
+    logger.error(
+      `identity-reverify-worker failed: ${String(error)}`,
+      error,
+      'IdentityReverify'
+    );
     return c.json({ status: 'error', message: String(error) }, 500);
   }
+}
+);
 });
+
+triggers.post('/tasks/apply-pending-schema-patches', async (c) => {
+  const subreddit = getSubreddit();
+  return historyService.wrapJobExecution(
+    {
+      jobType: 'apply-pending-schema-patches',
+      subreddit,
+      initialDetails: 'Applying pending schema migration patches',
+    },
+    async (updateDetails) => {
+      let requestBody: any = {};
+      try {
+        requestBody = await c.req.json();
+      } catch {
+        requestBody = {};
+      }
+
+      const data = requestBody?.data || requestBody || {};
+      const fromVersion: string | undefined = data.fromVersion;
+      const targetSchemaVersion: string | undefined = data.targetSchemaVersion;
+      const ownerId: string | null = data.ownerId ?? null;
+
+      if (!fromVersion || !targetSchemaVersion) {
+        logger.error(
+          `apply-pending-schema-patches invoked without fromVersion/targetSchemaVersion in job data`,
+          null,
+          'SchemaUpgrade'
+        );
+        return c.json(
+          { status: 'error', message: 'missing fromVersion/targetSchemaVersion' },
+          400
+        );
+      }
+
+      try {
+        await updateDetails(`Running schema patches ${fromVersion} -> ${targetSchemaVersion}...`);
+        const runner = new PatchRunner(storage);
+        await runner.run(fromVersion, targetSchemaVersion);
+        logger.info(
+          `Patch chain completed: ${fromVersion} -> ${targetSchemaVersion}`,
+          'SchemaUpgrade'
+        );
+        return c.json({ status: 'success', fromVersion, targetSchemaVersion });
+      } catch (error) {
+        logger.error(
+          `Patch chain failed running ${fromVersion} -> ${targetSchemaVersion}: ${String(error)}`,
+          error,
+          'SchemaUpgrade'
+        );
+        return c.json({ status: 'error', message: String(error) }, 500);
+      } finally {
+        if (ownerId) {
+          await releaseUpgradeLock(storage, ownerId).catch((err) => {
+            logger.error(
+              `Failed to release upgrade lock for owner ${ownerId}: ${String(err)}`,
+              err,
+              'SchemaUpgrade'
+            );
+          });
+        }
+      }
+    }
+  );
+});
+
+triggers.post('/tasks/purge-expired-deletions', async (c) => {
+  const subreddit = getSubreddit();
+  let requestBody: any = {};
+  try {
+    requestBody = await c.req.json();
+  } catch {
+    requestBody = {};
+  }
+  const rawSub =
+    requestBody?.subreddit || requestBody?.data?.subreddit || subreddit;
+  const targetSubreddit = extractSubredditName(rawSub, subreddit);
+
+  return historyService.wrapJobExecution(
+    {
+      jobType: 'purge-expired-deletions',
+      jobName: 'Purge Deletions',
+      subreddit: targetSubreddit,
+      initialDetails: `Purging expired deletions for r/${targetSubreddit}...`,
+    },
+    async (updateDetails) => {
+      try {
+        const snapshotService = new MetricSnapshotService(storage);
+        const purged = await snapshotService.purgeExpiredDeletions(targetSubreddit);
+
+        // Sweep orphaned scan artifacts (e.g. leftover keys for scans missing valid metadata)
+        let purgedScanArtifacts = 0;
+        try {
+          const counterStr = await storage.get(redisKey.scanCounter());
+          const maxScan = counterStr ? parseInt(counterStr, 10) : 0;
+          for (let s = 1; s <= maxScan; s++) {
+            const meta: any = await storage
+              .hGetAll(redisKey.scanMeta(s))
+              .catch(() => ({}));
+            const hasValidMeta =
+              meta &&
+              Object.keys(meta).length > 0 &&
+              (Boolean(meta.subreddit) || Boolean(meta.scan_date));
+
+            if (!hasValidMeta) {
+              const keysToCheck = [
+                redisKey.scanMeta(s),
+                redisKey.scanStats(s),
+                redisKey.scanData(s),
+                redisKey.scanLists(s),
+                redisKey.scanPool(s),
+                redisKey.scanPoolJson(s),
+                redisKey.scanListTop(s),
+                redisKey.scanListDiscussed(s),
+                redisKey.scanListEngaged(s),
+                redisKey.scanListRising(s),
+                redisKey.scanListHot(s),
+                redisKey.scanListControversial(s),
+                redisKey.runAnalysisPool(s),
+                redisKey.runLists(s),
+                `scan:${s}:summary`,
+              ];
+              const delResults = await Promise.all(
+                keysToCheck.map((k) => storage.del(k).catch(() => 0))
+              );
+              const removedCount = delResults.reduce(
+                (acc: number, val: any) => acc + (typeof val === 'number' ? val : (val ? 1 : 0)),
+                0
+              );
+              const zrem1 = (await storage.zRem(redisKey.snapshotsTimeline(), [s.toString()]).catch(() => 0)) || 0;
+              const zrem2 = (await storage.zRem('global:snapshots:timeline', [s.toString()]).catch(() => 0)) || 0;
+              const zrem3 = (await storage.zRem('scan:timeline', [s.toString()]).catch(() => 0)) || 0;
+
+              if (removedCount > 0 || zrem1 > 0 || zrem2 > 0 || zrem3 > 0) {
+                purgedScanArtifacts++;
+              }
+            }
+          }
+        } catch (scanSweepErr) {
+          logger.warn(
+            `Failed to sweep orphaned scan artifacts: ${String(scanSweepErr)}`,
+            'DeletionRoutine'
+          );
+        }
+
+        const totalPurged = purged + purgedScanArtifacts;
+        logger.info(
+          `Idempotent purgeExpiredDeletions executed for r/${targetSubreddit}: ${purged} snapshots, ${purgedScanArtifacts} scan artifacts purged`,
+          'DeletionRoutine'
+        );
+        const details = [];
+        if (purged > 0) details.push(`${purged} expired deletion records`);
+        if (purgedScanArtifacts > 0) details.push(`${purgedScanArtifacts} orphaned scan artifacts`);
+        await updateDetails(
+          details.length > 0
+            ? `Purged ${details.join(' and ')} for r/${targetSubreddit}`
+            : `No expired deletions.`
+        );
+        return c.json({ status: 'success', purged, purgedScanArtifacts, total: totalPurged });
+      } catch (error) {
+        logger.error(
+          `Failed to purge expired deletions for r/${targetSubreddit}: ${String(error)}`,
+          error,
+          'DeletionRoutine'
+        );
+        return c.json({ status: 'error', message: String(error) }, 500);
+      }
+    }
+  );
+});
+
+/**
+ * Task: MetricSnapshot Cleanup Job (daily maintenance)
+ */
+triggers.post('/tasks/metric-snapshot-cleanup', async (c) => {
+  const subreddit = getSubreddit();
+  let requestBody: any = {};
+  try {
+    requestBody = await c.req.json();
+  } catch {
+    requestBody = {};
+  }
+
+  const rawSub =
+    requestBody?.subreddit || requestBody?.data?.subreddit || subreddit;
+  const targetSubreddit = extractSubredditName(rawSub, subreddit);
+
+  return historyService.wrapJobExecution(
+    {
+      jobType: 'metric-snapshot-cleanup',
+      jobName: 'Snapshot Cleanup',
+      subreddit: targetSubreddit,
+      initialDetails: `Cleaning up metric snapshots for r/${targetSubreddit}...`,
+    },
+    async (updateDetails) => {
+      // It must not run for subreddits that have never published a Metric Post
+      // (check index for emptiness before processing)
+      const indexKey = METRIC_SNAP_INDEX_KEY(targetSubreddit);
+      let zsetCount = 0;
+      try {
+        const members = await storage.zRange(indexKey, 0, 0);
+        zsetCount = Array.isArray(members) ? members.length : 0;
+      } catch {
+        zsetCount = 0;
+      }
+
+      if (zsetCount === 0) {
+        logger.info(
+          `Skipping MetricSnapshot cleanup for r/${targetSubreddit}: index is empty`,
+          'CleanupJob'
+        );
+        return c.json({ status: 'skipped', reason: 'empty-index' });
+      }
+
+      try {
+        const snapshotService = new MetricSnapshotService(storage);
+
+        // 1. Purge orphaned snapshots
+        const purgedOrphaned = await snapshotService.purgeOrphaned(targetSubreddit);
+        logger.info(
+          `Purged ${purgedOrphaned} orphaned MetricSnapshots`,
+          'CleanupJob'
+        );
+
+        // 2. Purge expired deleted snapshots
+        const purgedDeleted =
+          await snapshotService.purgeExpiredDeletions(targetSubreddit);
+        logger.info(
+          `Purged ${purgedDeleted} expired deleted MetricSnapshots`,
+          'CleanupJob'
+        );
+
+        // 3. Log total
+        const total = purgedOrphaned + purgedDeleted;
+        logger.info(
+          `MetricSnapshot cleanup complete: ${total} records removed`,
+          'CleanupJob'
+        );
+        const details = [];
+        if (purgedOrphaned > 0) details.push(`${purgedOrphaned} orphaned`);
+        if (purgedDeleted > 0) details.push(`${purgedDeleted} expired`);
+        await updateDetails(
+          details.length > 0
+            ? `Cleanup complete: ${total} records removed (${details.join(', ')})`
+            : `No records to clean up.`
+        );
+
+        return c.json({ status: 'success', purgedOrphaned, purgedDeleted, total });
+      } catch (error) {
+        logger.error(
+          `MetricSnapshot cleanup failed for r/${targetSubreddit}: ${String(error)}`,
+          error,
+          'CleanupJob'
+        );
+        return c.json({ status: 'error', message: String(error) }, 500);
+      }
+    }
+  );
+});
+
+/**
+ * Task: Sidebar Live Stat Refresh Job
+ */
+async function handleSidebarLiveRefresh(c: Context) {
+  const subreddit = getSubreddit();
+  let requestBody: any = {};
+  try {
+    requestBody = await c.req.json();
+  } catch {
+    requestBody = {};
+  }
+
+  const rawSub =
+    requestBody?.subreddit || requestBody?.data?.subreddit || subreddit;
+  const targetSubreddit = extractSubredditName(rawSub, subreddit);
+
+  return historyService.wrapJobExecution(
+    {
+      jobType: 'sidebar-live-refresh',
+      jobName: 'Sidebar Refresh',
+      subreddit: targetSubreddit,
+      initialDetails: `Refreshing sidebar stats for r/${targetSubreddit}...`,
+    },
+    async (updateDetails) => {
+      try {
+        const syncService = new SidebarSyncService(storage, reddit, scheduler);
+
+        // 1. Read SidebarWidgetConfig via SidebarSyncService.getConfig(subreddit).
+        // If not enabled or refreshInterval is 'off': exit silently.
+        const config = await syncService.getConfig(targetSubreddit);
+        if (!config.enabled || config.refreshInterval === 'off') {
+          return c.json({ status: 'skipped', reason: 'disabled-or-off' });
+        }
+
+        // 2. Call SidebarSyncService.isRefreshDue(subreddit, config).
+        // If not due: exit silently.
+        const isDue = await syncService.isRefreshDue(targetSubreddit, config);
+        if (!isDue) {
+          return c.json({ status: 'skipped', reason: 'not-due' });
+        }
+
+        // 3. Read live stats from current snapshot in Redis
+        const snapshot = await retriever.getLatestSnapshot(targetSubreddit);
+        if (!snapshot || !snapshot.stats) {
+          logger.warn(
+            `Sidebar live refresh skipped for r/${targetSubreddit}: no valid snapshot data available`,
+            'SidebarRefreshJob'
+          );
+          return c.json({ status: 'skipped', reason: 'no-snapshot-data' });
+        }
+
+        const {
+          subscribers,
+          posts_per_day: postsPerDay,
+          comments_per_day: commentsPerDay,
+          avg_engagement: avgEngagement,
+          combined_velocity: combinedVelocity,
+        } = snapshot.stats;
+        if (
+          subscribers == null ||
+          postsPerDay == null ||
+          commentsPerDay == null ||
+          avgEngagement == null ||
+          combinedVelocity == null
+        ) {
+          logger.warn(
+            `Sidebar live refresh skipped for r/${targetSubreddit}: snapshot contains null/empty stats`,
+            'SidebarRefreshJob'
+          );
+          return c.json({ status: 'skipped', reason: 'incomplete-snapshot-data' });
+        }
+
+        const liveStats: LiveStatsSlice = {
+          subscribers,
+          postsPerDay,
+          commentsPerDay,
+          avgEngagement,
+          combinedVelocity,
+        };
+
+        // 4. Call SidebarSyncService.updateLiveStats(subreddit, liveStats)
+        const result = await syncService.updateLiveStats(
+          targetSubreddit,
+          liveStats
+        );
+
+        // 5. Log result
+        logger.info(
+          `Sidebar live refresh complete for r/${targetSubreddit}`,
+          'SidebarRefreshJob'
+        );
+        await updateDetails(`Successfully updated sidebar`);
+
+        return c.json({ status: 'success', result });
+      } catch (error) {
+        logger.error(
+          `Sidebar refresh failed for r/${targetSubreddit}: ${String(error)}`,
+          error,
+          'SidebarRefreshJob'
+        );
+        return c.json({ status: 'error', message: String(error) }, 500);
+      }
+    }
+  );
+}
+
+triggers.post('/tasks/sidebar-live-refresh', handleSidebarLiveRefresh);

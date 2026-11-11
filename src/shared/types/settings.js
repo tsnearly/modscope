@@ -281,3 +281,13 @@ export const DEFAULT_CALCULATION_SETTINGS = {
 export const DEFAULT_USER_SETTINGS = {
   theme: 'modscopeflow',
 };
+
+export const DEFAULT_METRIC_SETTINGS = {
+  scheduleType: 'weekly',
+  hour: 10,
+  minute: 0,
+  dayOfWeek: 1, // Monday
+  showMemberGrowth: true,
+  showTopContributors: true,
+  showTopPosts: true,
+};

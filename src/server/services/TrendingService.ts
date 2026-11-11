@@ -1,13 +1,15 @@
 import { RedisClient } from '@devvit/web/server';
-import { PostData, TrendData } from '../../shared/types/api';
-import { resolvePostUtcId, resolvePostIdentityKey } from '../../shared/utils/post-utils';
+import { logger } from '../core/logger';
+import { PostData, TrendData } from '../../shared/types/api.types';
+import { resolvePostUtcId, resolvePostIdentityKey } from '../../shared/utils/postUtils';
+import { DataRetrievalService } from './DataRetrievalService';
 import {
   normalizeZRangeMembers,
   parseZSetMembers,
   parseHashEntries,
   writeTsZSet,
   RawZRangeMember,
-} from '../../shared/utils/redis-utils';
+} from '../../shared/utils/redisUtils';
 import {
   DAY_NAMES,
   VALID_DAY_NAMES,
@@ -65,9 +67,12 @@ interface TrendConfigSnapshot {
 
 export class TrendingService {
   private redis: RedisClient;
+  private dataRetriever: DataRetrievalService;
   private startTime: number = 0;
-  constructor(redis: RedisClient) {
+  private materializationAsOf: number = 0;
+  constructor(redis: RedisClient, dataRetriever?: DataRetrievalService) {
     this.redis = redis;
+    this.dataRetriever = dataRetriever || new DataRetrievalService(redis);
   }
 
   /**
@@ -81,9 +86,12 @@ export class TrendingService {
   /**
    * Log timing for major computation stages
    */
+  /**
+   * Log timing for major computation stages
+   */
   private logStageTime(stage: string, startTime: number): void {
     const elapsed = Date.now() - startTime;
-    console.log(`[TRENDS] ${stage} completed in ${elapsed}ms`);
+    logger.info(`${stage} completed in ${elapsed}ms`, 'TrendingService');
   }
 
   /**
@@ -98,14 +106,16 @@ export class TrendingService {
     const results: R[] = [];
     const totalBatches = Math.ceil(items.length / batchSize);
 
-    console.log(
-      `[TRENDS] ${stageName}: Processing ${items.length} items in ${totalBatches} batches of ${batchSize}`
+    logger.info(
+      `${stageName}: Processing ${items.length} items in ${totalBatches} batches of ${batchSize}`,
+      'TrendingService'
     );
 
     for (let i = 0; i < items.length; i += batchSize) {
       if (this.isApproachingTimeout()) {
-        console.warn(
-          `[TRENDS] ${stageName}: Approaching timeout, processed ${i}/${items.length} items`
+        logger.warn(
+          `${stageName}: Approaching timeout, processed ${i}/${items.length} items`,
+          'TrendingService'
         );
         throw new Error(
           `Timeout approaching during ${stageName} - processed ${i}/${items.length} items`
@@ -120,8 +130,9 @@ export class TrendingService {
         results.push(...batchResults);
 
         const batchElapsed = Date.now() - batchStartTime;
-        console.log(
-          `[TRENDS] ${stageName}: Batch ${Math.floor(i / batchSize) + 1}/${totalBatches} completed in ${batchElapsed}ms`
+        logger.info(
+          `${stageName}: Batch ${Math.floor(i / batchSize) + 1}/${totalBatches} completed in ${batchElapsed}ms`,
+          'TrendingService'
         );
 
         // Small delay between batches to respect rate limits
@@ -129,9 +140,10 @@ export class TrendingService {
           await new Promise((resolve) => setTimeout(resolve, TREND_BATCH_INTER_DELAY_MS));
         }
       } catch (error) {
-        console.error(
-          `[TRENDS] ${stageName}: Batch ${Math.floor(i / batchSize) + 1} failed:`,
-          error
+        logger.error(
+          `${stageName}: Batch ${Math.floor(i / batchSize) + 1} failed`,
+          error,
+          'TrendingService'
         );
         throw error;
       }
@@ -141,36 +153,83 @@ export class TrendingService {
   }
 
   /**
+   * Helper to retrieve scan metadata with legacy fallback
+   */
+  private async getScanMeta(scanId: number): Promise<Record<string, string>> {
+    let meta: Record<string, string> =
+      (await this.redis.hGetAll(redisKey.scanMeta(scanId)).catch(() => ({}))) ||
+      {};
+    if (!meta || Object.keys(meta).length === 0 || (!meta.scan_date && !meta.scanDate)) {
+      const fallback: Record<string, string> =
+        (await this.redis.hGetAll(`run:${scanId}:meta`).catch(() => ({}))) ||
+        {};
+      if (fallback && Object.keys(fallback).length > 0) {
+        meta = { ...fallback, ...meta };
+      }
+    }
+    return meta;
+  }
+
+  /**
+   * Helper to retrieve scan stats with legacy fallback
+   */
+  private async getScanStats(scanId: number): Promise<Record<string, string>> {
+    let stats: Record<string, string> =
+      (await this.redis.hGetAll(redisKey.scanStats(scanId)).catch(() => ({}))) ||
+      {};
+    if (!stats || Object.keys(stats).length === 0) {
+      const fallback: Record<string, string> =
+        (await this.redis.hGetAll(`run:${scanId}:stats`).catch(() => ({}))) ||
+        {};
+      if (fallback && Object.keys(fallback).length > 0) {
+        stats = { ...fallback, ...stats };
+      }
+    }
+    return stats;
+  }
+
+  /**
    * Main materialization entry point - processes a completed snapshot
    */
   async materializeTrends(subreddit: string, scanId: number): Promise<void> {
     this.startTime = Date.now();
-    console.log(
-      `[TRENDS] Starting materialization for r/${subreddit} scan #${scanId} at ${new Date().toISOString()}`
+    logger.info(
+      `Starting materialization for r/${subreddit} scan #${scanId} at ${new Date().toISOString()}`,
+      'TrendingService'
     );
 
     try {
       // Stage 1: Read scan metadata and settings
       const stage1Start = Date.now();
       const [meta, trendConfig] = await Promise.all([
-        this.redis.hGetAll(redisKey.scanMeta(scanId)),
+        this.getScanMeta(scanId),
         this.loadTrendConfigSnapshot(subreddit),
       ]);
       this.logStageTime('Metadata and settings read', stage1Start);
-      console.log(
-        `[TRENDS] Metadata for scan #${scanId}:`,
-        JSON.stringify(meta)
+      logger.info(
+        `Metadata for scan #${scanId}: ${JSON.stringify(meta)}`,
+        'TrendingService'
       );
 
       if (!meta.scan_date) {
         throw new Error(`Missing scan_date for scan #${scanId}`);
       }
+      this.materializationAsOf = new Date(meta.scan_date).getTime();
+      if (!Number.isFinite(this.materializationAsOf) || this.materializationAsOf <= 0) {
+        this.materializationAsOf = Date.now();
+        logger.warn('Could not parse scan_date — using Date.now() as reference', 'TrendingService');
+      }
+      logger.info(
+        `Materialization reference timestamp: ${new Date(this.materializationAsOf).toISOString()}`,
+        'TrendingService'
+      );
       const { retentionDays, analysisPoolSize } =
         await this.getRetentionSettings(subreddit, trendConfig);
       const trendAnalysisDays = trendConfig.trendAnalysisDays;
 
-      console.log(
-        `[TRENDS] Configuration: retentionDays=${retentionDays}, analysisPoolSize=${analysisPoolSize}, trendAnalysisDays=${trendAnalysisDays}`
+      logger.info(
+        `Configuration: retentionDays=${retentionDays}, analysisPoolSize=${analysisPoolSize}, trendAnalysisDays=${trendAnalysisDays}`,
+        'TrendingService'
       );
 
       // Stage 2: Get retained scans within the retention window
@@ -180,14 +239,14 @@ export class TrendingService {
         retentionDays
       );
       this.logStageTime('Retained scans retrieval', stage2Start);
-      console.log(`[TRENDS] Retained scans count: ${retainedScans.length}`);
+      logger.info(`Retained scans count: ${retainedScans.length}`, 'TrendingService');
 
       if (retainedScans.length === 0) {
-        console.log(`[TRENDS] No retained scans found for r/${subreddit}`);
+        logger.info(`No retained scans found for r/${subreddit}`, 'TrendingService');
         return;
       }
 
-      console.log(`[TRENDS] Processing ${retainedScans.length} retained scans`);
+      logger.info(`Processing ${retainedScans.length} retained scans`, 'TrendingService');
 
       // Check timeout before starting heavy computation
       if (this.isApproachingTimeout()) {
@@ -204,31 +263,17 @@ export class TrendingService {
       await this.materializeSubscriberGrowth(subreddit, retainedScans);
 
       if (this.isApproachingTimeout()) {
-        console.warn(
-          '[TRENDS] Timeout approaching, skipping remaining calculations'
+        logger.warn(
+          'Timeout approaching, skipping remaining calculations',
+          'TrendingService'
         );
-        throw new Error('Timeout approaching during materialization');
+        return;
       }
 
-      await this.materializeEngagementOverTime(
-        subreddit,
-        retainedScans,
-        analysisPoolSize,
-        trendAnalysisDays
-      );
-
-      if (this.isApproachingTimeout()) {
-        console.warn(
-          '[TRENDS] Timeout approaching, skipping content mix and heatmap'
-        );
-        throw new Error('Timeout approaching during engagement calculation');
-      }
-
-      // Less critical calculations
       await Promise.all([
         this.materializeContentMix(
-          subreddit, 
-          retainedScans, 
+          subreddit,
+          retainedScans,
           trendAnalysisDays
         ),
         this.materializePostingHeatmap(
@@ -241,33 +286,94 @@ export class TrendingService {
           retainedScans,
           trendAnalysisDays
         ),
-        this.materializeGlobalAggregates(
-          subreddit,
-          retainedScans,
-          trendAnalysisDays
-        ),
       ]);
+
+      if (this.isApproachingTimeout()) {
+        logger.warn('Timeout approaching after content/heatmap/times phase — skipping global aggregates and engagement', 'TrendingService');
+        return;
+      }
+
+      await this.materializeGlobalAggregates(
+        subreddit,
+        retainedScans,
+        trendAnalysisDays
+      );
+
+      if (this.isApproachingTimeout()) {
+        logger.warn('Timeout approaching after global aggregates — skipping engagement over time', 'TrendingService');
+        return;
+      }
+
+      await this.materializeEngagementOverTime(
+        subreddit,
+        retainedScans,
+        analysisPoolSize,
+        trendAnalysisDays
+      );
 
       this.logStageTime('All materialization calculations', stage3Start);
 
-      // Stage 4: Update last materialized timestamp
+      // Stage 4: Update last materialized timestamp and materialize root snapshots
       const stage4Start = Date.now();
-      await this.redis.set(
-        redisKey.trendsLastMaterialized(subreddit),
-        new Date().toISOString()
-      );
-      await this.applyTrendKeyTotals(subreddit, trendAnalysisDays);
+      const lastMaterializedIso = new Date().toISOString();
+      await this.redis.hSet(redisKey.trendsStatic(), {
+        lastMaterialized: lastMaterializedIso,
+      });
+      await this.applyTrendKeyTotals(trendAnalysisDays);
+      await this.purgeLegacyTrendKeys(subreddit);
+
+      try {
+        const fullTrendData = await this.getTrendData(subreddit, this.materializationAsOf);
+        if (fullTrendData) {
+          const serialized = JSON.stringify(fullTrendData);
+          await this.redis.set(
+            redisKey.trendsMaterialized(this.materializationAsOf),
+            serialized
+          );
+          await this.redis.zAdd(redisKey.trendsMaterializations(), {
+            score: this.materializationAsOf,
+            member: String(this.materializationAsOf),
+          });
+
+          await this.redis.hSet(redisKey.trendsStatic(), {
+            lastMaterialized: lastMaterializedIso,
+            globalAggregates: JSON.stringify({
+              globalWordCloud: fullTrendData.globalWordCloud || {},
+              globalBestPostingTimes: fullTrendData.globalBestPostingTimes || [],
+              globalStats: fullTrendData.globalStats || {},
+            }),
+            bestTimesTimeline: JSON.stringify(fullTrendData.bestPostingTimesChange?.timeline || []),
+            bestTimesChanges: JSON.stringify(fullTrendData.bestPostingTimesChange?.changeSummary || {}),
+            contentMixRecap: fullTrendData.contentMixRecap || '',
+            postingPatternRecap: fullTrendData.postingPatternRecap || '',
+          });
+        }
+      } catch (matSnapshotErr) {
+        logger.warn(`Failed to write timestamped materialized trend snapshot: ${matSnapshotErr}`, 'TrendingService');
+      }
       this.logStageTime('Last materialized timestamp update', stage4Start);
 
+      const [subscriberCount, staticFields] = await Promise.all([
+        this.redis
+          .zCard(redisKey.trendsTs('subscriber_growth'))
+          .catch(() => 0),
+        this.redis
+          .hGetAll(redisKey.trendsStatic())
+          .catch(() => ({})),
+      ]);
+      logger.info(`✓ Key presence check: ${JSON.stringify({
+        subscriberGrowth: subscriberCount > 0 ? 'present' : 'MISSING',
+        contentMixRecap:  staticFields?.contentMixRecap ? 'present' : 'MISSING',
+        postingPatternRecap: staticFields?.postingPatternRecap ? 'present' : 'MISSING',
+        bestTimesTimeline: staticFields?.bestTimesTimeline ? 'present' : 'MISSING',
+        globalAggregates: staticFields?.globalAggregates ? 'present' : 'MISSING',
+      })}`, 'TrendingService');
+
       const totalElapsed = Date.now() - this.startTime;
-      console.log(
-        `[TRENDS] ✓ Trend forecasting complete for r/${subreddit} scan #${scanId} in ${totalElapsed}ms`
-      );
+      logger.info(`✓ Trend forecasting complete for r/${subreddit} scan #${scanId} in ${totalElapsed}ms`, 'TrendingService');
 
       if (totalElapsed > 30000) {
-        console.warn(
-          `[TRENDS] ⚠️ Trend forecasting exceeded 30-second target: ${totalElapsed}ms`
-        );
+        logger.warn(`⚠️ Trend forecasting exceeded 30-second target: ${totalElapsed}ms`, 'TrendingService');
       }
     } catch (error) {
       const totalElapsed = Date.now() - this.startTime;
@@ -281,9 +387,7 @@ export class TrendingService {
         stage: this.determineFailureStage(error),
       };
 
-      console.error(
-        `[TRENDS] ❌ Trend forecasting failed for r/${subreddit} scan #${scanId}`,
-        {
+      logger.error(`❌ Trend forecasting failed for r/${subreddit} scan #${scanId}`, {
           ...errorContext,
           error:
             error instanceof Error
@@ -293,22 +397,24 @@ export class TrendingService {
                   stack: error.stack,
                 }
               : error,
-        }
-      );
+        }, 'TrendingService');
 
       // Log structured error for monitoring/alerting
-      console.error(`[TRENDS] ERROR_CONTEXT: ${JSON.stringify(errorContext)}`);
+      logger.error(`ERROR_CONTEXT: ${JSON.stringify(errorContext)}`, undefined, 'TrendingService');
 
       throw error;
+    } finally {
+      this.materializationAsOf = 0;
     }
   }
 
-  private async applyTrendKeyTotals(
-    subreddit: string,
-    analysisDays: number
-  ): Promise<void> {
-    const ttlSeconds = Math.max(1, (analysisDays + 2) * SEC_PER_DAY);
-    const keys = [
+  /**
+   * Deletes the deprecated per-subreddit `trends:{sub}:*` keys. All trend
+   * output now lives in trends:static / trends:ts:* / trends:materializations,
+   * so any of these still present are stale leftovers from the pre-v2 layout.
+   */
+  private async purgeLegacyTrendKeys(subreddit: string): Promise<void> {
+    const legacyKeys = [
       redisKey.trendsLastMaterialized(subreddit),
       redisKey.trendsSubscriberGrowth(subreddit),
       redisKey.trendsEngagementAvg(subreddit),
@@ -320,7 +426,27 @@ export class TrendingService {
       redisKey.trendsPostingPatternRecap(subreddit),
       redisKey.trendsBestTimesTimeline(subreddit),
       redisKey.trendsBestTimesChanges(subreddit),
+      redisKey.trendsBestPostingTimes(subreddit),
       redisKey.trendsGlobalAggregates(subreddit),
+      redisKey.trendsMaterializations(subreddit),
+    ];
+    await Promise.all(
+      legacyKeys.map((key) => this.redis.del(key).catch(() => {}))
+    );
+  }
+
+  private async applyTrendKeyTotals(analysisDays: number): Promise<void> {
+    const ttlSeconds = Math.max(1, (analysisDays + 2) * SEC_PER_DAY);
+    const keys = [
+      redisKey.trendsStatic(),
+      redisKey.trendsTs('subscriber_growth'),
+      redisKey.trendsTs('engagement_avg'),
+      redisKey.trendsTs('engagement_velocity'),
+      redisKey.trendsTs('engagement_anomalies'),
+      redisKey.trendsTs('content_mix'),
+      redisKey.trendsTs('posting_heatmap'),
+      redisKey.trendsTs('best_posting_times'),
+      redisKey.trendsMaterializations(),
     ];
 
     const redisWithExpire = this.redis as RedisClient & {
@@ -377,7 +503,7 @@ export class TrendingService {
     retainedScans: Array<{ scanId: number; timestamp: number }>
   ): Promise<void> {
     const stageStart = Date.now();
-    console.log(`[TRENDS] Starting subscriber growth calculation for ${retainedScans.length} scans`);
+    logger.info(`Starting subscriber growth calculation for ${retainedScans.length} scans`, 'TrendingService');
 
     try {
       const results = await this.executeBatched(
@@ -385,10 +511,10 @@ export class TrendingService {
         TREND_BATCH_SUBSCRIBER,
         async (scan) => {
           try {
-            const stats = await this.redis.hGetAll(redisKey.scanStats(scan.scanId));
+            const stats = await this.getScanStats(scan.scanId);
             return { timestamp: scan.timestamp, value: parseInt(stats.subscribers || '0') };
           } catch (error) {
-            console.warn(`[TRENDS] Failed to read subscriber data for scan ${scan.scanId}:`, error);
+            logger.warn(`Failed to read subscriber data for scan ${scan.scanId}: ${error}`, 'TrendingService');
             return null;
           }
         },
@@ -396,8 +522,8 @@ export class TrendingService {
       );
 
       const subscriberData = results.filter((r): r is { timestamp: number; value: number } => r !== null);
-      console.log(`[TRENDS] Collected subscriber data for ${subscriberData.length} scans`);
-      await writeTsZSet(this.redis, redisKey.trendsSubscriberGrowth(subreddit), subscriberData);
+      logger.info(`Collected subscriber data for ${subscriberData.length} scans`, 'TrendingService');
+      await writeTsZSet(this.redis, redisKey.trendsTs('subscriber_growth'), subscriberData);
       this.logStageTime('Subscriber growth materialization', stageStart);
     } catch (error) {
       throw new Error(`Subscriber growth calculation failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -419,7 +545,13 @@ export class TrendingService {
     modelQuality: number;
     growthRate: number;
   }> {
-    const rawData = await this.redis.zRange(redisKey.trendsSubscriberGrowth(subreddit), 0, -1);
+    const activeKey = redisKey.trendsTs('subscriber_growth');
+    let rawData = await this.redis.zRange(activeKey, 0, -1);
+    let resolvedKey = activeKey;
+    if (!rawData || rawData.length === 0) {
+      resolvedKey = redisKey.trendsSubscriberGrowth(subreddit);
+      rawData = await this.redis.zRange(resolvedKey, 0, -1);
+    }
     if (rawData.length < 2) {
       return {
         trendline: [],
@@ -432,7 +564,7 @@ export class TrendingService {
 
     // Parse data points
     const rawMembers = normalizeZRangeMembers(rawData as RawZRangeMember[]);
-    const dataPoints = parseZSetMembers(rawMembers, redisKey.trendsSubscriberGrowth(subreddit), parseInt)
+    const dataPoints = parseZSetMembers(rawMembers, resolvedKey, parseInt)
       .filter((p) => !asOf || p.timestamp <= asOf)
       .sort((a, b) => a.timestamp - b.timestamp);
 
@@ -620,13 +752,11 @@ export class TrendingService {
     analysisDays: number
   ): Promise<void> {
     const stageStart = Date.now();
-    console.log(
-      `[TRENDS] Starting 5-phase engagement materialization for ${retainedScans.length} scans`
-    );
+    logger.info(`Starting 5-phase engagement materialization for ${retainedScans.length} scans`, 'TrendingService');
 
     try {
       if (retainedScans.length === 0) {
-        console.warn(`[TRENDS] No retained scans for r/${subreddit}`);
+        logger.warn(`No retained scans for r/${subreddit}`, 'TrendingService');
         return;
       }
 
@@ -651,16 +781,12 @@ export class TrendingService {
 
       // Set window based on configured analysis period, not scan availability.
       // This ensures we capture all posts within the analysis window regardless of when scans were collected.
-      const windowEnd = Date.now();
+      const windowEnd = this.materializationAsOf > 0 ? this.materializationAsOf : Date.now();
       const windowStart = windowEnd - analysisDays * MS_PER_DAY;
-      console.log(
-        `[TRENDS] Using ${analysisDays}-day analysis window: ${new Date(windowStart).toISOString()} to ${new Date(windowEnd).toISOString()}`
-      );
+      logger.info(`Using ${analysisDays}-day analysis window: ${new Date(windowStart).toISOString()} to ${new Date(windowEnd).toISOString()}`, 'TrendingService');
 
       // PHASE 2: Pool decomposition - hydrate posts from scan pools
-      console.log(
-        `[TRENDS] Phase 2: Pool decomposition for ${retainedScans.length} scans`
-      );
+      logger.info(`Phase 2: Pool decomposition for ${retainedScans.length} scans`, 'TrendingService');
       for (const scan of retainedScans) {
         const analysisPool = await this.getAnalysisPool(scan.scanId);
         if (analysisPool.length === 0) continue;
@@ -684,19 +810,23 @@ export class TrendingService {
                 ),
               });
             } catch (e) {
-              console.warn(`[TRENDS] Failed to hydrate post: ${e}`);
+              logger.warn(`Failed to hydrate post: ${e}`, 'TrendingService');
             }
           }
           await new Promise((r) => setTimeout(r, TREND_POOL_CHUNK_DELAY_MS));
         }
       }
 
-      console.log(
-        `[TRENDS] Phase 2 complete: ${dailyBuckets.size} daily buckets, ${uniquePosts.size} unique posts`
-      );
+      logger.info(`Phase 2 complete: ${uniquePosts.size} unique posts collected across ${retainedScans.length} scans`, 'TrendingService');
+
+      if (uniquePosts.size === 0) {
+        logger.warn(`Phase 2: no unique posts collected for r/${subreddit} — ` +
+          `check that getAnalysisPool returns data for retained scan IDs`, 'TrendingService');
+        return;
+      }
 
       // PHASE 3: Time-series velocity extraction
-      console.log(`[TRENDS] Phase 3: Time-series velocity extraction`);
+      logger.info(`Phase 3: Time-series velocity extraction`, 'TrendingService');
       const uniquePostEntries = Array.from(uniquePosts.values());
 
       for (let i = 0; i < uniquePostEntries.length; i += TREND_CHUNK_VELOCITY) {
@@ -771,16 +901,16 @@ export class TrendingService {
               bucket.velocityPoints.push(avgVelocity);
             }
           } catch (e) {
-            console.warn(`[TRENDS] Failed to extract velocity: ${e}`);
+            logger.warn(`Failed to extract velocity: ${e}`, 'TrendingService');
           }
         }
         await new Promise((r) => setTimeout(r, TREND_VELOCITY_DELAY_MS));
       }
 
-      console.log(`[TRENDS] Phase 3 complete`);
+      logger.info(`Phase 3 complete`, 'TrendingService');
 
       // PHASE 4: Daily bucket aggregation
-      console.log(`[TRENDS] Phase 4: Daily aggregation`);
+      logger.info(`Phase 4: Daily aggregation`, 'TrendingService');
       const engagementData: Array<{ timestamp: number; value: number }> = [];
       const velocityData: Array<{ timestamp: number; value: number }> = [];
 
@@ -809,14 +939,12 @@ export class TrendingService {
         });
       }
 
-      console.log(
-        `[TRENDS] Phase 4 complete: ${engagementData.length} daily aggregates`
-      );
+      logger.info(`Phase 4 complete: ${engagementData.length} daily aggregates`, 'TrendingService');
 
       // PHASE 5: Write output
-      console.log(`[TRENDS] Phase 5: Writing engagement trend output`);
-      await writeTsZSet(this.redis, redisKey.trendsEngagementAvg(subreddit), engagementData);
-      await writeTsZSet(this.redis, redisKey.trendsEngagementVelocity(subreddit), velocityData);
+      logger.info(`Phase 5: Writing engagement trend output`, 'TrendingService');
+      await writeTsZSet(this.redis, redisKey.trendsTs('engagement_avg'), engagementData);
+      await writeTsZSet(this.redis, redisKey.trendsTs('engagement_velocity'), velocityData);
    
       if (engagementData.length > 0) {
         await this.detectEngagementAnomalies(subreddit, engagementData);
@@ -825,10 +953,7 @@ export class TrendingService {
       this.logStageTime('5-phase engagement materialization', stageStart);
     } catch (error) {
       const elapsed = Date.now() - stageStart;
-      console.error(
-        `[TRENDS] ❌ 5-phase engagement materialization failed for r/${subreddit} after ${elapsed}ms:`,
-        error
-      );
+      logger.error(`❌ 5-phase engagement materialization failed for r/${subreddit} after ${elapsed}ms:`, error, 'TrendingService');
       throw new Error(
         `5-phase engagement materialization failed: ${error instanceof Error ? error.message : String(error)}`
       );
@@ -909,8 +1034,8 @@ export class TrendingService {
       }
     }
 
-    const hashKey = redisKey.trendsEngagementAnomalies(subreddit);
-    await this.redis.del(hashKey);
+    const hashKey = redisKey.trendsTs('engagement_anomalies');
+    await this.redis.del(hashKey).catch(() => {});
     if (Object.keys(anomalies).length > 0) {
       await this.redis.hSet(hashKey, anomalies);
     }
@@ -925,12 +1050,10 @@ export class TrendingService {
     analysisDays: number
   ): Promise<void> {
     const stageStart = Date.now();
-    console.log(
-      `[TRENDS] Starting content mix calculation for ${retainedScans.length} scans`
-    );
+    logger.info(`Starting content mix calculation for ${retainedScans.length} scans`, 'TrendingService');
 
     try {
-      const windowEnd = Date.now();
+      const windowEnd = this.materializationAsOf > 0 ? this.materializationAsOf : Date.now();
       const windowStart = windowEnd - analysisDays * MS_PER_DAY;
 
       const allFlairs = new Set<string>();
@@ -963,7 +1086,7 @@ export class TrendingService {
             }
             return unique.length;
           } catch (error) {
-            console.warn(`[TRENDS] Failed to read scan data for ${scan.scanId}:`, error);
+            logger.warn(`Failed to read scan data for ${scan.scanId}: ${error}`, 'TrendingService');
             return 0;
           }
         },
@@ -980,17 +1103,15 @@ export class TrendingService {
         })
         .sort((a, b) => a.timestamp - b.timestamp);
 
-      console.log(
-        `[TRENDS] Calculated flair distributions for ${flairDistributions.length} daily buckets`
-      );
+      logger.info(`Calculated flair distributions for ${flairDistributions.length} daily buckets`, 'TrendingService');
 
       // Write daily flair distributions
-      const zsetKey = redisKey.trendsContentMix(subreddit);
-      await this.redis.del(zsetKey);
+      const rootMixKey = redisKey.trendsTs('content_mix');
+      await this.redis.del(rootMixKey).catch(() => {});
       for (let i = 0; i < flairDistributions.length; i += TREND_CHUNK_ZSET_WRITE) {
         const chunk = flairDistributions.slice(i, i + TREND_CHUNK_ZSET_WRITE);
         for (const entry of chunk) {
-          await this.redis.zAdd(zsetKey, {
+          await this.redis.zAdd(rootMixKey, {
             score: entry.timestamp,
             member: `${entry.timestamp}:${JSON.stringify(entry.flairs)}`,
           });
@@ -999,7 +1120,7 @@ export class TrendingService {
 
       // Generate and store content mix recap with idempotent semantics
       const recap = this.generateContentMixRecap(flairDistributions);
-      await this.redis.set(redisKey.trendsContentMixRecap(subreddit), recap);
+      await this.redis.hSet(redisKey.trendsStatic(), { contentMixRecap: recap });
 
 
       this.logStageTime('Content mix materialization', stageStart);
@@ -1107,14 +1228,12 @@ export class TrendingService {
     analysisDays: number
   ): Promise<void> {
     const stageStart = Date.now();
-    console.log(
-      `[TRENDS] Starting posting heatmap calculation for ${retainedScans.length} scans`
-    );
+    logger.info(`Starting posting heatmap calculation for ${retainedScans.length} scans`, 'TrendingService');
 
     try {
       if (retainedScans.length === 0) return;
 
-      const windowEnd = Date.now();
+      const windowEnd = this.materializationAsOf > 0 ? this.materializationAsOf : Date.now();
       const windowStart = windowEnd - analysisDays * MS_PER_DAY;
       const recentWindowDays = Math.max(1, Math.ceil(analysisDays / 2));
       const recentCutoff = windowEnd - recentWindowDays * MS_PER_DAY;
@@ -1154,7 +1273,7 @@ export class TrendingService {
         return createdUtcMs >= windowStart && createdUtcMs < recentCutoff;
       });
 
-      console.log(`[TRENDS] Processing ${recentPosts.length} recent and ${historicalPosts.length} historical posts`);
+      logger.info(`Processing ${recentPosts.length} recent and ${historicalPosts.length} historical posts`, 'TrendingService');
 
       // Initialize heatmap buckets (7 days × 24 hours = 168 buckets)
       const recentBuckets: Record<string, number> = {};
@@ -1173,9 +1292,7 @@ export class TrendingService {
 
       // Check timeout before processing historical window
       if (this.isApproachingTimeout()) {
-        console.warn(
-          '[TRENDS] Timeout approaching, skipping historical window processing'
-        );
+        logger.warn('Timeout approaching, skipping historical window processing', 'TrendingService');
         throw new Error('Timeout approaching during heatmap calculation');
       }
 
@@ -1203,20 +1320,18 @@ export class TrendingService {
         };
       }
 
-      console.log(
-        `[TRENDS] Calculated posting heatmap bins for ${Object.keys(heatmapBins).length} time buckets`
-      );
+      logger.info(`Calculated posting heatmap bins for ${Object.keys(heatmapBins).length} time buckets`, 'TrendingService');
 
       // Write heatmap
-      const hashKey = redisKey.trendsPostingHeatmap(subreddit);
+      const rootHeatmap = redisKey.trendsTs('posting_heatmap');
       const serialized: Record<string, string> = {};
       for (const [bucket, bin] of Object.entries(heatmapBins)) serialized[bucket] = JSON.stringify(bin);
-      await this.redis.del(hashKey);
-      await this.redis.hSet(hashKey, serialized);
+      await this.redis.del(rootHeatmap).catch(() => {});
+      await this.redis.hSet(rootHeatmap, serialized);
 
       // Write recap
       const recap = this.generatePostingPatternRecap(recentBuckets, historicalBuckets);
-      await this.redis.set(redisKey.trendsPostingPatternRecap(subreddit), recap);
+      await this.redis.hSet(redisKey.trendsStatic(), { postingPatternRecap: recap });
 
       this.logStageTime('Posting heatmap materialization', stageStart);
     } catch (error) {
@@ -1232,9 +1347,7 @@ export class TrendingService {
     buckets: Record<string, number>,
     windowName: string = 'Window'
   ): Promise<void> {
-    console.log(
-      `[TRENDS] ${windowName}: Processing ${posts.length} posts for time bucketing`
-    );
+    logger.info(`${windowName}: Processing ${posts.length} posts for time bucketing`, 'TrendingService');
 
     let totalPosts = 0;
     for (const post of posts) {
@@ -1249,7 +1362,7 @@ export class TrendingService {
       }
     }
 
-    console.log(`[TRENDS] ${windowName}: Processed ${totalPosts} posts`);
+    logger.info(`${windowName}: Processed ${totalPosts} posts`, 'TrendingService');
   }
 
   /**
@@ -1349,18 +1462,14 @@ export class TrendingService {
     trendAnalysisDays: number
   ): Promise<void> {
     const stageStart = Date.now();
-    console.log(
-      `[TRENDS] Materializing global aggregates for ${retainedScans.length} scans`
-    );
+    logger.info(`Materializing global aggregates for ${retainedScans.length} scans`, 'TrendingService');
     try {
       if (retainedScans.length === 0) {
-        console.log(`[TRENDS] Skipping global aggregates: no retained scans.`);
+        logger.info(`Skipping global aggregates: no retained scans.`, 'TrendingService');
         return;
       }
 
-      console.log(
-        `[TRENDS] Starting global aggregates calculation for ${retainedScans.length} scans`
-      );
+      logger.info(`Starting global aggregates calculation for ${retainedScans.length} scans`, 'TrendingService');
 
       const englishStopwords = [
         "'ll","'tis","'twas","'ve","10","39","a","a's","able","ableabout","about","above","abroad","abst","accordance",
@@ -1488,7 +1597,11 @@ export class TrendingService {
       let totalCommentsPerDay = 0;
       let totalAvgEngagement = 0;
       let totalAvgScore = 0;
+      let totalVelocity = 0;
       let statsCount = 0;
+      let latestSubscribers = 0;
+      let latestActive = 0;
+      let latestStatsTs = -1;
 
       const scanProcessor = async (scan: {
         scanId: number;
@@ -1496,15 +1609,33 @@ export class TrendingService {
       }) => {
         try {
           // Accumulate global stats
-          const stats = await this.redis.hGetAll(redisKey.scanStats(scan.scanId));
-          if (stats.posts_per_day && stats.comments_per_day) {
+          const stats = await this.getScanStats(scan.scanId);
+          const p =
+            stats.posts_per_day !== undefined && stats.posts_per_day !== ''
+              ? parseFloat(stats.posts_per_day)
+              : NaN;
+          const c =
+            stats.comments_per_day !== undefined && stats.comments_per_day !== ''
+              ? parseFloat(stats.comments_per_day)
+              : NaN;
+          const e = parseFloat(stats.avg_engagement || '0');
+          const s = parseFloat(stats.avg_score || '0');
+          const v = parseFloat(stats.combined_velocity || stats.score_velocity || '0');
+          const subs = parseInt(stats.subscribers || '0', 10);
+          const act = parseInt(stats.active || stats.active_users || '0', 10);
+
+          if (Number.isFinite(p) || Number.isFinite(c) || Number.isFinite(s)) {
             return {
               type: 'stats',
-              p: parseFloat(stats.posts_per_day),
-              c: parseFloat(stats.comments_per_day),
-              e: parseFloat(stats.avg_engagement || '0'),
-              s: parseFloat(stats.avg_score || '0'),
+              p: Number.isFinite(p) ? p : 0,
+              c: Number.isFinite(c) ? c : 0,
+              e: Number.isFinite(e) ? e : 0,
+              s: Number.isFinite(s) ? s : 0,
+              v: Number.isFinite(v) ? v : 0,
+              subscribers: Number.isFinite(subs) ? subs : 0,
+              active: Number.isFinite(act) ? act : 0,
               scanId: scan.scanId,
+              timestamp: scan.timestamp,
             };
           }
           return null;
@@ -1519,14 +1650,17 @@ export class TrendingService {
       }) => {
         try {
           const pool = await this.getAnalysisPool(scan.scanId);
-          console.log(
-            `[TRENDS] Analysis pool for global aggregates scan #${scan.scanId}: ${pool.length} posts`
-          );
+          logger.info(`Analysis pool for global aggregates scan #${scan.scanId}: ${pool.length} posts`, 'TrendingService');
 
           const scanWordCloud: Record<string, number> = {};
-          // Unique posts by URL
+          // Unique posts by identity key
           const uniquePosts = Array.from(
-            new Map(pool.map((p) => [p.url, p])).values()
+            new Map(
+              pool.map((p) => [
+                resolvePostIdentityKey(p) || p.id || (p as any).postId || p.url,
+                p,
+              ])
+            ).values()
           );
 
           const combined = new Set([...englishStopwords, ...additional]);
@@ -1575,7 +1709,13 @@ export class TrendingService {
           totalCommentsPerDay += res.c;
           totalAvgEngagement += res.e;
           totalAvgScore += res.s;
+          totalVelocity += res.v;
           statsCount++;
+          if (res.timestamp > latestStatsTs) {
+            latestStatsTs = res.timestamp;
+            if (res.subscribers > 0) latestSubscribers = res.subscribers;
+            if (res.active > 0) latestActive = res.active;
+          }
         }
       }
 
@@ -1596,6 +1736,9 @@ export class TrendingService {
         comments_per_day: statsCount > 0 ? totalCommentsPerDay / statsCount : 0,
         avg_engagement:   statsCount > 0 ? totalAvgEngagement / statsCount : 0,
         avg_score: statsCount > 0 ? totalAvgScore / statsCount : 0,
+        velocity_24h: statsCount > 0 ? Number((totalVelocity / statsCount).toFixed(2)) : 0,
+        subscribers: latestSubscribers,
+        active_users: latestActive,
       };
 
       // Finalize Word Cloud
@@ -1656,17 +1799,21 @@ export class TrendingService {
         .sort((a, b) => b.sortWeight - a.sortWeight)
         .slice(0, 3);
 
-      await this.redis.set(redisKey.trendsGlobalAggregates(subreddit), JSON.stringify({
+      const serializedAggregates = JSON.stringify({
         globalWordCloud: finalWordCloud,
         globalBestPostingTimes: finalBestPostingTimes,
         globalStats: finalStats,
-      }));
+      });
+
+      await this.redis.hSet(redisKey.trendsStatic(), {
+        globalAggregates: serializedAggregates,
+      });
 
       this.logStageTime('Global aggregates materialization', stageStart);
     } catch (error) {
-      console.error(
-        `[TRENDS] ❌ Global aggregates calculation failed for r/${subreddit}:`,
-        error
+      logger.error(`❌ Global aggregates calculation failed for r/${subreddit}:`, error, 'TrendingService');
+      throw new Error(
+        `Global aggregates calculation failed: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   }
@@ -1680,13 +1827,9 @@ export class TrendingService {
     analysisDays: number
   ): Promise<void> {
     const stageStart = Date.now();
-    console.log(
-      `[TRENDS] Starting best posting times calculation for ${retainedScans.length} scans`
-    );
+    logger.info(`Starting best posting times calculation for ${retainedScans.length} scans`, 'TrendingService');
     if (retainedScans.length < 2) {
-      console.warn(
-        `[TRENDS] Only ${retainedScans.length} scans found. Best posting times change analysis requires at least 2 for trend detection.`
-      );
+      logger.warn(`Only ${retainedScans.length} scans found. Best posting times change analysis requires at least 2 for trend detection.`, 'TrendingService');
     }
 
     try {
@@ -1736,7 +1879,7 @@ export class TrendingService {
           // Store per-scan slot scores
           const slotScoresStr: Record<string, string> = {};
           for (const [slot, score] of Object.entries(slotScores)) slotScoresStr[slot] = score.toString();
-          await this.redis.hSet(redisKey.trendsBestTimesScan(subreddit, scan.scanId), slotScoresStr);
+          await this.redis.hSet(redisKey.trendsBestTimesScan(scan.scanId), slotScoresStr);
 
 
           // Get top 5 slots for timeline
@@ -1753,10 +1896,7 @@ export class TrendingService {
             topSlots: sortedSlots,
           };
         } catch (error) {
-          console.warn(
-            `[TRENDS] Failed to calculate best times for scan ${scan.scanId}:`,
-            error
-          );
+          logger.warn(`Failed to calculate best times for scan ${scan.scanId}: ${error}`, 'TrendingService');
           return null;
         }
       };
@@ -1775,33 +1915,24 @@ export class TrendingService {
         }
       }
 
-      console.log(
-        `[TRENDS] Calculated best times for ${timelineData.length} scans`
-      );
+      logger.info(`Calculated best times for ${timelineData.length} scans`, 'TrendingService');
 
       // Analyze changes over time
       const changeSummary = this.analyzeBestTimesChanges(timelineData);
 
       // Store timeline and change summary (this would be retrieved by the API)
       // For now, we'll store it as JSON strings since the API will parse them
-      await Promise.all([
-        this.redis.set(
-          redisKey.trendsBestTimesTimeline(subreddit),
-          JSON.stringify(timelineData)
-        ),
-        this.redis.set(
-          redisKey.trendsBestTimesChanges(subreddit),
-          JSON.stringify(changeSummary)
-        ),
-      ]);
+      const timelineStr = JSON.stringify(timelineData);
+      const changesStr = JSON.stringify(changeSummary);
+      await this.redis.hSet(redisKey.trendsStatic(), {
+        bestTimesTimeline: timelineStr,
+        bestTimesChanges: changesStr,
+      });
 
       this.logStageTime('Best posting times materialization', stageStart);
     } catch (error) {
       const elapsed = Date.now() - stageStart;
-      console.error(
-        `[TRENDS] ❌ Best posting times calculation failed for r/${subreddit} after ${elapsed}ms:`,
-        error
-      );
+      logger.error(`❌ Best posting times calculation failed for r/${subreddit} after ${elapsed}ms:`, error, 'TrendingService');
       throw new Error(
         `Best posting times calculation failed: ${error instanceof Error ? error.message : String(error)}`
       );
@@ -1838,9 +1969,9 @@ export class TrendingService {
         const postKey = resolvePostIdentityKey(post);
         const velocitySignal = velocityByPost[postKey];
         const signal =
-          typeof velocitySignal === 'number' && Number.isFinite(velocitySignal)
+          typeof velocitySignal === 'number' && Number.isFinite(velocitySignal) && velocitySignal > 0
             ? velocitySignal
-            : Number(post.engagement_score || post.score || 0);
+            : Number(post.engagement_score ?? post.score ?? 0);
 
         slotData[slot].totalSignal += signal;
         slotData[slot].postCount++;
@@ -2034,7 +2165,7 @@ export class TrendingService {
       const date = new Date(today.getTime() - d * MS_PER_DAY);
       const dateKey = date.toISOString().slice(0, 10);
       if (dateKey) {
-        dayKeys.push(redisKey.snapshotIndex(subreddit, dateKey));
+        dayKeys.push(redisKey.snapshotIndex(dateKey));
       }
     }
 
@@ -2046,7 +2177,7 @@ export class TrendingService {
         if (!scanIdStr) return null;
         const scanId = parseInt(scanIdStr, 10);
         if (Number.isNaN(scanId)) return null;
-        const meta = await this.redis.hGetAll(redisKey.scanMeta(scanId));
+        const meta = await this.getScanMeta(scanId);
         const scanTimestamp = meta.scan_date
           ? new Date(meta.scan_date).getTime()
           : meta.proc_date
@@ -2073,12 +2204,26 @@ export class TrendingService {
     if (retainedScanMap.size === 0) {
       // Legacy compatibility path for older snapshot fixtures and historical
       // installs that only populated the global timeline.
-      const timelineEntries = await this.redis.zRange(
+      let timelineEntries = await this.redis.zRange(
         redisKey.snapshotsTimeline(),
         cutoffTimestamp,
         '+inf',
         { by: 'score' }
       );
+      if (!timelineEntries || timelineEntries.length === 0) {
+        timelineEntries = (await this.redis
+          .zRange('global:snapshots:timeline', cutoffTimestamp, '+inf', {
+            by: 'score',
+          })
+          .catch(() => [])) as any[];
+      }
+      if (!timelineEntries || timelineEntries.length === 0) {
+        timelineEntries = (await this.redis
+          .zRange('scan:timeline', cutoffTimestamp, '+inf', {
+            by: 'score',
+          })
+          .catch(() => [])) as any[];
+      }
 
       const timelineResults = await this.executeBatched(
         timelineEntries as any[],
@@ -2089,7 +2234,7 @@ export class TrendingService {
           const scanId = parseInt(member, 10);
           if (Number.isNaN(scanId) || retainedScanMap.has(scanId)) return null;
 
-          const meta = await this.redis.hGetAll(redisKey.scanMeta(scanId));
+          const meta = await this.getScanMeta(scanId);
           if (meta.subreddit !== subreddit) return null;
 
           const entryScore = typeof entry === 'object' ? entry.score : undefined;
@@ -2122,7 +2267,7 @@ export class TrendingService {
             scanIds,
             30,
             async (scanId) => {
-              const meta = await this.redis.hGetAll(redisKey.scanMeta(scanId));
+              const meta = await this.getScanMeta(scanId);
               if (!meta || meta.subreddit !== subreddit) return null;
 
               const scanDateStr = meta.scan_date || meta.proc_date;
@@ -2147,13 +2292,18 @@ export class TrendingService {
       }
     }
 
-    const retainedScans = Array.from(retainedScanMap.values());
-
-    console.log(
-      `[TRENDS] Retained scans selected for r/${subreddit}: ${retainedScans.length}`
+    const retainedScans = Array.from(retainedScanMap.values()).sort(
+      (a, b) => a.timestamp - b.timestamp
     );
 
-    return retainedScans.sort((a, b) => a.timestamp - b.timestamp);
+    logger.info(`Retained scans selected for r/${subreddit}: ${retainedScans.length}`, 'TrendingService');
+    const oldest = retainedScans[0];
+    const newest = retainedScans[retainedScans.length - 1];
+    logger.info(`getRetainedScans: ${retainedScans.length} scans, ` +
+      `oldest=${oldest ? new Date(oldest.timestamp).toISOString() : 'none'}, ` +
+      `newest=${newest ? new Date(newest.timestamp).toISOString() : 'none'}`, 'TrendingService');
+
+    return retainedScans;
   }
 
   /**
@@ -2188,9 +2338,13 @@ export class TrendingService {
 
       if (configData) {
         const config = JSON.parse(configData);
-        const parsedRetentionDays = Number(config?.storage?.retentionDays);
+        const parsedRetentionDays = Number(
+          config?.storage?.retentionDays ??
+            config?.retention ??
+            config?.retentionDays
+        );
         const parsedAnalysisPoolSize = Number(
-          config?.settings?.analysisPoolSize
+          config?.settings?.analysisPoolSize ?? config?.analysisPoolSize
         );
 
         if (Number.isFinite(parsedRetentionDays) && parsedRetentionDays > 0) {
@@ -2219,10 +2373,7 @@ export class TrendingService {
         }
       }
     } catch (error) {
-      console.warn(
-        `[TRENDS] Failed to load trend config snapshot for ${subreddit}:`,
-        error
-      );
+      logger.warn(`Failed to load trend config snapshot for ${subreddit}: ${error}`, 'TrendingService');
     }
 
     return {
@@ -2341,7 +2492,8 @@ export class TrendingService {
    */
   private densifyContentMixSeries(
     series: Array<{ timestamp: number; flairs: Record<string, number> }>,
-    days: number
+    days: number,
+    endTimestamp?: number
   ): Array<{ timestamp: number; flairs: Record<string, number> }> {
     if (series.length === 0 || days <= 0) {
       return [];
@@ -2349,7 +2501,7 @@ export class TrendingService {
 
     const allFlairs = new Set<string>();
     const latestByDay = new Map<number, Record<string, number>>();
-    const timeline = this.buildDayTimeline(days);
+    const timeline = this.buildDayTimeline(days, endTimestamp);
     const timelineStart = timeline[0];
     const timelineEnd = timeline[timeline.length - 1];
     if (timelineStart === undefined || timelineEnd === undefined) {
@@ -2395,17 +2547,25 @@ export class TrendingService {
 
   /**
    * Parse trend data from Redis for API responses
+   *
+   * @param asOf - Optional Unix ms timestamp. When provided, filters all
+   *               time-series data to points at or before this timestamp.
+   *               Defaults to now.
+   * @param windowDays - Optional number of days to include in the window
+   *                     ending at asOf. Defaults to trendAnalysisDays
+   *                     from subreddit config.
    */
   async getTrendData(
     subreddit: string,
-    asOf?: number
+    asOf?: number,
+    windowDays?: number
   ): Promise<TrendData | null> {
     this.startTime = Date.now();
     try {
       // Check if materialized data exists
-      const lastMaterialized = await this.redis.get(
-        redisKey.trendsLastMaterialized(subreddit)
-      );
+      const lastMaterialized =
+        (await this.redis.hGet(redisKey.trendsStatic(), 'lastMaterialized').catch(() => null)) ||
+        (await this.redis.get(redisKey.trendsLastMaterialized(subreddit)).catch(() => null));
       if (!lastMaterialized) {
         return null;
       }
@@ -2416,11 +2576,12 @@ export class TrendingService {
         !isFutureDate &&
         Date.now() - lastMaterializedDate.getTime() > MS_PER_DAY;
       const trendAnalysisDays = await this.getTrendAnalysisDays(subreddit);
+      const effectiveWindowDays = windowDays ?? trendAnalysisDays;
 
       // Parse subscriber growth data
       const subscriberGrowth = this.densifyDailySeries(
         await this.parseSubscriberGrowth(subreddit, asOf),
-        trendAnalysisDays,
+        effectiveWindowDays,
         'carry-forward',
         asOf
       );
@@ -2435,7 +2596,7 @@ export class TrendingService {
       // Parse engagement data
       const engagementOverTime = this.densifyDailySeries(
         await this.parseEngagementOverTime(subreddit, asOf),
-        trendAnalysisDays,
+        effectiveWindowDays,
         'zero',
         asOf
       );
@@ -2445,25 +2606,29 @@ export class TrendingService {
       // Parse content mix data
       const contentMix = this.densifyContentMixSeries(
         await this.parseContentMix(subreddit, asOf),
-        trendAnalysisDays
+        effectiveWindowDays,
+        asOf
       );
       const contentMixRecap =
-        (await this.redis.get(redisKey.trendsContentMixRecap(subreddit))) || '';
+        (await this.redis.hGet(redisKey.trendsStatic(), 'contentMixRecap').catch(() => null)) ||
+        (await this.redis.get(redisKey.trendsContentMixRecap(subreddit)).catch(() => null)) ||
+        '';
 
       // Parse posting heatmap data
-      const postingHeatmap = await this.parsePostingHeatmap(subreddit);
+      const postingHeatmap = await this.parsePostingHeatmap(subreddit, asOf);
       const postingPatternRecap =
-        (await this.redis.get(redisKey.trendsPostingPatternRecap(subreddit))) ||
+        (await this.redis.hGet(redisKey.trendsStatic(), 'postingPatternRecap').catch(() => null)) ||
+        (await this.redis.get(redisKey.trendsPostingPatternRecap(subreddit)).catch(() => null)) ||
         '';
 
       // Parse best posting times data
       const bestPostingTimesChange =
-        await this.parseBestPostingTimesChange(subreddit);
+        await this.parseBestPostingTimesChange(subreddit, asOf);
 
       // Parse global aggregates
-      const globalAggregatesStr = await this.redis.get(
-        redisKey.trendsGlobalAggregates(subreddit)
-      );
+      const globalAggregatesStr =
+        (await this.redis.hGet(redisKey.trendsStatic(), 'globalAggregates').catch(() => null)) ||
+        (await this.redis.get(redisKey.trendsGlobalAggregates(subreddit)).catch(() => null));
       const globalAggregates = globalAggregatesStr
         ? JSON.parse(globalAggregatesStr)
         : {
@@ -2494,10 +2659,7 @@ export class TrendingService {
         bestPostingTimesChange,
       };
     } catch (error) {
-      console.error(
-        `[TRENDS] Failed to get trend data for ${subreddit}:`,
-        error
-      );
+      logger.error(`Failed to get trend data for ${subreddit}:`, error, 'TrendingService');
       // Persist error for dashboard ErrorBoundary visibility
       await this.redis.set(
         redisKey.debugError(),
@@ -2512,21 +2674,23 @@ export class TrendingService {
     subreddit: string,
     asOf?: number
   ): Promise<Array<{ timestamp: number; value: number }>> {
-    const zsetKey = redisKey.trendsSubscriberGrowth(subreddit);
+    const activeKey = redisKey.trendsTs('subscriber_growth');
 
     try {
-      const rawData = await this.redis.zRange(zsetKey, 0, -1);
+      let rawData = await this.redis.zRange(activeKey, 0, -1);
+      let resolvedKey = activeKey;
+      if (!rawData || rawData.length === 0) {
+        resolvedKey = redisKey.trendsSubscriberGrowth(subreddit);
+        rawData = await this.redis.zRange(resolvedKey, 0, -1);
+      }
       const rawMembers = normalizeZRangeMembers(
         rawData as Array<string | { member: string; score: number }>
       );
 
-      const points = parseZSetMembers(rawMembers, zsetKey, parseInt);
+      const points = parseZSetMembers(rawMembers, resolvedKey, parseInt);
       return asOf ? points.filter(p => p.timestamp <= asOf) : points;
     } catch (error) {
-      console.warn(
-        `[TRENDS] Failed to parse subscriber growth data for ${subreddit}:`,
-        error
-      );
+      logger.warn(`Failed to parse subscriber growth data for ${subreddit}: ${error}`, 'TrendingService');
       return [];
     }
   }
@@ -2535,13 +2699,18 @@ export class TrendingService {
    * Parse engagement over time ZSET data
    */
   private async parseEngagementOverTime(subreddit: string, asOf?: number): Promise<Array<{ timestamp: number; value: number }>> {
-    const key = redisKey.trendsEngagementAvg(subreddit);
+    const activeKey = redisKey.trendsTs('engagement_avg');
     try {
-      const raw = normalizeZRangeMembers(await this.redis.zRange(key, 0, -1) as RawZRangeMember[]);
-      const points = parseZSetMembers(raw, key, parseFloat);
+      let raw = normalizeZRangeMembers((await this.redis.zRange(activeKey, 0, -1)) as RawZRangeMember[]);
+      let resolvedKey = activeKey;
+      if (raw.length === 0) {
+        resolvedKey = redisKey.trendsEngagementAvg(subreddit);
+        raw = normalizeZRangeMembers((await this.redis.zRange(resolvedKey, 0, -1)) as RawZRangeMember[]);
+      }
+      const points = parseZSetMembers(raw, resolvedKey, parseFloat);
       return asOf ? points.filter((p) => p.timestamp <= asOf) : points;
     } catch (error) {
-      console.warn(`[TRENDS] Failed to parse engagement over time for ${subreddit}:`, error);
+      logger.warn(`Failed to parse engagement over time for ${subreddit}: ${error}`, 'TrendingService');
       return [];
     }
   }
@@ -2557,10 +2726,13 @@ export class TrendingService {
       deviation: number;
     }>
   > {
-    const hashKey = redisKey.trendsEngagementAnomalies(subreddit);
+    const activeKey = redisKey.trendsTs('engagement_anomalies');
 
     try {
-      const rawData = await this.redis.hGetAll(hashKey);
+      let rawData = await this.redis.hGetAll(activeKey);
+      if (!rawData || Object.keys(rawData).length === 0) {
+        rawData = await this.redis.hGetAll(redisKey.trendsEngagementAnomalies(subreddit));
+      }
       const anomalies: Array<{
         timestamp: number;
         type: 'spike' | 'dip';
@@ -2571,26 +2743,20 @@ export class TrendingService {
       for (const [timestampStr, jsonStr] of Object.entries(rawData)) {
         try {
           if (typeof timestampStr !== 'string' || typeof jsonStr !== 'string') {
-            console.warn(
-              `[TRENDS] Skipping non-string anomaly entry in ${hashKey}: ${timestampStr}=${jsonStr}`
-            );
+            logger.warn(`Skipping non-string anomaly entry in ${hashKey}: ${timestampStr}=${jsonStr}`, 'TrendingService');
             continue;
           }
 
           const timestamp = parseInt(timestampStr);
           if (isNaN(timestamp)) {
-            console.warn(
-              `[TRENDS] Skipping anomaly entry with invalid timestamp in ${hashKey}: ${timestampStr}`
-            );
+            logger.warn(`Skipping anomaly entry with invalid timestamp in ${hashKey}: ${timestampStr}`, 'TrendingService');
             continue;
           }
 
           // Validate timestamp is reasonable
           const now = Date.now();
           if (timestamp < 0 || timestamp > now + 365 * MS_PER_DAY) {
-            console.warn(
-              `[TRENDS] Skipping anomaly entry with unreasonable timestamp in ${hashKey}: ${timestampStr}`
-            );
+            logger.warn(`Skipping anomaly entry with unreasonable timestamp in ${hashKey}: ${timestampStr}`, 'TrendingService');
             continue;
           }
 
@@ -2598,17 +2764,12 @@ export class TrendingService {
           try {
             anomalyData = JSON.parse(jsonStr);
           } catch (parseError) {
-            console.warn(
-              `[TRENDS] Skipping anomaly entry with invalid JSON in ${hashKey}: ${timestampStr}=${jsonStr}`,
-              parseError
-            );
+            logger.warn(`Skipping anomaly entry with invalid JSON in ${hashKey}: ${timestampStr}=${jsonStr}: ${parseError}`, 'TrendingService');
             continue;
           }
 
           if (!anomalyData || typeof anomalyData !== 'object') {
-            console.warn(
-              `[TRENDS] Skipping anomaly entry with invalid data structure in ${hashKey}: ${timestampStr}=${jsonStr}`
-            );
+            logger.warn(`Skipping anomaly entry with invalid data structure in ${hashKey}: ${timestampStr}=${jsonStr}`, 'TrendingService');
             continue;
           }
 
@@ -2616,9 +2777,7 @@ export class TrendingService {
             !anomalyData.type ||
             !['spike', 'dip'].includes(anomalyData.type)
           ) {
-            console.warn(
-              `[TRENDS] Skipping anomaly entry with invalid type in ${hashKey}: ${timestampStr}=${jsonStr}`
-            );
+            logger.warn(`Skipping anomaly entry with invalid type in ${hashKey}: ${timestampStr}=${jsonStr}`, 'TrendingService');
             continue;
           }
 
@@ -2626,9 +2785,7 @@ export class TrendingService {
             typeof anomalyData.value !== 'number' ||
             isNaN(anomalyData.value)
           ) {
-            console.warn(
-              `[TRENDS] Skipping anomaly entry with invalid value in ${hashKey}: ${timestampStr}=${jsonStr}`
-            );
+            logger.warn(`Skipping anomaly entry with invalid value in ${hashKey}: ${timestampStr}=${jsonStr}`, 'TrendingService');
             continue;
           }
 
@@ -2644,19 +2801,13 @@ export class TrendingService {
             deviation,
           });
         } catch (error) {
-          console.warn(
-            `[TRENDS] Error parsing anomaly entry in ${hashKey}: ${timestampStr}=${jsonStr}`,
-            error
-          );
+          logger.warn(`Error parsing anomaly entry in ${hashKey}: ${timestampStr}=${jsonStr}: ${error}`, 'TrendingService');
         }
       }
 
       return anomalies.sort((a, b) => a.timestamp - b.timestamp);
     } catch (error) {
-      console.warn(
-        `[TRENDS] Failed to parse engagement anomalies for ${subreddit}:`,
-        error
-      );
+      logger.warn(`Failed to parse engagement anomalies for ${subreddit}: ${error}`, 'TrendingService');
       return [];
     }
   }
@@ -2665,9 +2816,12 @@ export class TrendingService {
    * Parse content mix data from daily flair distributions
    */
   private async parseContentMix(subreddit: string, asOf?: number): Promise<Array<{ timestamp: number; flairs: Record<string, number> }>> {
-    const key = redisKey.trendsContentMix(subreddit);
+    const activeKey = redisKey.trendsTs('content_mix');
     try {
-      const rawData = await this.redis.zRange(key, 0, -1);
+      let rawData = await this.redis.zRange(activeKey, 0, -1);
+      if (!rawData || rawData.length === 0) {
+        rawData = await this.redis.zRange(redisKey.trendsContentMix(subreddit), 0, -1);
+      }
       const result: Array<{ timestamp: number; flairs: Record<string, number> }> = [];
 
       for (const member of rawData) {
@@ -2682,12 +2836,12 @@ export class TrendingService {
           if (typeof flairs !== 'object' || flairs === null) continue;
           result.push({ timestamp, flairs });
         } catch (error) {
-          console.warn(`[TRENDS] Failed to parse content mix entry from ${key}:`, error);
+          logger.warn(`Failed to parse content mix entry from ${key}: ${error}`, 'TrendingService');
         }
       }
       return result.sort((a, b) => a.timestamp - b.timestamp);
     } catch (error) {
-      console.warn(`[TRENDS] Failed to parse content mix data for ${subreddit}:`, error);
+      logger.warn(`Failed to parse content mix data for ${subreddit}: ${error}`, 'TrendingService');
       return [];
     }
   }
@@ -2695,7 +2849,10 @@ export class TrendingService {
   /**
    * Parse posting heatmap hash data
    */
-  private async parsePostingHeatmap(subreddit: string): Promise<
+  private async parsePostingHeatmap(
+    subreddit: string,
+    asOf?: number
+  ): Promise<
     Array<{
       dayHour: string;
       delta: number;
@@ -2706,7 +2863,25 @@ export class TrendingService {
   > {
 
     try {
-      const rawData = await this.redis.hGetAll(redisKey.trendsPostingHeatmap(subreddit));
+      let rawData = await this.redis.hGetAll(redisKey.trendsTs('posting_heatmap'));
+      if (!rawData || Object.keys(rawData).length === 0) {
+        rawData = await this.redis.hGetAll(redisKey.trendsPostingHeatmap(subreddit));
+      }
+
+      if (asOf) {
+        const lastMaterialized =
+          (await this.redis.hGet(redisKey.trendsStatic(), 'lastMaterialized').catch(() => null)) ||
+          (await this.redis.get(redisKey.trendsLastMaterialized(subreddit)).catch(() => null));
+        if (
+          lastMaterialized &&
+          new Date(lastMaterialized).getTime() > asOf + MS_PER_DAY
+        ) {
+          logger.warn(`parsePostingHeatmap: stored heatmap was materialized after asOf ` +
+            `(${new Date(lastMaterialized).toISOString()} > ${new Date(asOf).toISOString()}) ` +
+            `— returning empty to prevent stale heatmap data in historical context`, 'TrendingService');
+          return [];
+        }
+      }
 
       // Validate day-hour bucket format (e.g., "Mon-14")
       const dayHourValidator = (dayHour: string): boolean => {
@@ -2743,7 +2918,7 @@ export class TrendingService {
 
       const legacyDeltas = parseHashEntries<number>(
         legacyRawData,
-        redisKey.trendsPostingHeatmap(subreddit),
+        redisKey.trendsTs('posting_heatmap'),
         (v: string) => Number(v),
         dayHourValidator
       );
@@ -2807,10 +2982,7 @@ export class TrendingService {
 
       return heatmap;
     } catch (error) {
-      console.warn(
-        `[TRENDS] Failed to parse posting heatmap for ${subreddit}:`,
-        error
-      );
+      logger.warn(`Failed to parse posting heatmap for ${subreddit}: ${error}`, 'TrendingService');
       return [];
     }
   }
@@ -2818,7 +2990,10 @@ export class TrendingService {
   /**
    * Parse best posting times change data
    */
-  private async parseBestPostingTimesChange(subreddit: string): Promise<{
+  private async parseBestPostingTimesChange(
+    subreddit: string,
+    asOf?: number
+  ): Promise<{
     timeline: Array<{
       timestamp: number;
       topSlots: Array<{ dayHour: string; score: number }>;
@@ -2830,12 +3005,20 @@ export class TrendingService {
     };
   }> {
     try {
-      const [timelineStr, changesStr] = await Promise.all([
-        this.redis.get(redisKey.trendsBestTimesTimeline(subreddit)),
-        this.redis.get(redisKey.trendsBestTimesChanges(subreddit)),
+      const [timelineStatic, changesStatic, timelineLegacy, changesLegacy] = await Promise.all([
+        this.redis.hGet(redisKey.trendsStatic(), 'bestTimesTimeline').catch(() => null),
+        this.redis.hGet(redisKey.trendsStatic(), 'bestTimesChanges').catch(() => null),
+        this.redis.get(redisKey.trendsBestTimesTimeline(subreddit)).catch(() => null),
+        this.redis.get(redisKey.trendsBestTimesChanges(subreddit)).catch(() => null),
       ]);
 
-      const timeline = timelineStr ? JSON.parse(timelineStr) : [];
+      const timelineStr = timelineStatic || timelineLegacy;
+      const changesStr = changesStatic || changesLegacy;
+
+      const timeline: Array<{
+        timestamp: number;
+        topSlots: Array<{ dayHour: string; score: number }>;
+      }> = timelineStr ? JSON.parse(timelineStr) : [];
       const changeSummary = changesStr
         ? JSON.parse(changesStr)
         : {
@@ -2844,9 +3027,21 @@ export class TrendingService {
             stableSlots: [],
           };
 
+      if (asOf !== undefined) {
+        const filteredTimeline = timeline.filter(e => e.timestamp <= asOf);
+        if (filteredTimeline.length === 0) {
+          return {
+            timeline: [],
+            changeSummary: { risingSlots: [], fallingSlots: [], stableSlots: [] },
+          };
+        }
+        const recomputedSummary = this.analyzeBestTimesChanges(filteredTimeline);
+        return { timeline: filteredTimeline, changeSummary: recomputedSummary };
+      }
+
       return { timeline, changeSummary };
     } catch (error) {
-      console.warn('[TRENDS] Failed to parse best posting times data:', error);
+      logger.warn(`Failed to parse best posting times data: ${error}`, 'TrendingService');
       return {
         timeline: [],
         changeSummary: { risingSlots: [], fallingSlots: [], stableSlots: [] },
@@ -2862,16 +3057,24 @@ export class TrendingService {
     deletedScanIds: number[],
     deletedTimestamps: number[]
   ): Promise<void> {
-    console.log(
-      `[TRENDS] Cleaning up trend artifacts for ${deletedScanIds.length} deleted scans`
-    );
+    logger.info(`Cleaning up trend artifacts for ${deletedScanIds.length} deleted scans`, 'TrendingService');
 
     try {
       // Remove entries from subscriber growth and engagement ZSETs by timestamp
       for (const timestamp of deletedTimestamps) {
         await Promise.all([
           this.redis.zRemRangeByScore(
+            redisKey.trendsTs('subscriber_growth'),
+            timestamp,
+            timestamp
+          ),
+          this.redis.zRemRangeByScore(
             redisKey.trendsSubscriberGrowth(subreddit),
+            timestamp,
+            timestamp
+          ),
+          this.redis.zRemRangeByScore(
+            redisKey.trendsTs('engagement_avg'),
             timestamp,
             timestamp
           ),
@@ -2881,10 +3084,18 @@ export class TrendingService {
             timestamp
           ),
           this.redis.zRemRangeByScore(
+            redisKey.trendsTs('engagement_velocity'),
+            timestamp,
+            timestamp
+          ),
+          this.redis.zRemRangeByScore(
             redisKey.trendsEngagementVelocity(subreddit),
             timestamp,
             timestamp
           ),
+          this.redis.hDel(redisKey.trendsTs('engagement_anomalies'), [
+            timestamp.toString(),
+          ]).catch(() => {}),
           this.redis.hDel(redisKey.trendsEngagementAnomalies(subreddit), [
             timestamp.toString(),
           ]),
@@ -2894,9 +3105,13 @@ export class TrendingService {
       // Remove per-scan flair distribution and best times hashes
       for (const scanId of deletedScanIds) {
         await Promise.all([
+          this.redis.hDel(redisKey.trendsTs('engagement_anomalies'), [scanId.toString()]).catch(() => {}),
           this.redis.hDel(redisKey.trendsEngagementAnomalies(subreddit), [scanId.toString()]),
-          this.redis.del(redisKey.trendsFlair(subreddit, scanId)),
-          this.redis.del(redisKey.trendsBestTimesScan(subreddit, scanId)),
+          this.redis.del(redisKey.trendsFlair(scanId)),
+          this.redis.del(redisKey.trendsBestTimesScan(scanId)),
+          this.redis.del(redisKey.trendsHeatmapScan(scanId)),
+          this.redis.del(redisKey.trendsContentMixScan(scanId)),
+          this.redis.del(redisKey.trendsAnomaliesScan(scanId)),
         ]);
       }
 
@@ -2906,6 +3121,17 @@ export class TrendingService {
       if (remainingScans.length === 0) {
         // No scans remain, remove all trend keys
         await Promise.all([
+          // New paradigm keys
+          this.redis.del(redisKey.trendsStatic()),
+          this.redis.del(redisKey.trendsTs('subscriber_growth')),
+          this.redis.del(redisKey.trendsTs('engagement_avg')),
+          this.redis.del(redisKey.trendsTs('engagement_velocity')),
+          this.redis.del(redisKey.trendsTs('engagement_anomalies')),
+          this.redis.del(redisKey.trendsTs('content_mix')),
+          this.redis.del(redisKey.trendsTs('posting_heatmap')),
+          this.redis.del(redisKey.trendsTs('best_posting_times')),
+          this.redis.del(redisKey.trendsMaterializations()),
+          // Legacy compatibility keys
           this.redis.del(redisKey.trendsLastMaterialized(subreddit)),
           this.redis.del(redisKey.trendsContentMix(subreddit)),
           this.redis.del(redisKey.trendsContentMixRecap(subreddit)),
@@ -2925,9 +3151,9 @@ export class TrendingService {
         await this.recomputeAggregates(subreddit, remainingScans);
       }
 
-      console.log(`[TRENDS] ✓ Cleanup complete for r/${subreddit}`);
+      logger.info(`✓ Cleanup complete for r/${subreddit}`, 'TrendingService');
     } catch (error) {
-      console.error(`[TRENDS] Cleanup failed for r/${subreddit}:`, error);
+      logger.error(`Cleanup failed for r/${subreddit}:`, error, 'TrendingService');
     }
   }
 
@@ -2947,10 +3173,7 @@ export class TrendingService {
         this.materializeBestPostingTimes(subreddit, remainingScans, trendConfig.trendAnalysisDays),
       ]);
     } catch (error) {
-      console.error(
-        `[TRENDS] Failed to recompute aggregates for r/${subreddit}:`,
-        error
-      );
+      logger.error(`Failed to recompute aggregates for r/${subreddit}:`, error, 'TrendingService');
     }
   }
 
@@ -3064,42 +3287,53 @@ export class TrendingService {
   async cleanupDeletedScan(scanId: number): Promise<void> {
     try {
       // Get scan metadata to determine subreddit and timestamp
-      const meta = await this.redis.hGetAll(redisKey.scanMeta(scanId));
+      const meta = await this.getScanMeta(scanId);
       if (!meta.subreddit || !meta.scan_date) {
-        console.warn(
-          `[TRENDS] Cannot cleanup scan ${scanId}: missing metadata`
-        );
+        logger.warn(`Cannot cleanup scan ${scanId}: missing metadata`, 'TrendingService');
         return;
       }
 
       const subreddit = meta.subreddit;
       const timestamp = new Date(meta.scan_date).getTime();
 
-      console.log(
-        `[TRENDS] Cleaning up trend artifacts for scan ${scanId} (r/${subreddit})`
-      );
+      logger.info(`Cleaning up trend artifacts for scan ${scanId} (r/${subreddit})`, 'TrendingService');
 
       // Clean up trend artifacts for this single scan
       await this.cleanupTrendArtifacts(subreddit, [scanId], [timestamp]);
     } catch (error) {
-      console.error(`[TRENDS] Failed to cleanup scan ${scanId}:`, error);
+      logger.error(`Failed to cleanup scan ${scanId}:`, error, 'TrendingService');
       // Don't throw - cleanup failures shouldn't block snapshot deletion
     }
   }
 
   /**
-   * Robustly retrieves the analysis pool for a scan ID, supporting both
-   * the new ZSET format and the legacy JSON blob format.
+   * Robustly retrieves the analysis pool for a scan ID, supporting
+   * normalized shard-hydrated snapshots, embedded JSON ZSET entries,
+   * and legacy JSON blob format.
    */
   private async getAnalysisPool(scanId: number): Promise<PostData[]> {
     try {
+      // 1. Primary path: retrieve and hydrate normalized snapshot via DataRetrievalService
+      try {
+        const snapshot = await this.dataRetriever.getSnapshotById(scanId);
+        if (
+          snapshot &&
+          Array.isArray(snapshot.analysisPool) &&
+          snapshot.analysisPool.length > 0
+        ) {
+          return snapshot.analysisPool;
+        }
+      } catch {
+        // Fall through to ZSET / legacy handlers if DataRetrievalService encountered an issue
+      }
+
       const parsePoolFromZset = async (
         zsetKey: string
       ): Promise<PostData[]> => {
         const count = await this.redis.zCard(zsetKey);
         if (count <= 0) return [];
 
-        console.log(`[TRENDS] zCard for ${zsetKey}: ${count}`);
+        logger.info(`zCard for ${zsetKey}: ${count}`, 'TrendingService');
         const pool: PostData[] = [];
         const batchSize = 100;
         for (let i = 0; i < count; i += batchSize) {
@@ -3120,52 +3354,40 @@ export class TrendingService {
             try {
               pool.push(JSON.parse(memberStr));
             } catch (e) {
-              console.warn(
-                `[TRENDS] Failed to parse pool member for scan #${scanId}`,
-                e
-              );
+              logger.warn(`Failed to parse pool member for scan #${scanId}: ${e}`, 'TrendingService');
             }
           }
         }
         return pool;
       };
 
-      // 1. Prefer canonical pool key
+      // 2. Embedded JSON in canonical pool key
       const canonicalPool = await parsePoolFromZset(redisKey.scanPool(scanId));
       if (canonicalPool.length > 0) {
         return canonicalPool;
       }
 
-      // 2. Fallback to pool:json key used by normalized snapshots
+      // 3. Fallback to pool:json key used by legacy normalized snapshots
       const jsonPool = await parsePoolFromZset(redisKey.scanPoolJson(scanId));
       if (jsonPool.length > 0) {
         return jsonPool;
       }
 
-      // 3. Fallback to legacy JSON blob format
+      // 4. Fallback to legacy JSON blob format
       const scanData = await this.redis.get(redisKey.scanData(scanId));
-      console.log(
-        `[TRENDS] Legacy scan data for #${scanId}: ${scanData ? 'found' : 'not found'}`
-      );
       if (scanData) {
         try {
           const parsedData = JSON.parse(scanData);
           return parsedData.analysis_pool || [];
         } catch (e) {
-          console.warn(
-            `[TRENDS] Failed to parse legacy scan data for scan #${scanId}`,
-            e
-          );
+          logger.warn(`Failed to parse legacy scan data for scan #${scanId}: ${e}`, 'TrendingService');
           return [];
         }
       }
 
       return [];
     } catch (error) {
-      console.warn(
-        `[TRENDS] Error retrieving analysis pool for scan #${scanId}:`,
-        error
-      );
+      logger.warn(`Error retrieving analysis pool for scan #${scanId}: ${error}`, 'TrendingService');
       return [];
     }
   }

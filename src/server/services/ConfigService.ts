@@ -1,13 +1,12 @@
 import type { RedisClient } from '@devvit/web/server';
-import {
-  ConfigSettings,
-  CalculationSettings,
-  DEFAULT_CALCULATION_SETTINGS,
-} from '../../shared/types/settings';
 import { redisKey } from '../../shared/core/constants';
+import {
+  CalculationSettings,
+  ConfigSettings,
+  DEFAULT_CALCULATION_SETTINGS,
+} from '../../shared/types/settings.types';
 
 export class ConfigService {
-
   constructor(private redis: RedisClient) {}
 
   async getConfig(): Promise<ConfigSettings> {

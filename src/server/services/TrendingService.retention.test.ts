@@ -62,6 +62,11 @@ class RetentionMockRedisClient {
     return zset.length;
   }
 
+  async hGet(key: string, field: string): Promise<string | null> {
+    const hash = this.data.get(key) || {};
+    return hash[field] ?? null;
+  }
+
   async hGetAll(key: string): Promise<Record<string, string>> {
     return this.data.get(key) || {};
   }
@@ -171,15 +176,18 @@ class RetentionMockRedisClient {
     return deletedCount;
   }
 
-  async zRem(key: string, member: string): Promise<number> {
+  async zRem(key: string, members: string | string[]): Promise<number> {
     const zset = this.data.get(key) || [];
     const originalLength = zset.length;
-    const filtered = zset.filter((item: any) => item.member !== member);
+    const membersArray = Array.isArray(members) ? members : [members];
+    const filtered = zset.filter(
+      (item: any) => !membersArray.includes(item.member)
+    );
     this.data.set(key, filtered);
     return originalLength - filtered.length;
   }
 
-  async trackOperation(op: string, fn: () => Promise<any>): Promise<any> {
+  async trackOperation(_op: string, fn: () => Promise<any>): Promise<any> {
     return fn();
   }
 
@@ -329,7 +337,6 @@ function generateMultiScanTestData(
 }
 
 describe('TrendingService Retention and Cleanup Tests', () => {
-  let mockRedis: RetentionMockRedisClient;
   // Helper to setup test environment for a specific subreddit
   const setupTest = (subreddit: string) => {
     const mock = generateMultiScanTestData(subreddit, 15, 30);
@@ -345,7 +352,7 @@ describe('TrendingService Retention and Cleanup Tests', () => {
       const subreddit = 'sub_growth_test';
 
       await trend.materializeTrends(subreddit, latestScanId);
-      await norm.deleteSnapshot(1006);
+      await norm.deleteSnapshot(1006, true);
 
       const afterGrowth = mock.getData(`trends:${subreddit}:subscriber_growth`);
       expect(afterGrowth.find((i: any) => i.member === '1006')).toBeUndefined();
@@ -356,7 +363,7 @@ describe('TrendingService Retention and Cleanup Tests', () => {
       const subreddit = 'eng_avg_test';
 
       await trend.materializeTrends(subreddit, latestScanId);
-      await norm.deleteSnapshot(1006);
+      await norm.deleteSnapshot(1006, true);
 
       const afterEng = mock.getData(`trends:${subreddit}:engagement_avg`);
       expect(afterEng.find((i: any) => i.member === '1006')).toBeUndefined();
@@ -367,7 +374,7 @@ describe('TrendingService Retention and Cleanup Tests', () => {
       const subreddit = 'eng_anom_test';
 
       await trend.materializeTrends(subreddit, latestScanId);
-      await norm.deleteSnapshot(1006);
+      await norm.deleteSnapshot(1006, true);
 
       const afterAnom = mock.getData(
         `trends:${subreddit}:engagement_anomalies`
@@ -380,7 +387,7 @@ describe('TrendingService Retention and Cleanup Tests', () => {
       const subreddit = 'flair_dist_test';
 
       await trend.materializeTrends(subreddit, latestScanId);
-      await norm.deleteSnapshot(1006);
+      await norm.deleteSnapshot(1006, true);
 
       const afterFlair = mock.getData(
         `trends:${subreddit}:flair_distribution:1006`
@@ -393,7 +400,7 @@ describe('TrendingService Retention and Cleanup Tests', () => {
       const subreddit = 'best_times_test';
 
       await trend.materializeTrends(subreddit, latestScanId);
-      await norm.deleteSnapshot(1006);
+      await norm.deleteSnapshot(1006, true);
 
       const afterBest = mock.getData(`trends:${subreddit}:best_times:1006`);
       expect(afterBest).toBeUndefined();
@@ -407,7 +414,7 @@ describe('TrendingService Retention and Cleanup Tests', () => {
 
       // Delete all 15 scans
       for (let i = 0; i < 15; i++) {
-        await norm.deleteSnapshot(1000 + i);
+        await norm.deleteSnapshot(1000 + i, true);
       }
 
       // Check for any remaining trend keys for this subreddit
@@ -424,8 +431,9 @@ describe('TrendingService Retention and Cleanup Tests', () => {
 
       await trend.materializeTrends(subreddit, latestScanId);
       const beforeRecap = mock.getData(`trends:${subreddit}:content_mix_recap`);
+      expect(beforeRecap).toBeTruthy();
 
-      await norm.deleteSnapshot(1014); // Delete newest
+      await norm.deleteSnapshot(1014, true); // Delete newest
 
       const afterRecap = mock.getData(`trends:${subreddit}:content_mix_recap`);
       expect(afterRecap).toBeTruthy();
@@ -440,8 +448,9 @@ describe('TrendingService Retention and Cleanup Tests', () => {
       const beforeRecap = mock.getData(
         `trends:${subreddit}:posting_pattern_recap`
       );
+      expect(beforeRecap).toBeTruthy();
 
-      await norm.deleteSnapshot(1014);
+      await norm.deleteSnapshot(1014, true);
 
       const afterRecap = mock.getData(
         `trends:${subreddit}:posting_pattern_recap`

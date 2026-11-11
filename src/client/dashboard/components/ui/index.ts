@@ -9,11 +9,72 @@ export { Heading } from './heading';
 export type { HeadingProps } from './heading';
 
 export { EntityTitle } from './entity-title';
+export { Brand, BrandLogo } from './brand';
+export type { BrandProps, BrandLogoProps } from './brand';
+export {
+  Avatar,
+  AvatarGroup,
+  AvatarBadge,
+  registerAvatar,
+  getCachedAvatar,
+  fetchAvatarUrl,
+} from './avatar';
+export type {
+  AvatarProps,
+  AvatarGroupProps,
+  AvatarBadgeProps,
+  AvatarSize,
+  AvatarColor,
+  AvatarBadgePosition,
+  AvatarBadgeVariant,
+} from './avatar';
+export { Profile, ProfileAvatar } from './profile';
+export type { ProfileProps, ProfileAvatarProps } from './profile';
+export { Navbar, NavbarItem } from './navbar';
+export type { NavbarProps, NavbarItemProps } from './navbar';
+export { Navlist, NavlistItem, NavlistGroup } from './navlist';
+export type {
+  NavlistProps,
+  NavlistItemProps,
+  NavlistGroupProps,
+} from './navlist';
+export {
+  Sidebar,
+  SidebarHeader,
+  SidebarBrand,
+  SidebarCollapse,
+  SidebarToggle,
+  SidebarSearch,
+  SidebarNav,
+  SidebarItem,
+  SidebarGroup,
+  SidebarSpacer,
+  SidebarProfile,
+  useSidebar,
+} from './sidebar';
+export type {
+  SidebarProps,
+  SidebarHeaderProps,
+  SidebarBrandProps,
+  SidebarCollapseProps,
+  SidebarToggleProps,
+  SidebarSearchProps,
+  SidebarNavProps,
+  SidebarItemProps,
+  SidebarGroupProps,
+  SidebarProfileProps,
+} from './sidebar';
+export { Main } from './main';
+export type { MainProps } from './main';
 
 // New Components
 export {
   Card,
   CardHeader,
+  CardHeading,
+  CardSubheading,
+  CardActions,
+  CardBody,
   CardFooter,
   CardTitle,
   CardDescription,
@@ -78,7 +139,11 @@ export * from './tabs';
 export * from './table';
 export * from './radio';
 export * from './tooltip';
+export * from './popover';
 export * from './chart';
 export * from './section';
 export * from './non-ideal-state';
 export * from './toast';
+export * from './carousel';
+export { Text, textVariants, type TextProps } from './text';
+export { Textarea, textareaVariants, type TextareaProps } from './textarea';

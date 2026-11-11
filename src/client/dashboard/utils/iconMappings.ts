@@ -159,8 +159,17 @@ export function getIconPath(filename: string): string {
     );
   }
 
+  const resolveAssetUrl = (val: unknown): string => {
+    if (!val) return '';
+    if (typeof val === 'string') return val;
+    if (typeof val === 'object' && val !== null && 'default' in val) {
+      return String((val as any).default || '');
+    }
+    return String(val);
+  };
+
   if (match) {
-    return iconAssets[match] as string;
+    return resolveAssetUrl(iconAssets[match]);
   }
 
   // 4. Case-insensitive basename only match (very loose)
@@ -178,7 +187,7 @@ export function getIconPath(filename: string): string {
   }
 
   if (match) {
-    return iconAssets[match] as string;
+    return resolveAssetUrl(iconAssets[match]);
   }
 
   // Last ditch: try without "glass-" or "mono-" prefix

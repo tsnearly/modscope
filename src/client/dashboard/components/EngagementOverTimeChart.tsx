@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react';
 import {
-    Area,
-    AreaChart,
-    CartesianGrid,
-    Tooltip as RechartsTooltip,
-    ResponsiveContainer,
-    XAxis,
-    YAxis,
+  Area,
+  AreaChart,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  ResponsiveContainer,
+  XAxis,
+  YAxis,
 } from 'recharts';
 import { getDataGroupingIcon } from '../utils/iconMappings';
 import { Chart } from './ui/chart';
@@ -99,7 +99,10 @@ function EngagementTooltip({
             borderRadius: '4px',
             fontSize: '10px',
             fontWeight: 600,
-            background: anomaly.type === 'spike' ? 'rgba(239,68,68,0.1)' : 'rgba(245,158,11,0.1)',
+            background:
+              anomaly.type === 'spike'
+                ? 'rgba(239,68,68,0.1)'
+                : 'rgba(245,158,11,0.1)',
             color: anomaly.type === 'spike' ? '#ef4444' : '#f59e0b',
             display: 'flex',
             alignItems: 'center',
@@ -117,7 +120,8 @@ function EngagementTooltip({
           />
           <span style={{ textTransform: 'capitalize' }}>{anomaly.type}</span>
           <span style={{ marginLeft: 'auto', opacity: 0.8 }}>
-            {anomaly.deviation > 0 ? '+' : ''}{anomaly.deviation.toFixed(1)}σ
+            {anomaly.deviation > 0 ? '+' : ''}
+            {anomaly.deviation.toFixed(1)}σ
           </span>
         </div>
       )}
@@ -135,29 +139,6 @@ export function EngagementOverTimeChart({
   const [hiddenSeries, setHiddenSeries] = useState<Record<string, boolean>>({});
   const engagementData = trendsData.engagementOverTime || [];
   const anomalies = trendsData.engagementAnomalies || [];
-
-  if (engagementData.length === 0) {
-    return (
-      <Chart
-        title="Engagement Over Time"
-        icon={
-          <Icon
-            src={getDataGroupingIcon('engagement', iconContext)}
-            size={16}
-          />
-        }
-        height={340}
-      >
-        <div className="h-full flex items-center justify-center">
-          <NonIdealState
-            title="No Engagement Data"
-            message="No engagement data available for this time period. Run a snapshot to generate engagement trends."
-            icon="mono-unavailable"
-          />
-        </div>
-      </Chart>
-    );
-  }
 
   const chartData = useMemo(() => {
     const toUtcDayNoon = (ts: number): number => {
@@ -209,7 +190,11 @@ export function EngagementOverTimeChart({
       const offset = trendAnalysisDays - 1 - idx;
       const timestamp = todayUtcNoon - offset * MS_PER_DAY;
       const entry = aggregate.get(timestamp);
-      const value = entry ? entry.sum / Math.max(1, entry.count) : 0;
+      // A day with no scan data is genuinely missing, not zero engagement —
+      // using null here (rather than 0) lets the chart render a real gap
+      // instead of a false cliff down to zero and back up, which was
+      // previously indistinguishable from an actual engagement collapse.
+      const value = entry ? entry.sum / Math.max(1, entry.count) : null;
       return {
         timestamp,
         date: formatShortDate(timestamp),
@@ -218,6 +203,29 @@ export function EngagementOverTimeChart({
       };
     });
   }, [anomalies, engagementData, trendAnalysisDays, snapshotTimestamp]);
+
+  if (engagementData.length === 0) {
+    return (
+      <Chart
+        title="Engagement Over Time"
+        icon={
+          <Icon
+            src={getDataGroupingIcon('engagement', iconContext)}
+            size={16}
+          />
+        }
+        height={340}
+      >
+        <div className="h-full flex items-center justify-center">
+          <NonIdealState
+            title="No Engagement Data"
+            message="No engagement data available for this time period. Run a snapshot to generate engagement trends."
+            icon="mono-unavailable"
+          />
+        </div>
+      </Chart>
+    );
+  }
 
   const compactTooltipProps = {
     content: <EngagementTooltip />,
@@ -285,7 +293,13 @@ export function EngagementOverTimeChart({
       <div style={{ position: 'relative', zIndex: 3, marginBottom: '8px' }}>
         {renderLegend()}
       </div>
-      <div style={{ width: '100%', height: 'calc(100% - 32px)', position: 'relative' }}>
+      <div
+        style={{
+          width: '100%',
+          height: 'calc(100% - 32px)',
+          position: 'relative',
+        }}
+      >
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart
             data={chartData}
@@ -357,4 +371,3 @@ export function EngagementOverTimeChart({
     </Chart>
   );
 }
-

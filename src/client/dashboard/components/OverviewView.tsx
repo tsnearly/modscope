@@ -1,12 +1,15 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import type {
   AnalyticsSnapshot,
   PostData,
-} from '../../../shared/types/api';
+} from '../../../shared/types/api.types';
+import { MS_PER_DAY } from '../../../shared/core/constants';
+import { formatSafe } from '../../../shared/utils/dateUtils';
 import { getDataGroupingIcon, type IconContext } from '../utils/iconMappings';
 import { Chart } from './ui/chart';
 import { Icon } from './ui/icon';
 import {
+  Tooltip,
   TooltipArrow,
   TooltipContent,
   TooltipPortal,
@@ -15,6 +18,7 @@ import {
   TooltipTrigger,
   tooltipContentClass,
 } from './ui/tooltip';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 interface OverviewMetric {
   label: string;
@@ -79,6 +83,9 @@ export function OverviewView({
   effectiveOfficials,
   officialAccount,
 }: OverviewViewProps) {
+  const isMobile = useIsMobile();
+  const [tappedWord, setTappedWord] = useState<{word: string, count: number} | null>(null);
+
   const trendData = analytics?.trendData;
   const useTrendPrecisionData = !!(
     trendData?.globalStats ||
@@ -95,33 +102,87 @@ export function OverviewView({
       trendData.globalBestPostingTimes.length > 0
     ) {
       const timeline = trendData?.bestPostingTimesChange?.timeline;
-      const latestPoint = timeline && timeline.length > 0 ? timeline[timeline.length - 1] : null;
+      if (timeline && timeline.length > 0) {
+        const latestPoint = timeline[timeline.length - 1];
+        const anchorTimestamp = latestPoint?.timestamp || Date.now();
+        const cutoffTs = anchorTimestamp - 30 * MS_PER_DAY;
+        const validTimeline = timeline.filter(
+          (t: any) => t.timestamp >= cutoffTs && t.timestamp <= anchorTimestamp
+        );
+        const segmentSize = Math.max(1, Math.floor(validTimeline.length / 2));
+        const latePeriod = validTimeline.slice(-segmentSize);
 
-      return trendData.globalBestPostingTimes
-        .map((slot: any) => {
-          const localized = localizeTrendDayHour(slot.day, slot.hour);
-          const dayHourKey = `${slot.day}-${slot.hour.toString().padStart(2, '0')}`;
-          
-          let scoreToDisplay = Math.round(slot.score);
-          if (latestPoint && Array.isArray(latestPoint.topSlots)) {
-            const timelineSlot = latestPoint.topSlots.find((s: any) => s.dayHour === dayHourKey);
-            if (timelineSlot) {
-              scoreToDisplay = Math.round(timelineSlot.score);
+        const windowSlotAccum = new Map<
+          string,
+          { scores: number[]; dayHour: string }
+        >();
+
+        for (const entry of latePeriod) {
+          for (const slot of entry.topSlots || []) {
+            if (!windowSlotAccum.has(slot.dayHour)) {
+              windowSlotAccum.set(slot.dayHour, {
+                scores: [],
+                dayHour: slot.dayHour,
+              });
             }
-            // If not in the latest timeline snapshot, keep the aggregate score from globalBestPostingTimes
+            windowSlotAccum.get(slot.dayHour)!.scores.push(slot.score);
           }
-          
+        }
+
+        const avg = (arr: number[]) =>
+          arr.length > 0 ? arr.reduce((s, v) => s + v, 0) / arr.length : 0;
+
+        const timelineEvaluated = Array.from(windowSlotAccum.values())
+          .map(({ dayHour, scores }) => {
+            const parts = dayHour.split('-');
+            const day = parts[0] || 'Unknown';
+            const hour = parseInt(parts[1] || '0', 10);
+            const localized = localizeTrendDayHour(day, hour);
+            return {
+              day: localized.dayShort,
+              hour: localized.hour,
+              hour_fmt: localized.hourFmt,
+              score: Math.round(avg(scores)),
+              isTrend: true,
+            };
+          })
+          .filter((s) => s.score > 0)
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 3);
+
+        if (timelineEvaluated.length > 0) {
+          return timelineEvaluated;
+        }
+      }
+
+      const results = trendData.globalBestPostingTimes
+        .map((slot: any) => {
+          const day =
+            slot.day || (slot.dayHour ? slot.dayHour.split('-')[0] : 'Unknown');
+          const hour =
+            slot.hour !== undefined
+              ? slot.hour
+              : slot.dayHour
+                ? Number(slot.dayHour.split('-')[1])
+                : NaN;
+          const localized = localizeTrendDayHour(day, hour);
+
           return {
             day: localized.dayShort,
             hour: localized.hour,
             hour_fmt: localized.hourFmt,
-            score: scoreToDisplay,
+            score: Math.round(slot.score || 0),
             count: slot.count,
+            isTrend: true,
           };
         })
         .filter((slot) => slot.score > 0)
         .sort((a, b) => b.score - a.score)
         .slice(0, 3);
+
+      if (results.length > 0) {
+        return results;
+      }
     }
 
     const pool = analytics?.analysisPool;
@@ -171,6 +232,7 @@ export function OverviewView({
           score: Math.round(sortWeight),
           sortWeight,
           count,
+          isTrend: false,
         };
       })
       .sort((a, b) => b.sortWeight - a.sortWeight)
@@ -201,7 +263,9 @@ export function OverviewView({
     }
 
     const uniquePosts = Array.from(
-      new Map(pool.map((p: PostData) => [p.url, p])).values()
+      new Map(
+        pool.map((p: PostData & { postId?: string }) => [p.id || p.postId || p.url, p])
+      ).values()
     );
 
     const stopWords = new Set([
@@ -355,7 +419,7 @@ export function OverviewView({
   const engagementScores: number[] = [];
 
   pool.forEach((p: PostData) => {
-    const d = new Date(p.created_utc * 1000).toISOString().split('T')[0]!;
+    const d = formatSafe(p.created_utc * 1000, 'yyyy-MM-dd');
     postsByDay[d] = (postsByDay[d] || 0) + 1;
     commentsByDay[d] = (commentsByDay[d] || 0) + p.comments;
     engagementScores.push(p.engagement_score || 0);
@@ -470,7 +534,9 @@ export function OverviewView({
     },
     {
       label: 'Avg Engagement',
-      value: formatMetricNumber(trendGlobalStats?.avg_engagement ?? metrics.avgScore),
+      value: formatMetricNumber(
+        trendGlobalStats?.avg_engagement ?? metrics.avgScore
+      ),
       color: 'text-[var(--color-primary)]',
       title: trendGlobalStats
         ? 'Multi-day trend aggregate'
@@ -527,8 +593,13 @@ export function OverviewView({
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 mb-0">
+    <div
+      className="flex flex-col gap-2 p-1.5 sm:p-3"
+      style={{
+        paddingBottom: 'max(48px, calc(16px + var(--safe-area-bottom)))',
+      }}
+    >
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-1.5 sm:gap-2 mb-0">
         {metricBoxes.map((metric, idx) => (
           <TooltipProvider key={idx} delayDuration={200}>
             <TooltipRoot>
@@ -648,9 +719,32 @@ export function OverviewView({
                       </span>
                     </div>
                   </div>
-                  <div style={{ fontSize: '0.75rem', fontWeight: 'bold' }}>
-                    {t.score}
-                  </div>
+                  <Tooltip
+                    content={
+                      <div className="flex flex-col gap-0.5 text-left">
+                        <span className="font-bold text-[10px] text-[var(--color-primary)]">
+                          {t.isTrend ? 'Trend Dataset' : 'Snapshot Dataset'}
+                        </span>
+                        <span className="font-normal text-muted-foreground">
+                          {t.isTrend
+                            ? `Historical engagement & velocity score (${t.score}) derived from multi-snapshot trends${typeof t.count === 'number' && t.count > 0 ? ` across ${t.count} posts` : ''}.`
+                            : `Engagement score (${t.score}) derived from current snapshot posts${typeof t.count === 'number' && t.count > 0 ? ` (${t.count} posts in slot)` : ''}.`}
+                        </span>
+                      </div>
+                    }
+                    side="top"
+                    align="end"
+                  >
+                    <div
+                      style={{
+                        fontSize: '0.75rem',
+                        fontWeight: 'bold',
+                        cursor: 'help',
+                      }}
+                    >
+                      {t.score}
+                    </div>
+                  </Tooltip>
                 </div>
               ))}
             </div>
@@ -684,6 +778,18 @@ export function OverviewView({
                 <span
                   key={item.word}
                   title={`${item.count} occurrences`}
+                  onClick={
+                    isMobile
+                      ? (e) => {
+                          e.stopPropagation();
+                          setTappedWord(
+                            tappedWord?.word === item.word
+                              ? null
+                              : { word: item.word, count: item.count }
+                          );
+                        }
+                      : undefined
+                  }
                   style={{
                     fontWeight: 'bold',
                     color: [
@@ -696,13 +802,52 @@ export function OverviewView({
                     lineHeight: 0.85,
                     fontSize: `${item.size}em`,
                     opacity: item.opacity,
-                    cursor: 'pointer',
+                    cursor: isMobile ? 'pointer' : 'default',
+                    outline:
+                      isMobile && tappedWord?.word === item.word
+                        ? '1px dashed var(--color-primary)'
+                        : 'none',
                   }}
+                  aria-label={`${item.word}: ${item.count} occurrences`}
                 >
                   {item.word}
                 </span>
               ))}
             </div>
+            {isMobile && tappedWord && (
+              <div
+                className="mt-2 px-3 py-2 rounded-md"
+                style={{
+                  background: 'var(--color-surface)',
+                  border: '1px solid var(--color-border)',
+                  fontSize: '11px',
+                  color: 'var(--text-secondary)',
+                  lineHeight: 1.6,
+                }}
+              >
+                <div style={{ fontWeight: 700, marginBottom: '2px', color: 'var(--text-primary)' }}>
+                  {tappedWord.word}
+                </div>
+                <div>
+                  <strong>{tappedWord.count}</strong> occurrence{tappedWord.count !== 1 ? 's' : ''}
+                </div>
+                <button
+                  onClick={() => setTappedWord(null)}
+                  style={{
+                    marginTop: '4px',
+                    fontSize: '10px',
+                    color: 'var(--text-muted)',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: 0,
+                    textDecoration: 'underline',
+                  }}
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
           </Chart>
           {trendPrecisionNotice}
         </div>
