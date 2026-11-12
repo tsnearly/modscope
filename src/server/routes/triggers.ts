@@ -57,19 +57,14 @@ const historyService = new HistoryService(storage);
 const schedulerService = new SchedulerService(scheduler, storage);
 
 /**
- * Delete-trigger cache invalidation AND identity anonymization.
+ * Delete-trigger identity anonymization.
  * Devvit exposes PostDelete and CommentDelete, not a separate UserDelete event.
- * We use deletion payloads as the signal to clear any cached identity/title data
- * that might otherwise keep showing removed content.
+ * We use deletion payloads as the signal to anonymize real-time identity data.
  *
- * This previously only cleared the deprecated usernameCache/postTitleCache
- * hashes — it never touched identity:post/identity:user at all, meaning the
- * real-time half of the compliance sync wasn't actually wired to the system
- * everything else was built around. It now does both: a post-level deletion
- * anonymizes that post's identity record; an author-level deletion signal
- * (author now reads '[deleted]'/'[removed]') anonymizes the user record,
- * which cascades to every post that user has ever made via the identity
- * split — one write here, not one per post.
+ * A post-level deletion anonymizes that post's identity record via IdentityService.
+ * An author-level deletion signal (author now reads '[deleted]'/'[removed]')
+ * anonymizes the user record once, which cascades to every post that user
+ * has ever made via the identity split — one write here, not one per post.
  *
  * A dormant post whose author deletes their account without any other
  * event ever touching that post is NOT caught here — Devvit doesn't emit a
@@ -81,7 +76,7 @@ const schedulerService = new SchedulerService(scheduler, storage);
 async function invalidateDeletedContentCaches(
   kind: 'post' | 'comment',
   payload: Record<string, unknown>,
-  subreddit: string
+  _subreddit: string
 ): Promise<void> {
   const postId = String(
     payload.postId ||
@@ -121,32 +116,11 @@ async function invalidateDeletedContentCaches(
     payload.authorName === '[removed]',
   ].some(Boolean);
 
-  const titleKeysToRemove = new Set<string>();
-  if (postId) titleKeysToRemove.add(postId);
-  if (kind === 'post' && typeof payload.name === 'string')
-    titleKeysToRemove.add(payload.name);
-
-  const usernameKeysToRemove = deletionMarked
-    ? new Set(authorCandidates)
-    : new Set<string>();
-
   const ops: Promise<unknown>[] = [];
-  for (const key of titleKeysToRemove) {
-    ops.push(storage.hDel(redisKey.postTitleCache(subreddit), [key]));
-  }
-  for (const key of usernameKeysToRemove) {
-    ops.push(storage.hDel(redisKey.usernameCache(subreddit), [key]));
-  }
 
-  // The actual compliance write — anonymize the real identity records, not
-  // just the deprecated caches above (kept only so a not-yet-migrated
-  // install's old read path still reflects the deletion until its backfill
-  // patch has run).
+  // Anonymize the real identity records via IdentityService
   if (kind === 'post' && postId) {
-    const postFullname = postId.startsWith('t3_') ? postId : `t3_${postId}`;
-    const postInternalId = await storage.get(
-      redisKey.postFullnameToInternalId(postFullname)
-    );
+    const postInternalId = await identityService.getPostInternalIdByFullname(postId);
     if (postInternalId) {
       ops.push(identityService.anonymizePost(postInternalId));
     }
@@ -154,17 +128,7 @@ async function invalidateDeletedContentCaches(
 
   if (deletionMarked) {
     for (const candidate of authorCandidates) {
-      const userFullname = candidate.startsWith('t2_')
-        ? candidate
-        : `t2_${candidate}`;
-      let userInternalId = await storage.get(
-        redisKey.userFullnameToInternalId(userFullname)
-      );
-      if (!userInternalId) {
-        userInternalId = await storage.get(
-          redisKey.usernameToInternalId(candidate)
-        );
-      }
+      const userInternalId = await identityService.getUserInternalIdByFullnameOrUsername(candidate);
       if (userInternalId) {
         // One write, regardless of how many posts this user has made —
         // that's the entire point of the identity split.
@@ -314,17 +278,6 @@ async function handleUpdateEvent(kind: 'post', c: any) {
 
 triggers.post('/on-post-update', async (c) => handleUpdateEvent('post', c));
 
-// Legacy internal aliases used by scheduler-style plumbing.
-triggers.post('/tasks/on-post-delete', async (c) =>
-  handleDeleteEvent('post', c)
-);
-triggers.post('/tasks/on-comment-delete', async (c) =>
-  handleDeleteEvent('comment', c)
-);
-triggers.post('/tasks/on-post-update', async (c) =>
-  handleUpdateEvent('post', c)
-);
-
 // Helper for DATA_SUBREDDIT
 const getSubreddit = () => context.subredditName || 'unknown';
 
@@ -367,12 +320,12 @@ async function isDuplicateTrigger(
  * Trigger: App Install
  */
 triggers.post('/on-app-install', async (c) => {
-  const _input = await c.req.json<OnAppInstallRequest>();
-  const _subreddit = _input.subreddit?.name || 'global';
+  const input = await c.req.json<OnAppInstallRequest>();
+  const subredditName = input.subreddit?.name || 'global';
 
   // Deduplicate app installation/update trigger events
-  if (await isDuplicateTrigger('app-install', _subreddit)) {
-    logger.info(`r/${_subreddit} Skip duplicate app-install trigger`, 'TriggerRoutes');
+  if (await isDuplicateTrigger('app-install', subredditName)) {
+    logger.info(`r/${subredditName} Skip duplicate app-install trigger`, 'TriggerRoutes');
     return c.json<TriggerResponse>(
       { status: 'success', message: 'Duplicate trigger skipped' },
       200
@@ -380,32 +333,50 @@ triggers.post('/on-app-install', async (c) => {
   }
 
   try {
-    const post = await createPost(_subreddit);
+    const post = await createPost(subredditName);
 
     // Capture installed version so the next check-for-updates doesn't
     // immediately notify about the version just installed.
     const currentVersion = context.appVersion ?? 'unknown';
     await redis.set(redisKey.lastNotifiedVersion(), currentVersion);
 
-    return c.json({ status: 'success', postId: post.id });
+    // Ensure initial core maintenance jobs (snapshot-worker, metric-snapshot-cleanup,
+    // purge-expired-deletions, check-for-updates, identity-reverify-cron) with randomized
+    // schedule offsets across installations.
+    const maintenance = await schedulerService.ensureCoreMaintenanceJobs(subredditName);
+    logger.info(
+      `on-app-install: Initialized core maintenance jobs for r/${subredditName} (created: ${maintenance.created.join(', ') || 'none'}, existing: ${maintenance.existing.join(', ') || 'none'})`,
+      'TriggerRoutes'
+    );
+
+    return c.json({
+      status: 'success',
+      postId: post.id,
+      maintenance,
+    });
   } catch (error) {
     logger.error('on-app-install failed:', error, 'TriggerRoutes');
-    return c.json({ status: 'error', message: 'Failed to create post' }, 500);
+    return c.json<TriggerResponse>(
+      { 
+        status: 'error', 
+        message: 'Failed to complete install trigger' 
+      }, 
+      500
+    );
   }
 });
 
 /**
  * Trigger: App Upgrade
- * Re-hydrates snapshot-worker jobs from jobs:active and report-worker jobs
- * from saved report settings into the scheduler because Devvit resets
- * scheduled tasks on app update.
+ * Checks scheduler to ensure base core maintenance jobs exist; schedules any missing ones
+ * with randomized offsets while preserving existing moderator-configured jobs.
  */
 triggers.post('/on-app-upgrade', async (c) => {
-  const _input = await c.req.json<OnAppUpgradeRequest>();
-  const _subreddit = _input.subreddit?.name || 'global';
+  const input = await c.req.json<OnAppUpgradeRequest>();
+  const subredditName = input.subreddit?.name || 'global';
 
-  if (await isDuplicateTrigger('app-upgrade', _subreddit)) {
-    logger.info('on-app-upgrade: Skip duplicate trigger', 'TriggerRoutes');
+  if (await isDuplicateTrigger('app-upgrade', subredditName)) {
+    logger.info(`r/${subredditName} Skip duplicate app-install trigger`, 'TriggerRoutes');
     return c.json(
       { status: 'success', message: 'Duplicate trigger skipped' },
       200
@@ -413,17 +384,30 @@ triggers.post('/on-app-upgrade', async (c) => {
   }
 
   try {
+    const maintenance = await schedulerService.ensureCoreMaintenanceJobs(subredditName);
+    logger.info(
+      `on-app-upgrade: Verified core maintenance jobs for r/${subredditName} (created: ${maintenance.created.join(', ') || 'none'}, existing: ${maintenance.existing.join(', ') || 'none'})`,
+      'TriggerRoutes'
+    );
+
     return c.json({
       status: 'success',
-      restored: 0,
+      maintenance,
+      restored: maintenance.created.length,
       removed: 0,
-      skipped: 0,
+      skipped: maintenance.existing.length,
       reportRestored: 0,
       reportSkipped: 0,
     });
   } catch (error) {
     logger.error('on-app-upgrade failed:', error, 'TriggerRoutes');
-    return c.json({ status: 'error', message: String(error) }, 500);
+    return c.json<TriggerResponse>(
+      { 
+        status: 'error', 
+        message: String(error) 
+      }, 
+      500
+    );
   }
 });
 
@@ -435,14 +419,17 @@ const handleCheckForUpdates = async (c: Context) => {
 
   if (await isDuplicateTrigger('check-for-updates', _subreddit)) {
     logger.info('check-for-updates: Skip duplicate trigger', 'TriggerRoutes');
-    return c.json(
-      { status: 'success', message: 'Duplicate trigger skipped' },
+    return c.json<TriggerResponse>(
+      { 
+        status: 'success', 
+        message: 'Duplicate trigger skipped' 
+      },
       200
     );
   }
 
   if (!_subreddit) {
-    return c.json(
+    return c.json<TriggerResponse>(
       {
         status: 'error',
         message: 'Subreddit context is unavailable for update notifications',
@@ -1130,6 +1117,23 @@ triggers.post('/tasks/apply-pending-schema-patches', async (c) => {
         await updateDetails(`Running schema patches ${fromVersion} -> ${targetSchemaVersion}...`);
         const runner = new PatchRunner(storage);
         await runner.run(fromVersion, targetSchemaVersion);
+        if (targetSchemaVersion === 'v2' || fromVersion === 'v1') {
+          try {
+            await scheduler.runJob({
+              name: 'rebuild-trend-history',
+              runAt: new Date(Date.now() + 1000),
+            });
+            logger.info(
+              'apply-pending-schema-patches: Scheduled rebuild-trend-history worker',
+              'SchemaUpgrade'
+            );
+          } catch (schedErr) {
+            logger.warn(
+              `apply-pending-schema-patches: Failed to auto-schedule rebuild-trend-history: ${schedErr}`,
+              'SchemaUpgrade'
+            );
+          }
+        }
         logger.info(
           `Patch chain completed: ${fromVersion} -> ${targetSchemaVersion}`,
           'SchemaUpgrade'
@@ -1472,8 +1476,8 @@ triggers.post('/tasks/rebuild-trend-history', async (c) => {
       initialDetails: `Recalculating trend history for r/${subreddit}...`,
     },
     async (updateDetails) => {
-      const cursorKey = 'rebuild:trends:cursor';
-      const cursorStr = await storage.get(cursorKey);
+      const metaKey = redisKey.trendsMeta();
+      const cursorStr = await storage.hGet(metaKey, 'rebuildCursor').catch(() => null);
 
       // On first run without cursor, reset trending keys
       if (!cursorStr) {
@@ -1487,14 +1491,24 @@ triggers.post('/tasks/rebuild-trend-history', async (c) => {
           redisKey.trendsTsSubscribers(),
           redisKey.trendsTsEngagement(),
           redisKey.trendsTsVelocity(),
+          redisKey.trendsTsPosts(),
+          redisKey.trendsTsComments(),
+          redisKey.trendsTsScore(),
           redisKey.trendsTsFlair(),
           redisKey.trendsTsContentmix(),
           redisKey.trendsTsHeatmap(),
           redisKey.trendsTsBesttimes(),
           redisKey.trendsTsWordcloud(),
           redisKey.trendsTsMaterializations(),
+          redisKey.trendsTs('posting_heatmap'),
+          redisKey.trendsTs('engagement_anomalies'),
         ];
         await Promise.all(keysToReset.map((k) => storage.del(k).catch(() => {})));
+        // Clean up any legacy standalone keys if present
+        await Promise.all([
+          storage.del('rebuild:trends:cursor').catch(() => {}),
+          storage.del('rebuild:trends:completed').catch(() => {}),
+        ]);
       }
 
       const cursor = cursorStr ? parseInt(cursorStr, 10) : 0;
@@ -1537,8 +1551,8 @@ triggers.post('/tasks/rebuild-trend-history', async (c) => {
       const pendingScans = allScans.filter((s) => s.timestamp > cursor);
 
       if (pendingScans.length === 0) {
-        await storage.del(cursorKey);
-        await storage.set('rebuild:trends:completed', new Date().toISOString());
+        await storage.hDel(metaKey, ['rebuildCursor']).catch(() => {});
+        await storage.hSet(metaKey, { lastRebuild: new Date().toISOString() });
         logger.info(
           `rebuild-trend-history: Full pass complete for r/${subreddit}`,
           'TrendRebuild'
@@ -1560,7 +1574,7 @@ triggers.post('/tasks/rebuild-trend-history', async (c) => {
       }
 
       const lastProcessed = batch[batch.length - 1]!;
-      await storage.set(cursorKey, String(lastProcessed.timestamp));
+      await storage.hSet(metaKey, { rebuildCursor: String(lastProcessed.timestamp) });
 
       const remaining = pendingScans.length - batch.length;
       logger.info(
@@ -1574,8 +1588,8 @@ triggers.post('/tasks/rebuild-trend-history', async (c) => {
           runAt: new Date(Date.now() + 15000), // 15s delay between batches
         });
       } else {
-        await storage.del(cursorKey);
-        await storage.set('rebuild:trends:completed', new Date().toISOString());
+        await storage.hDel(metaKey, ['rebuildCursor']).catch(() => {});
+        await storage.hSet(metaKey, { lastRebuild: new Date().toISOString() });
       }
 
       await updateDetails(

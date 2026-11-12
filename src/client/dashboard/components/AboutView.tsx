@@ -4,12 +4,15 @@ import { Accordion } from './ui/accordion';
 import { Button } from './ui/button';
 import { EntityTitle } from './ui/entity-title';
 import { Icon } from './ui/icon';
+import { Switch } from './ui/switch';
 
 interface AboutViewProps {
   appVersion: string;
   currentUsername?: string | undefined;
   onOpenUpgradeModal?: (() => void) | undefined;
   onRefreshSnapshots?: (() => Promise<void> | void) | undefined;
+  layoutMode?: 'sidebar' | 'classic' | undefined;
+  onToggleLayoutMode?: (() => void) | undefined;
 }
 
 function AboutView({
@@ -17,6 +20,8 @@ function AboutView({
   currentUsername,
   onOpenUpgradeModal,
   onRefreshSnapshots,
+  layoutMode,
+  onToggleLayoutMode,
 }: AboutViewProps) {
   const isOwner = (currentUsername || '').toLowerCase() === 'seetigerlearn';
 
@@ -28,6 +33,19 @@ function AboutView({
         title="About ModScope"
         subtitle="Advanced subreddit analytics for moderators"
         className="p-3 sm:p-6 bg-transparent border-b border-border flex-shrink-0"
+        actions={
+          onToggleLayoutMode ? (
+            <div className="flex items-center gap-2 bg-[var(--color-card)] px-3 py-1.5 rounded-lg border border-border shadow-xs">
+              <Icon name="glass-adjustments.png" size={14} />
+              <Switch
+                label="Modern Sidebar"
+                checked={layoutMode === 'sidebar'}
+                onCheckedChange={() => onToggleLayoutMode()}
+                className="text-xs font-semibold text-[var(--color-text)]"
+              />
+            </div>
+          ) : undefined
+        }
       />
 
       <div className="view-content flex-1 overflow-y-auto px-2 pb-2 pt-1 sm:px-6 sm:pb-6 sm:pt-2">

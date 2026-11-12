@@ -586,9 +586,13 @@ async function planStorageOverhaul(
       const memberRaw = extractZSetMember(rawEntry);
       if (!memberRaw) continue;
 
+      const rawScore = typeof rawEntry === 'object' && rawEntry && 'score' in rawEntry
+        ? Number(rawEntry.score)
+        : score;
+
       if (!memberRaw.trim().startsWith('{')) {
         // Already a bare reference (post-rework ingest) — pass through untouched.
-        rewrittenMembers.push({ score, member: memberRaw });
+        rewrittenMembers.push({ score: rawScore, member: memberRaw });
         continue;
       }
 
@@ -601,19 +605,20 @@ async function planStorageOverhaul(
 
       if (!postObj) {
         malformedLegacyRecords += 1;
-        rewrittenMembers.push({ score, member: memberRaw });
+        rewrittenMembers.push({ score: rawScore, member: memberRaw });
         continue;
       }
 
       const utcId = await resolvePostObject(postObj);
       if (!utcId) {
-        rewrittenMembers.push({ score, member: memberRaw });
+        rewrittenMembers.push({ score: rawScore, member: memberRaw });
         continue;
       }
 
       const rawId = String(postObj.id || '').replace(/^t3_/, '');
       if (rawId) postIdToUtcId.set(rawId, utcId);
-      rewrittenMembers.push({ score, member: utcId });
+      const postEngagementScore = Math.round(Number(postObj.engagement_score ?? postObj.score ?? rawScore));
+      rewrittenMembers.push({ score: postEngagementScore, member: utcId });
       affectedPosts += 1;
       snapshotTouched = true;
     }
@@ -1609,6 +1614,44 @@ export const PATCH_CHAIN: PatchDefinition[] = [
         }
       }
 
+      // --- TRENDING KEY PURGE ---
+      // Purge all legacy and current trending keys so rebuild-trend-history starts from a clean slate
+      if (ctx.redis.del) {
+        const trendKeysToPurge = [
+          redisKey.trendsMeta(),
+          redisKey.trendsStatic(),
+          redisKey.trendsTsSubscribers(),
+          redisKey.trendsTsEngagement(),
+          redisKey.trendsTsVelocity(),
+          redisKey.trendsTsPosts(),
+          redisKey.trendsTsComments(),
+          redisKey.trendsTsScore(),
+          redisKey.trendsTsFlair(),
+          redisKey.trendsTsContentmix(),
+          redisKey.trendsTsHeatmap(),
+          redisKey.trendsTsBesttimes(),
+          redisKey.trendsTsWordcloud(),
+          redisKey.trendsTsMaterializations(),
+          'trends:materializations',
+          'trends:best_posting_times',
+          'trends:posting_heatmap',
+          'trends:content_mix',
+          'trends:subscriber_growth',
+          'trends:engagement_avg',
+          'trends:engagement_velocity',
+          'trends:engagement_anomalies',
+          'rebuild:trends:cursor',
+          'rebuild:trends:completed',
+        ];
+        await Promise.all(trendKeysToPurge.map((k) => ctx.redis.del!(k).catch(() => {})));
+        const wildcardTrendKeys = await listKeysMatching(ctx.redis, 'trends:*').catch(() => []);
+        await Promise.all(wildcardTrendKeys.map((k) => ctx.redis.del!(k).catch(() => {})));
+        logger.info(
+          `Purged trending keyspace (${trendKeysToPurge.length + wildcardTrendKeys.length} keys) for rebuild-trend-history recalculation`,
+          'SchemaUpgradeService'
+        );
+      }
+
       await ctx.commitSchemaVersion();
       logger.info(
         'Stage 4/5 [Commit]: Atomic commit complete. Schema version is now v2.',
@@ -1916,7 +1959,7 @@ export async function resetSchemaUpgradeState(
     baseKeysToDelete.push(`staging:patch:${patch.id}:dryrun`);
   }
 
-  let matchedKeys: string[] = [];
+  const matchedKeys: string[] = [];
   if (typeof redis.keys === 'function') {
     try {
       const patterns = ['staging:*', 'migration:*', 'storage_overhaul:*'];

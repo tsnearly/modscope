@@ -206,4 +206,22 @@ describe('IdentityService compliance testing', () => {
     const tracked = await mockRedis.zRange(redisKey.identityAllUserIds(), 0, -1);
     expect(tracked).toHaveLength(0);
   });
+
+  it('resolves internal post and user IDs via helper methods', async () => {
+    const mockRedis = new MockRedis();
+    const service = new IdentityService(mockRedis as any);
+
+    await mockRedis.set(redisKey.postFullnameToInternalId('t3_testpost'), 'post_123');
+    await mockRedis.set(redisKey.userFullnameToInternalId('t2_testauthor'), 'usr_123');
+    await mockRedis.set(redisKey.usernameToInternalId('testauthorname'), 'usr_456');
+
+    expect(await service.getPostInternalIdByFullname('testpost')).toBe('post_123');
+    expect(await service.getPostInternalIdByFullname('t3_testpost')).toBe('post_123');
+    expect(await service.getPostInternalIdByFullname('nonexistent')).toBeNull();
+
+    expect(await service.getUserInternalIdByFullnameOrUsername('testauthor')).toBe('usr_123');
+    expect(await service.getUserInternalIdByFullnameOrUsername('t2_testauthor')).toBe('usr_123');
+    expect(await service.getUserInternalIdByFullnameOrUsername('testauthorname')).toBe('usr_456');
+    expect(await service.getUserInternalIdByFullnameOrUsername('nonexistent')).toBeNull();
+  });
 });

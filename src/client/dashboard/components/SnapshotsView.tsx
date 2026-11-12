@@ -498,7 +498,14 @@ export function SnapshotsView({
     );
   }
 
-  const totalTableWidth = Object.values(columnWidths).reduce((a, b) => a + b, 0);
+  const totalTableWidth =
+    columnWidths.scanDate +
+    columnWidths.subscribers +
+    columnWidths.posts +
+    columnWidths.comments +
+    columnWidths.engagement +
+    columnWidths.score +
+    columnWidths.pool;
 
   return (
     <div className="snapshots-view h-full flex flex-col bg-[var(--color-surface)] text-left">
@@ -548,7 +555,6 @@ export function SnapshotsView({
             >
               <colgroup>
                 <col style={{ width: `${columnWidths.scanDate}px` }} />
-                <col style={{ width: `${columnWidths.subreddit}px` }} />
                 <col style={{ width: `${columnWidths.subscribers}px` }} />
                 <col style={{ width: `${columnWidths.posts}px` }} />
                 <col style={{ width: `${columnWidths.comments}px` }} />
@@ -568,17 +574,6 @@ export function SnapshotsView({
                   >
                     <Tooltip content="All dates & times have been converted to your local timezone — {userLocalTimezoneLabel}">
                       <span className="truncate block min-w-0">Scan Date</span>
-                    </Tooltip>
-                  </TableHead>
-                  <TableHead
-                    className="whitespace-nowrap text-center"
-                    style={{ width: `${columnWidths.subreddit}px` }}
-                    resizable
-                    onResizeStart={(e) => handleResizeStart('subreddit', e)}
-                    onResizeDoubleClick={(e) => handleResetColumnWidth('subreddit', e)}
-                  >
-                    <Tooltip content="Subreddit">
-                      <span className="truncate block min-w-0">Subreddit</span>
                     </Tooltip>
                   </TableHead>
                   <TableHead
@@ -673,11 +668,8 @@ export function SnapshotsView({
                     <TableCell className="py-1.5 text-xs text-center whitespace-pre-line overflow-hidden">
                       {formatScanDate(snapshot.scanDate, '\n')}
                     </TableCell>
-                    <TableCell className="py-1.5 text-xs text-center truncate">
-                      r/{snapshot.subreddit}
-                    </TableCell>
                     <TableCell className="py-1.5 text-xs text-right truncate">
-                      {snapshot.subscribers}
+                      {Number(snapshot.subscribers ?? 0).toLocaleString()}
                     </TableCell>
                     <TableCell className="py-1.5 text-xs text-right truncate">
                       {snapshot.postsPerDay.toFixed(1)}

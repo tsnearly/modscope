@@ -75,26 +75,22 @@
         "endpoint": "/internal/triggers/tasks/metric-worker"
       },
       "metric-snapshot-cleanup": {
-        "endpoint": "/internal/triggers/tasks/metric-snapshot-cleanup",
-        "cron": "30 8 * * *"
+        "endpoint": "/internal/triggers/tasks/metric-snapshot-cleanup"
       },
       "purge-expired-deletions": {
-        "endpoint": "/internal/triggers/tasks/purge-expired-deletions",
-        "cron": "0 10 * * *"
+        "endpoint": "/internal/triggers/tasks/purge-expired-deletions"
       },
       "sidebar-live-refresh": {
         "endpoint": "/internal/triggers/tasks/sidebar-live-refresh"
       },
       "check-for-updates": {
-        "endpoint": "/internal/triggers/tasks/check-for-updates",
-        "cron": "0 15 * * 1"
+        "endpoint": "/internal/triggers/tasks/check-for-updates"
       },
       "apply-pending-schema-patches": {
         "endpoint": "/internal/triggers/tasks/apply-pending-schema-patches"
       },
       "identity-reverify-cron": {
-        "endpoint": "/internal/triggers/tasks/identity-reverify-cron",
-        "cron": "0 9 * * 0"
+        "endpoint": "/internal/triggers/tasks/identity-reverify-cron"
       },
       "identity-reverify-worker": {
         "endpoint": "/internal/triggers/tasks/identity-reverify-worker"

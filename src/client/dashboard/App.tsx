@@ -142,8 +142,15 @@ interface UpgradeStatusPayload {
   patchIndex?: number | null;
   patchTotal?: number | null;
   currentStage?: string | null;
+  targetVersion?: string;
+  schemaVersion?: {
+    currentVersion: string;
+    lastPatchAppliedAt: number;
+    lastPatchAppliedId: string | null;
+  };
   lock?: unknown;
   patchLog?: unknown;
+  allPatchLogs?: any[];
 }
 
 const isBlockingPhase = (status: UpgradeStatusValue | undefined): boolean =>
@@ -854,7 +861,17 @@ export const App = ({ startupModeHint = 'inline' }: AppProps) => {
     const justFinished = wasRunning && upgrade.status === 'success';
     prevUpgradeStatusRef.current = upgrade.status;
 
-    if (upgrade.status === 'checking' || isBlockingPhase(upgrade.status)) {
+    const hasPendingUpgrade = Boolean(
+      upgrade.schemaVersion?.currentVersion &&
+      upgrade.targetVersion &&
+      upgrade.schemaVersion.currentVersion !== upgrade.targetVersion
+    );
+
+    if (
+      upgrade.status === 'checking' ||
+      isBlockingPhase(upgrade.status) ||
+      hasPendingUpgrade
+    ) {
       return;
     }
 
@@ -1289,6 +1306,8 @@ export const App = ({ startupModeHint = 'inline' }: AppProps) => {
               currentUsername={currentUsername}
               onOpenUpgradeModal={() => setIsManualUpgradeModalOpen(true)}
               onRefreshSnapshots={handleRefreshSnapshots}
+              layoutMode={layoutMode}
+              onToggleLayoutMode={handleToggleLayoutMode}
             />
           </ErrorBoundary>
         );
@@ -1409,8 +1428,15 @@ export const App = ({ startupModeHint = 'inline' }: AppProps) => {
     );
   }
 
+  const hasPendingUpgrade = Boolean(
+    upgrade.schemaVersion?.currentVersion &&
+    upgrade.targetVersion &&
+    upgrade.schemaVersion.currentVersion !== upgrade.targetVersion
+  );
+
   const showBlockingModal =
     isBlockingPhase(upgrade.status) ||
+    hasPendingUpgrade ||
     (wasRunningRef.current &&
       (upgrade.status === 'success' || upgrade.status === 'failed') &&
       !hasDismissedCompletedModal);
@@ -1420,7 +1446,8 @@ export const App = ({ startupModeHint = 'inline' }: AppProps) => {
   // interactive nav toolbar and report view. Nothing below this point can
   // be reached while blocked, for anyone, owner or not.
   if (showBlockingModal) {
-    if (upgrade.isOwner || wasRunningRef.current) {
+    const isLockedByAnother = Boolean(upgrade.lock && !upgrade.isOwner);
+    if (!isLockedByAnother) {
       return (
         <ToastProvider>
           <UpgradeStatusModal
@@ -1879,16 +1906,6 @@ export const App = ({ startupModeHint = 'inline' }: AppProps) => {
               </div>
 
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleToggleLayoutMode}
-                  className="px-2.5 py-1 text-xs font-semibold rounded border border-border bg-[var(--color-card)] hover:bg-[var(--color-accent)] text-[var(--color-text)] transition-colors flex items-center gap-1.5"
-                  title="Switch to Modern Sidebar layout"
-                >
-                  <Icon name="glass-adjustments.png" size={14} />
-                  <span className="hidden sm:inline">Modern Sidebar</span>
-                </button>
-
                 {webViewMode !== 'expanded' && (
                   <Tooltip content="Open Full Screen" side="bottom">
                     <button

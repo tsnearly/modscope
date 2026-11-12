@@ -257,6 +257,9 @@ export const redisKey = {
   trendsTsSubscribers: () => `trends:ts:subscribers`,
   trendsTsEngagement: () => `trends:ts:engagement`,
   trendsTsVelocity: () => `trends:ts:velocity`,
+  trendsTsPosts: () => `trends:ts:posts`,
+  trendsTsComments: () => `trends:ts:comments`,
+  trendsTsScore: () => `trends:ts:score`,
   trendsTsFlair: () => `trends:ts:flair`,
   trendsTsContentmix: () => `trends:ts:contentmix`,
   trendsTsHeatmap: () => `trends:ts:heatmap`,
@@ -379,10 +382,6 @@ export const redisKey = {
   trendsContentMixScan: (scanId: number) => `trends:contentmix:scan:${scanId}`,
   /** @deprecated Anomalies are dynamically computed at query time from trends:ts:engagement */
   trendsAnomaliesScan: (scanId: number) => `trends:anomalies:scan:${scanId}`,
-  /** @deprecated */
-  usernameCache: (sub: string) => `modscope:cache:username:${sub}`,
-  /** @deprecated */
-  postTitleCache: (sub: string) => `modscope:cache:post_title:${sub}`,
   /** @deprecated */
   migrationGuard: (sub: string) => `modscope:migration:snapshot_v2:${sub}`,
   /** @deprecated */

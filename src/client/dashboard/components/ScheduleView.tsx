@@ -1102,6 +1102,20 @@ function ScheduleView({
     }
   };
 
+  const initialSnapshotJob = useMemo(
+    () => jobs.find((j) => resolveJobWorkerType(j) === 'snapshot-worker'),
+    [jobs]
+  );
+
+  // Sync initial snapshot worker job into the configuration tab if not actively editing another job
+  useEffect(() => {
+    if (activeTab === 'config' && initialSnapshotJob) {
+      if (!editingJobId || editingJobId === initialSnapshotJob.id) {
+        handleEditJob(initialSnapshotJob);
+      }
+    }
+  }, [activeTab, initialSnapshotJob]);
+
   const handleAddSchedule = async () => {
     if (isReadOnly) return;
     setLoading(true);
@@ -1207,7 +1221,8 @@ function ScheduleView({
           <select
             value={workerType}
             onChange={(e) => setWorkerType(e.target.value)}
-            className="w-full px-3 py-1.5 border border-border rounded-md bg-background text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            disabled={Boolean(editingJobId) || _isInlineModification}
+            className="w-full px-3 py-1.5 border border-border rounded-md bg-background text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-muted"
           >
             <option value="snapshot-worker">Snapshot Worker (Data Collection)</option>
             <option value="report-worker">Report Worker (Community Report)</option>
@@ -1503,7 +1518,14 @@ function ScheduleView({
           </Button>
         }
       />
-      <div className="flex-1 flex flex-col px-2 pb-2 pt-1 sm:px-6 sm:pb-4 sm:pt-2 min-h-0 relative overflow-y-auto">
+      <div
+        className={cn(
+          'flex-1 flex flex-col min-h-0 relative',
+          activeTab === 'history'
+            ? 'px-1 sm:px-2 pt-1 sm:pt-2 pb-1 sm:pb-2 overflow-hidden'
+            : 'px-2 pb-2 pt-1 sm:px-6 sm:pb-3 sm:pt-2 overflow-y-auto'
+        )}
+      >
         {/* Tab 1: Schedule Configuration */}
         {activeTab === 'config' && (
           <div className="max-w-4xl mx-auto w-full pb-4 sm:pb-6">
@@ -1744,17 +1766,6 @@ function ScheduleView({
                             >
                               {isEditing ? 'Close' : 'Edit'}
                             </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="text-destructive hover:bg-destructive/10 text-xs h-7 w-full justify-start"
-                              onClick={() => handleCancelJob(job.id)}
-                              disabled={isReadOnly}
-                              tooltip={isReadOnly ? 'Cancelling jobs is disabled in showcase mode' : 'Cancel Job'}
-                              icon="lucide:x-circle"
-                            >
-                              Cancel
-                            </Button>
                           </div>
                         </div>
                       </CardHeader>
@@ -1790,19 +1801,19 @@ function ScheduleView({
 
         {/* Tab 3: Job History */}
         {activeTab === 'history' && (
-          <div className="max-w-6xl mx-auto w-full pb-6 h-full flex flex-col min-h-[500px]">
-            <Card className="shadow-sm border-border bg-background flex flex-col h-full overflow-hidden">
+          <div className="w-full h-full flex flex-col min-h-0 overflow-hidden">
+            <Card className="shadow-sm border-border bg-background flex flex-col h-full min-h-0 overflow-hidden w-full">
               <CardHeader className="pb-3 border-b border-border bg-muted/50 flex-shrink-0">
                 <CardTitle className="text-lg flex items-center gap-2">
                   <Icon name="scheduler-jobhistory.png" size={16} />
                   Job History & Audit Log
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-0 flex-1 flex flex-col min-h-0 overflow-hidden">
+              <CardContent className="p-0 flex-1 flex flex-col min-h-0 overflow-hidden w-full">
                 <Table
                   ref={historyTableRef}
-                  containerClassName="flex-1 overflow-auto relative"
-                  className="table-fixed min-w-full"
+                  containerClassName="flex-1 overflow-auto relative w-full border-0 rounded-none shadow-none"
+                  className="table-fixed min-w-full w-full"
                   style={{
                     minWidth: `${Object.values(historyColumnWidths).reduce((a, b) => a + b, 0)}px`,
                   }}
@@ -1984,8 +1995,8 @@ function ScheduleView({
                     )}
                   </TableBody>
                 </Table>
-                <div className="p-4 bg-muted/20 border-t border-border text-xs text-muted-foreground">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="py-2.5 px-4 bg-muted/20 border-t border-border text-xs text-muted-foreground">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     <div className="flex flex-col">
                       <span className="text-[10px] uppercase font-bold text-muted-foreground/60">
                         Generated

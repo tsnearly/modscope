@@ -1585,38 +1585,22 @@ describe('TrendingService Performance Tests', () => {
         30
       );
 
-      // Verify that globalAggregates is stored in trends:meta
-      const savedAggregatesStr =
-        (await mockRedis.hGet('trends:meta', 'globalAggregates')) ||
-        (await mockRedis.get('trends:testsub:global_aggregates'));
-      expect(savedAggregatesStr).toBeTruthy();
+      // Verify that word cloud is stored in standardized trends:ts:wordcloud ZSET
+      const wordCloudMembers = await mockRedis.zRange('trends:ts:wordcloud', 0, -1);
+      expect(wordCloudMembers.length).toBeGreaterThan(0);
+      const first = wordCloudMembers[0]!;
+      const firstEntry = JSON.parse(first.slice(first.indexOf(':') + 1));
+      expect(firstEntry).toBeDefined();
 
-      const savedAggregates = JSON.parse(savedAggregatesStr!);
-
-      // Word cloud logic verification
-      expect(savedAggregates.globalWordCloud).toHaveProperty('unique');
-      expect(savedAggregates.globalWordCloud).toHaveProperty('distinct');
-
-      // Best posting times should be aggregated across all posts
-      expect(Array.isArray(savedAggregates.globalBestPostingTimes)).toBe(true);
-      expect(savedAggregates.globalBestPostingTimes.length).toBeGreaterThan(0);
-
-      // Global stats computed
-      expect(savedAggregates.globalStats).toHaveProperty('posts_per_day');
-      expect(savedAggregates.globalStats).toHaveProperty('comments_per_day');
-      expect(savedAggregates.globalStats).toHaveProperty('avg_engagement');
-      expect(savedAggregates.globalStats).toHaveProperty('avg_score');
-
-      // Totals logic: avg score = sum of scores / total posts = (10+20+30) / 3 = 20
-      expect(savedAggregates.globalStats.avg_score).toBeCloseTo(20, 1);
+      // Verify trends:meta is NOT adulterated with static JSON blobs
+      const metaGlobalAggregates = await mockRedis.hGet('trends:meta', 'globalAggregates');
+      expect(metaGlobalAggregates).toBeNull();
     });
 
     it('should handle zero scans safely', async () => {
       await (service as any).materializeGlobalAggregates('testsub', [], 30);
-      const savedAggregatesStr =
-        (await mockRedis.hGet('trends:meta', 'globalAggregates')) ||
-        (await mockRedis.get('trends:testsub:global_aggregates'));
-      expect(savedAggregatesStr).toBeNull();
+      const wordCloudMembers = await mockRedis.zRange('trends:ts:wordcloud', 0, -1);
+      expect(wordCloudMembers).toEqual([]);
     });
   });
 });

@@ -508,8 +508,8 @@ function ModalBody({
 
       {/* Migration Controls & Settings Box */}
       {state.kind !== 'running' && state.kind !== 'blocked' && (
-        <div className="space-y-3 rounded-lg border border-slate-800 bg-slate-900/70 p-3 text-xs">
-          <div className="flex flex-wrap items-center justify-between gap-1 text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-800/80 pb-2">
+        <div className="space-y-2 rounded-lg border border-slate-800 bg-slate-900/70 p-3 text-xs">
+          <div className="flex flex-wrap items-center justify-between gap-1 text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-800/80 pb-1.5">
             <span>Upgrade Infrastructure Settings</span>
             <span className="font-mono text-sky-400 text-[11px]">
               Schema: {status?.schemaVersion?.currentVersion ?? 'v1'} →{' '}
@@ -517,86 +517,88 @@ function ModalBody({
             </span>
           </div>
 
-          {/* Interactive Dry-Run Switch */}
-          <div className="flex items-center justify-between bg-slate-950/80 p-2.5 rounded-md border border-slate-800/90 gap-3">
-            <div className="space-y-0.5 flex-1 min-w-0">
-              <div className="font-semibold text-slate-200 flex items-center gap-1.5">
-                <span>Dry-Run Switch</span>
-                {isDryRun ? (
-                  <span className="text-[10px] text-sky-400 font-mono font-normal">
-                    (Simulation Enabled)
-                  </span>
-                ) : (
-                  <span className="text-[10px] text-emerald-400 font-mono font-normal">
-                    (Live Mode)
-                  </span>
-                )}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+            {/* Interactive Dry-Run Switch */}
+            <div className="flex items-center justify-between bg-slate-950/80 px-2.5 py-1.5 rounded-md border border-slate-800/90 gap-2.5 flex-1 min-w-0">
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-slate-200 text-xs flex items-center gap-1.5 truncate">
+                  <span>Dry-Run Switch</span>
+                  {isDryRun ? (
+                    <span className="text-[10px] text-sky-400 font-mono font-normal">
+                      (Simulation)
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-emerald-400 font-mono font-normal">
+                      (Live Mode)
+                    </span>
+                  )}
+                </div>
+                <div className="text-[10px] text-slate-400 truncate">
+                  {isDryRun
+                    ? 'Simulate schema transformations safely.'
+                    : 'Execute and commit final schema version.'}
+                </div>
               </div>
-              <div className="text-[11px] text-slate-400 leading-tight">
-                {isDryRun
-                  ? 'Simulate schema patch transformations safely without writing changes to live Redis keys.'
-                  : 'Execute patch transformations and commit final schema version to live storage.'}
-              </div>
-            </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={isDryRun}
-              onClick={() => setIsDryRun(!isDryRun)}
-              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
-                isDryRun ? 'bg-sky-500' : 'bg-slate-700'
-              }`}
-            >
-              <span
-                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
-                  isDryRun ? 'translate-x-4' : 'translate-x-0'
+              <button
+                type="button"
+                role="switch"
+                aria-checked={isDryRun}
+                onClick={() => setIsDryRun(!isDryRun)}
+                className={`relative inline-flex h-4 w-8 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
+                  isDryRun ? 'bg-sky-500' : 'bg-slate-700'
                 }`}
-              />
-            </button>
-          </div>
+              >
+                <span
+                  className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                    isDryRun ? 'translate-x-4' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
 
-          {/* Action Buttons: Run Schema Upgrade + Reset Schema to v1 */}
-          <div className="flex flex-col gap-2">
-            <Button
-              variant="default"
-              className={`w-full text-xs font-semibold py-2 transition-all ${
-                isDryRun
-                  ? 'bg-sky-600 hover:bg-sky-500 text-white'
-                  : 'bg-primary hover:bg-primary/90 text-primary-foreground'
-              }`}
-              onClick={handleRunClick}
-              disabled={triggering || resetting}
-            >
-              {triggering
-                ? 'Initiating Upgrade...'
-                : isDryRun
-                  ? 'Run Schema Upgrade (Dry-Run Mode)'
-                  : 'Run Schema Upgrade (Live Mode)'}
-            </Button>
-
-            {onResetUpgrade && (
+            {/* Action Buttons: Run Schema Upgrade + Reset Schema to v1 */}
+            <div className="flex items-center gap-2 flex-shrink-0">
               <Button
-                variant="outline"
-                className="w-full text-xs font-semibold py-1.5 border-amber-600/60 text-amber-300 hover:bg-amber-950/40 hover:text-amber-200"
-                onClick={() => {
-                  if (resetting) return;
-                  setResetting(true);
-                  onResetUpgrade();
-                  setTimeout(() => setResetting(false), 2000);
-                }}
+                variant="default"
+                size="sm"
+                className={`text-xs font-semibold px-3 py-1.5 transition-all ${
+                  isDryRun
+                    ? 'bg-sky-600 hover:bg-sky-500 text-white'
+                    : 'bg-primary hover:bg-primary/90 text-primary-foreground'
+                }`}
+                onClick={handleRunClick}
                 disabled={triggering || resetting}
               >
-                {resetting
-                  ? 'Resetting Schema State...'
-                  : 'Reset Schema State to v1 (Dev Reset)'}
+                {triggering
+                  ? 'Initiating...'
+                  : isDryRun
+                    ? 'Run Upgrade (Dry-Run)'
+                    : 'Run Upgrade (Live)'}
               </Button>
-            )}
+
+              {onResetUpgrade && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs font-semibold px-3 py-1.5 border-amber-600/60 text-amber-300 hover:bg-amber-950/40 hover:text-amber-200"
+                  onClick={() => {
+                    if (resetting) return;
+                    setResetting(true);
+                    onResetUpgrade();
+                    setTimeout(() => setResetting(false), 2000);
+                  }}
+                  disabled={triggering || resetting}
+                >
+                  {resetting ? 'Resetting...' : 'Reset to v1'}
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       )}
 
       {/* Captured Schema Upgrade Log Explorer */}
-      <div className="space-y-2 pt-1">
+      <div className="space-y-1.5 pt-0.5">
         <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-400">
           <span>Captured Log Ledger ({patchesToDisplay.length})</span>
           <span className="text-[10px] text-slate-500 font-mono font-normal">
@@ -604,7 +606,7 @@ function ModalBody({
           </span>
         </div>
 
-        <div className="max-h-52 overflow-y-auto space-y-2 pr-1 text-xs">
+        <div className="space-y-2 text-xs">
           {patchesToDisplay.length === 0 ? (
             <div className="p-3 text-center text-xs text-slate-400 italic bg-slate-900/50 rounded border border-slate-800">
               No schema upgrade logs recorded yet. Storage is running baseline
@@ -624,16 +626,9 @@ function ModalBody({
                   key={patch.id}
                   className="rounded-lg border border-slate-800 bg-slate-900/60 p-2.5 space-y-2"
                 >
-                  {tsStr && (
-                    <div className="text-[10px] text-slate-400">
-                      Applied:{' '}
-                      <span className="font-mono text-slate-300">{tsStr}</span>
-                    </div>
-                  )}
-
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="font-semibold text-slate-100 truncate min-w-0">
-                      <span className="font-mono text-sky-400 text-[11px] truncate block">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="font-mono text-sky-400 font-bold text-xs truncate">
                         {patch.id}
                       </span>
                       <span className="text-[10px] text-slate-400 font-mono">
@@ -641,44 +636,49 @@ function ModalBody({
                       </span>
                     </div>
 
-                    {isCommitted ? (
-                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 whitespace-nowrap flex-shrink-0">
-                        ✓ Applied
-                      </span>
-                    ) : isFailed ? (
-                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-red-500/10 text-red-400 border border-red-500/30 whitespace-nowrap flex-shrink-0">
-                        ✗ Rolled Back
-                      </span>
-                    ) : isPatchDryRun ? (
-                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-sky-500/10 text-sky-300 border border-sky-500/30 whitespace-nowrap flex-shrink-0">
-                        Dry-Run Tested
-                      </span>
-                    ) : (
-                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-500/10 text-slate-400 border border-slate-500/30 whitespace-nowrap flex-shrink-0">
-                        Pending
-                      </span>
-                    )}
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {tsStr && (
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          {tsStr}
+                        </span>
+                      )}
+                      {isCommitted ? (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 whitespace-nowrap">
+                          ✓ Applied
+                        </span>
+                      ) : isFailed ? (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-red-500/10 text-red-400 border border-red-500/30 whitespace-nowrap">
+                          ✗ Rolled Back
+                        </span>
+                      ) : isPatchDryRun ? (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-sky-500/10 text-sky-300 border border-sky-500/30 whitespace-nowrap">
+                          Dry-Run Tested
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-500/10 text-slate-400 border border-slate-500/30 whitespace-nowrap">
+                          Pending
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   {p && (
-                    <div className="grid grid-cols-3 gap-1 pt-1 text-[10px] border-t border-slate-800/60">
+                    <div className="flex flex-wrap items-center gap-4 text-[10px] border-t border-slate-800/60 pt-1">
                       <div>
-                        <span className="text-slate-400 block">Snapshots:</span>
+                        <span className="text-slate-400 mr-1.5">Snapshots:</span>
                         <span className="font-mono font-semibold text-slate-200">
                           {p.scannedSnapshots ?? 0}
                           {p.totalSnapshots ? `/${p.totalSnapshots}` : ''}
                         </span>
                       </div>
                       <div>
-                        <span className="text-slate-400 block">Posts:</span>
+                        <span className="text-slate-400 mr-1.5">Posts:</span>
                         <span className="font-mono font-semibold text-slate-200">
                           {p.affectedPosts ?? 0}
                         </span>
                       </div>
                       <div>
-                        <span className="text-slate-400 block">
-                          Identities:
-                        </span>
+                        <span className="text-slate-400 mr-1.5">Identities:</span>
                         <span className="font-mono font-semibold text-slate-200">
                           {p.identityRecordsCreated ?? 0}
                         </span>
@@ -689,7 +689,7 @@ function ModalBody({
                   {(p?.logs && p.logs.length > 0) ||
                   p?.details ||
                   log?.error ? (
-                    <div className="text-[10px] font-mono text-slate-300 bg-slate-950 p-2 rounded border border-slate-800 break-words max-h-32 overflow-y-auto space-y-1">
+                    <div className="text-[10px] font-mono text-slate-300 bg-slate-950 p-2 rounded border border-slate-800 max-h-48 overflow-auto space-y-1">
                       {log?.error && (
                         <div className="text-red-400 font-semibold">
                           {log.error}
@@ -699,7 +699,7 @@ function ModalBody({
                         p.logs.map((line, lIdx) => (
                           <div
                             key={lIdx}
-                            className="text-slate-300 flex items-start gap-1"
+                            className="text-slate-300 flex items-start gap-1.5 whitespace-nowrap"
                           >
                             <span className="text-sky-500 font-bold flex-shrink-0">
                               &gt;
@@ -708,7 +708,7 @@ function ModalBody({
                           </div>
                         ))
                       ) : p?.details ? (
-                        <div className="text-slate-300 flex items-start gap-1">
+                        <div className="text-slate-300 flex items-start gap-1.5 whitespace-nowrap">
                           <span className="text-sky-500 font-bold flex-shrink-0">
                             &gt;
                           </span>
@@ -729,7 +729,7 @@ function ModalBody({
         <div className="pt-2 border-t border-slate-800 flex justify-end">
           <Button
             variant="default"
-            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs py-2 shadow-md"
+            className="w-full sm:w-auto px-5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs py-2 shadow-md"
             onClick={onClose}
           >
             Close &amp; Return to Dashboard
@@ -762,7 +762,7 @@ export function UpgradeStatusModal({
     if (!open) return null;
     return (
       <div className="fixed inset-0 z-[3000] flex items-center justify-center bg-slate-950/90 text-slate-50 p-3 sm:p-6 backdrop-blur-xs">
-        <div className="w-[94vw] max-w-lg space-y-4 rounded-xl border border-slate-800 bg-slate-900 p-4 sm:p-5 shadow-2xl max-h-[85vh] overflow-y-auto overflow-x-hidden">
+        <div className="w-[96vw] max-w-3xl space-y-3.5 rounded-xl border border-slate-800 bg-slate-900 p-4 sm:p-5 shadow-2xl max-h-[90vh] overflow-y-auto">
           <div className="border-b border-slate-800 pb-2.5 flex items-center justify-between">
             <h2 className="text-sm sm:text-base font-bold text-slate-50 tracking-tight">
               {state.title}
@@ -806,7 +806,7 @@ export function UpgradeStatusModal({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         hideClose={state.nonDismissible}
-        className="w-[94vw] max-w-lg border border-slate-800 bg-slate-950 text-slate-50 shadow-2xl p-4 sm:p-5 max-h-[85vh] overflow-y-auto overflow-x-hidden rounded-xl"
+        className="w-[96vw] max-w-3xl border border-slate-800 bg-slate-950 text-slate-50 shadow-2xl p-4 sm:p-5 max-h-[90vh] overflow-y-auto rounded-xl"
         onInteractOutside={(event) => {
           if (state.nonDismissible) {
             event.preventDefault();
@@ -818,7 +818,7 @@ export function UpgradeStatusModal({
           }
         }}
       >
-        <DialogHeader className="border-b border-slate-800 pb-2.5">
+        <DialogHeader className="border-b border-slate-800 pb-2 flex flex-row items-center justify-between">
           <DialogTitle className="text-sm sm:text-base font-bold text-slate-50 tracking-tight">
             {state.title}
           </DialogTitle>

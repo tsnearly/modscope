@@ -168,6 +168,11 @@ export async function writeTsZSet(
       key: string,
       entry: { score: number; member: string }
     ) => Promise<unknown>;
+    zRemRangeByScore?: (
+      key: string,
+      min: number,
+      max: number
+    ) => Promise<unknown>;
   },
   key: string,
   data: Array<{ timestamp: number; value: number | string }>,
@@ -178,6 +183,9 @@ export async function writeTsZSet(
   for (let i = 0; i < data.length; i += chunkSize) {
     const chunk = data.slice(i, i + chunkSize);
     for (const point of chunk) {
+      if (typeof redis.zRemRangeByScore === 'function') {
+        await redis.zRemRangeByScore(key, point.timestamp, point.timestamp).catch(() => {});
+      }
       await redis.zAdd(key, {
         score: point.timestamp,
         member: `${point.timestamp}:${point.value}`,

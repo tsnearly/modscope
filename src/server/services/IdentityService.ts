@@ -186,6 +186,31 @@ export class IdentityService {
     });
   }
 
+  async getPostInternalIdByFullname(
+    postFullname: string
+  ): Promise<string | null> {
+    const fn = postFullname.startsWith('t3_') ? postFullname : `t3_${postFullname}`;
+    const internalId = await this.redis.get(redisKey.postFullnameToInternalId(fn));
+    return internalId || null;
+  }
+
+  async getUserInternalIdByFullnameOrUsername(
+    candidate: string
+  ): Promise<string | null> {
+    const trimmed = (candidate || '').trim();
+    if (!trimmed) return null;
+    const userFullname = trimmed.startsWith('t2_') ? trimmed : `t2_${trimmed}`;
+    let userInternalId = await this.redis.get(
+      redisKey.userFullnameToInternalId(userFullname)
+    );
+    if (!userInternalId) {
+      userInternalId = await this.redis.get(
+        redisKey.usernameToInternalId(trimmed)
+      );
+    }
+    return userInternalId || null;
+  }
+
   async getUserIdentity(userInternalId: string): Promise<UserIdentity | null> {
     if (!userInternalId) return null;
     try {

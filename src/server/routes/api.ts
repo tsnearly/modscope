@@ -275,6 +275,23 @@ api.post('/upgrade/trigger', async (c) => {
   void (async () => {
     try {
       await runner.runPatch(patchToRun, { dryRun: isDryRun });
+      if (!isDryRun && patchToRun.id === 'storage_overhaul_v1_to_v2') {
+        try {
+          await scheduler.runJob({
+            name: 'rebuild-trend-history',
+            runAt: new Date(Date.now() + 1000),
+          });
+          logger.info(
+            'storage_overhaul_v1_to_v2: Scheduled rebuild-trend-history worker',
+            'ApiRoutes'
+          );
+        } catch (schedErr) {
+          logger.warn(
+            `storage_overhaul_v1_to_v2: Failed to auto-schedule rebuild-trend-history: ${schedErr}`,
+            'ApiRoutes'
+          );
+        }
+      }
     } catch (err) {
       logger.error('Error during patch execution:', err, 'ApiRoutes');
     } finally {
@@ -1838,33 +1855,15 @@ api.get('/trends', async (c) => {
       const asOfTs = parseInt(asOfParam, 10);
       if (Number.isFinite(asOfTs) && asOfTs > 0) {
         try {
-          const matches = await redis.zRange(
-            redisKey.trendsMaterializations(),
-            0,
-            asOfTs,
-            { by: 'score' }
-          );
-
-          if (matches.length > 0) {
-            const lastMatch = matches[matches.length - 1];
-            const memberTs =
-              typeof lastMatch === 'string'
-                ? lastMatch
-                : (lastMatch as { member: string }).member;
-            const stored = await redis.get(
-              redisKey.trendsMaterialized(parseInt(memberTs, 10)
-              )
-            );
-            if (stored) {
-              const parsed = JSON.parse(stored);
-              return c.json({
-                ...parsed,
-                customEmojis: {
-                  ...customEmojis,
-                  ...(parsed.customEmojis || {}),
-                },
-              });
-            }
+          const trendsAsOf = await trendDataService.getTrendData(DATA_SUBREDDIT, asOfTs);
+          if (trendsAsOf) {
+            return c.json({
+              ...trendsAsOf,
+              customEmojis: {
+                ...customEmojis,
+                ...((trendsAsOf as any)?.customEmojis || {}),
+              },
+            });
           }
         } catch (asOfErr) {
           logger.warn(
@@ -2566,13 +2565,18 @@ async function discoverAllRedisKeys(currentSubreddit?: string): Promise<string[]
     'system:patchLog:storage_overhaul_v1_to_v2',
     redisKey.countKey(),
     redisKey.trendsStatic(),
-    redisKey.trendsTs('subscriber_growth'),
-    redisKey.trendsTs('engagement_avg'),
-    redisKey.trendsTs('engagement_velocity'),
-    redisKey.trendsTs('engagement_anomalies'),
-    redisKey.trendsTs('content_mix'),
-    redisKey.trendsTs('posting_heatmap'),
-    redisKey.trendsTs('best_posting_times'),
+    // Live v2 trend time-series keys written by TrendingService
+    redisKey.trendsTsSubscribers(),
+    redisKey.trendsTsEngagement(),
+    redisKey.trendsTsVelocity(),
+    redisKey.trendsTsPosts(),
+    redisKey.trendsTsComments(),
+    redisKey.trendsTsScore(),
+    redisKey.trendsTsFlair(),
+    redisKey.trendsTsHeatmap(),
+    redisKey.trendsTsBesttimes(),
+    redisKey.trendsTsWordcloud(),
+    redisKey.trendsTsMaterializations(),
     redisKey.trendsMaterializations(),
     // Flair
     redisKey.flairTable(),
