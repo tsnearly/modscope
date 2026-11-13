@@ -35,7 +35,8 @@ export class MetricSnapshotService {
     publishedBy: string,
     source: 'scheduled' | 'manual',
     trendingService?: TrendingService,
-    asOf?: number
+    asOf?: number,
+    displayConfig?: MetricPostConfig
   ): Promise<MetricSnapshot> {
     const metricId = uuidv4();
     const resolvedAsOf =
@@ -81,7 +82,7 @@ export class MetricSnapshotService {
       status: 'pending',
       publishedBy,
       source,
-      config,
+      config: displayConfig || config,
       data,
       snapshotId: snapshot?.meta?.scanId ?? 0,
       snapshotDate: snapshot?.meta?.scanDate ?? new Date(score).toISOString(),

@@ -131,7 +131,8 @@ export class MetricPostPublisher {
         publishedBy,
         source,
         this.trendingService,
-        asOf
+        asOf,
+        config
       );
       metricId = metricSnap.metricId;
     } catch (err) {

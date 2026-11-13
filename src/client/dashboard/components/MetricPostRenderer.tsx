@@ -226,21 +226,27 @@ export class MetricPostRenderer {
   public getPostsForPeriod(period: PeriodKey): PostData[] {
     const allPosts = this.snapshot.analysisPool || [];
     if (!allPosts.length) return [];
-    const now = Date.now();
+    const scanDateMs = new Date(
+      (this.snapshot?.meta as any)?.scan_date ??
+        this.snapshot?.meta?.scanDate ??
+        ''
+    ).getTime();
+    const anchorTime =
+      Number.isFinite(scanDateMs) && scanDateMs > 0 ? scanDateMs : Date.now();
     const daysMap: Record<PeriodKey, number> = {
       today: 1,
       this_week: 7,
       this_month: 30,
       this_quarter: 90,
     };
-    const cutoff = now - daysMap[period] * 24 * 60 * 60 * 1000;
+    const cutoff = anchorTime - daysMap[period] * 24 * 60 * 60 * 1000;
 
     return allPosts.filter((post) => {
       const createdMs =
         post.created_utc < 10000000000
           ? post.created_utc * 1000
           : post.created_utc;
-      return createdMs >= cutoff;
+      return createdMs >= cutoff && createdMs <= anchorTime;
     });
   }
 
@@ -1189,41 +1195,8 @@ export const MetricPostWidget: React.FC<MetricPostWidgetProps> = ({
     if (context === 'METRIC_POST' && metricSnap?.data) {
       const snapData = metricSnap.data;
       switch (activeSection.sectionId) {
-        case 'TOP_CONTRIBUTORS':
-          if (snapData.topContributors) {
-            return renderer.renderTopContributors(
-              activeSection as UserListSectionConfig,
-              selectedPeriod,
-              snapData.topContributors
-            );
-          }
-          break;
-        case 'TOP_INFLUENCERS':
-          if (snapData.topInfluencers) {
-            return renderer.renderTopInfluencers(
-              activeSection as UserListSectionConfig,
-              selectedPeriod,
-              snapData.topInfluencers
-            );
-          }
-          break;
         case 'MEMBER_GROWTH':
-          if (snapData.memberGrowth) {
-            const mg = snapData.memberGrowth;
-            const sign = mg.total >= 0 ? '+' : '';
-            return (
-              <div className="flex flex-col items-center justify-center py-6 text-center">
-                <div className="text-4xl font-extrabold text-[var(--color-text,#1a1a1b)] tracking-tight">
-                  {sign}
-                  {mg.total.toLocaleString()}
-                </div>
-                <div className="text-sm font-semibold text-[var(--color-text-muted,#878a8c)] mt-1.5">
-                  new members · {mg.periodLabel || 'period'}
-                </div>
-              </div>
-            );
-          }
-          break;
+          return renderer.renderMemberGrowth(selectedPeriod);
         case 'PROJECTED_GROWTH': {
           const gb = snapData.growthBundle;
           if (!gb) {
@@ -1253,35 +1226,9 @@ export const MetricPostWidget: React.FC<MetricPostWidgetProps> = ({
           );
         }
         case 'POST_ACTIVITY':
-          if (snapData.postActivity) {
-            const pa = snapData.postActivity;
-            return (
-              <div className="flex flex-col items-center justify-center py-6 text-center">
-                <div className="text-4xl font-extrabold text-[var(--color-text,#1a1a1b)] tracking-tight">
-                  +{pa.total.toLocaleString()}
-                </div>
-                <div className="text-sm font-semibold text-[var(--color-text-muted,#878a8c)] mt-1.5">
-                  posts made · {pa.periodLabel || 'period'}
-                </div>
-              </div>
-            );
-          }
-          break;
+          return renderer.renderPostActivity(selectedPeriod);
         case 'COMMENT_ACTIVITY':
-          if (snapData.commentActivity) {
-            const ca = snapData.commentActivity;
-            return (
-              <div className="flex flex-col items-center justify-center py-6 text-center">
-                <div className="text-4xl font-extrabold text-[var(--color-text,#1a1a1b)] tracking-tight">
-                  +{ca.total.toLocaleString()}
-                </div>
-                <div className="text-sm font-semibold text-[var(--color-text-muted,#878a8c)] mt-1.5">
-                  comments made · {ca.periodLabel || 'period'}
-                </div>
-              </div>
-            );
-          }
-          break;
+          return renderer.renderCommentActivity(selectedPeriod);
         case 'POSTS_BY_FLAIR':
           if (snapData.flairBreakdown) {
             const rows = snapData.flairBreakdown;
@@ -1427,8 +1374,8 @@ export const MetricPostWidget: React.FC<MetricPostWidgetProps> = ({
       className="metric-post-theme-root w-full bg-[var(--color-surface,#ffffff)] text-[var(--color-text,#1a1a1b)] rounded-2xl border border-[var(--color-border,#ccc5bb)] shadow-md overflow-hidden font-sans transition-colors"
     >
       {/* ── 1. Top Banner Header (always renders) ── */}
-      <div className="bg-[var(--tab-active-bg,#1a1a1b)] text-[var(--tab-active-text,#ffffff)] px-5 py-3.5 flex items-center gap-3.5 border-b border-[var(--tab-border,#333336)]">
-        <div className="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center bg-white/10 p-1">
+      <div className="bg-[var(--tab-active-bg,#1a1a1b)] text-[var(--tab-active-text,#ffffff)] px-4 py-2.5 flex items-center gap-3 border-b border-[var(--tab-border,#333336)]">
+        <div className="w-7 h-7 rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center bg-white/10 p-1">
           <img
             src={
               getIconPath('app-icon.png') ||
@@ -1449,9 +1396,9 @@ export const MetricPostWidget: React.FC<MetricPostWidgetProps> = ({
       </div>
 
       {/* ── 2. Card Body Container ── */}
-      <div className="p-5 sm:p-6 space-y-4">
+      <div className="p-3.5 sm:p-4 space-y-3">
         {/* Section Header Row */}
-        <div className="flex items-center justify-between gap-2 border-b border-[var(--color-border,#ccc5bb)] pb-3">
+        <div className="flex items-center justify-between gap-2 border-b border-[var(--color-border,#ccc5bb)] pb-2.5">
           {/* Title or Dropdown */}
           <div className="min-w-0">
             {enabledSections.length <= 1 ? (
@@ -1499,19 +1446,79 @@ export const MetricPostWidget: React.FC<MetricPostWidgetProps> = ({
             )}
           </div>
 
-          {/* Period Selector (Upper Right) */}
+          {/* Period / Zoom Selector (Upper Right) */}
           <div className="flex-shrink-0">
             <div className="relative inline-flex items-center">
-              <select
-                value={selectedPeriod}
-                onChange={(e) => setSelectedPeriod(e.target.value as PeriodKey)}
-                className="h-8 appearance-none text-xs font-semibold text-[var(--color-text,#1a1a1b)] bg-[var(--color-surface,#ffffff)] hover:bg-[var(--color-bg,#dae0e6)] border border-[var(--color-border,#ccc5bb)] rounded-lg pl-2.5 pr-7 cursor-pointer focus:outline-none focus:ring-1 focus:ring-[var(--color-primary,#ff4650)] transition-colors shadow-xs"
-              >
-                <option value="today">Today</option>
-                <option value="this_week">This week</option>
-                <option value="this_month">This month</option>
-                <option value="this_quarter">This quarter</option>
-              </select>
+              {activeSection?.sectionId === 'PROJECTED_GROWTH' ? (
+                <select
+                  value={
+                    selectedWindow ||
+                    (selectedPeriod === 'today'
+                      ? 'today'
+                      : selectedPeriod === 'this_week'
+                        ? 'week'
+                        : selectedPeriod === 'this_month'
+                          ? 'month'
+                          : 'quarter')
+                  }
+                  onChange={(e) => {
+                    const win = e.target.value as 'today' | 'week' | 'month' | 'quarter';
+                    setSelectedWindow(win);
+                    const periodMap: Record<string, PeriodKey> = {
+                      today: 'today',
+                      week: 'this_week',
+                      month: 'this_month',
+                      quarter: 'this_quarter',
+                    };
+                    if (periodMap[win]) {
+                      setSelectedPeriod(periodMap[win]!);
+                    }
+                  }}
+                  className="h-8 appearance-none text-xs font-semibold text-[var(--color-text,#1a1a1b)] bg-[var(--color-surface,#ffffff)] hover:bg-[var(--color-bg,#dae0e6)] border border-[var(--color-border,#ccc5bb)] rounded-lg pl-2.5 pr-7 cursor-pointer focus:outline-none focus:ring-1 focus:ring-[var(--color-primary,#ff4650)] transition-colors shadow-xs"
+                >
+                  {(['today', 'week', 'month', 'quarter'] as const).map((w) => {
+                    const hasData = growthBundle?.[w]?.hasData ?? false;
+                    const labels: Record<string, string> = {
+                      today: 'Today (1d)',
+                      week: 'This week (7d)',
+                      month: 'This month (30d)',
+                      quarter: 'This quarter (90d)',
+                    };
+                    return (
+                      <option
+                        key={w}
+                        value={w}
+                        disabled={!hasData && availableWindows.length > 0}
+                      >
+                        {labels[w] || w} {!hasData && availableWindows.length > 0 ? ' (no data)' : ''}
+                      </option>
+                    );
+                  })}
+                </select>
+              ) : (
+                <select
+                  value={selectedPeriod}
+                  onChange={(e) => {
+                    const next = e.target.value as PeriodKey;
+                    setSelectedPeriod(next);
+                    const winMap: Record<PeriodKey, 'today' | 'week' | 'month' | 'quarter'> = {
+                      today: 'today',
+                      this_week: 'week',
+                      this_month: 'month',
+                      this_quarter: 'quarter',
+                    };
+                    if (winMap[next] && (!availableWindows.length || availableWindows.includes(winMap[next]))) {
+                      setSelectedWindow(winMap[next]);
+                    }
+                  }}
+                  className="h-8 appearance-none text-xs font-semibold text-[var(--color-text,#1a1a1b)] bg-[var(--color-surface,#ffffff)] hover:bg-[var(--color-bg,#dae0e6)] border border-[var(--color-border,#ccc5bb)] rounded-lg pl-2.5 pr-7 cursor-pointer focus:outline-none focus:ring-1 focus:ring-[var(--color-primary,#ff4650)] transition-colors shadow-xs"
+                >
+                  <option value="today">Today</option>
+                  <option value="this_week">This week</option>
+                  <option value="this_month">This month</option>
+                  <option value="this_quarter">This quarter</option>
+                </select>
+              )}
               <svg
                 className="w-3.5 h-3.5 text-[var(--color-text-muted,#878a8c)] absolute right-2 pointer-events-none"
                 fill="none"
@@ -1530,12 +1537,12 @@ export const MetricPostWidget: React.FC<MetricPostWidgetProps> = ({
         </div>
 
         {/* Dynamic Section Content */}
-        <div className="min-h-[140px] flex flex-col justify-center py-2">
+        <div className="min-h-[100px] flex flex-col justify-center py-1">
           {renderSectionContent()}
         </div>
 
         {/* ── 3. Footer (always renders) ── */}
-        <div className="flex items-center justify-between pt-3.5 border-t border-[var(--color-border,#ccc5bb)] text-xs font-semibold text-[var(--color-text,#1a1a1b)] min-h-[40px]">
+        <div className="flex items-center justify-between pt-2.5 border-t border-[var(--color-border,#ccc5bb)] text-xs font-semibold text-[var(--color-text,#1a1a1b)] min-h-[36px]">
           <span className="text-[var(--color-text-muted,#878a8c)] font-medium whitespace-nowrap">
             Powered by{' '}
             <button

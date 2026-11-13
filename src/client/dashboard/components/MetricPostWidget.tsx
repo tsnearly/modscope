@@ -109,7 +109,7 @@ export function MetricPostWidget() {
   return (
     <div
       data-theme={effectiveTheme}
-      className="min-h-full w-full p-4 sm:p-6 flex flex-col justify-start items-center bg-[var(--color-bg,#dae0e6)] font-sans transition-colors"
+      className="min-h-full w-full p-2 sm:p-3 flex flex-col justify-start items-center bg-[var(--color-bg,#dae0e6)] font-sans transition-colors"
     >
       <div className="w-full max-w-lg">
         <RendererWidget

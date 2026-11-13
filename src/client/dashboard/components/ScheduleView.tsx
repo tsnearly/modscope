@@ -312,6 +312,9 @@ function ScheduleView({
   const activeTab =
     controlledActiveTab !== undefined ? controlledActiveTab : internalActiveTab;
   const handleTabChange = (tab: ScheduleTab) => {
+    if (tab === 'jobs') {
+      setEditingJobId(null);
+    }
     if (onControlledTabChange) {
       onControlledTabChange(tab);
     } else {
@@ -1110,8 +1113,11 @@ function ScheduleView({
   // Sync initial snapshot worker job into the configuration tab if not actively editing another job
   useEffect(() => {
     if (activeTab === 'config' && initialSnapshotJob) {
-      if (!editingJobId || editingJobId === initialSnapshotJob.id) {
-        handleEditJob(initialSnapshotJob);
+      if (!editingJobId) {
+        // Pre-populate configuration fields without putting jobs tab in inline-edit mode
+        setName(initialSnapshotJob.config?.name || initialSnapshotJob.name || 'Snapshot Job');
+        setWorkerType(resolveJobWorkerType(initialSnapshotJob));
+        setEditingJobId(null);
       }
     }
   }, [activeTab, initialSnapshotJob]);
@@ -1715,26 +1721,26 @@ function ScheduleView({
                           : 'hover:border-border/80'
                       )}
                     >
-                      <CardHeader className="p-4 border-b border-border bg-muted/10">
-                        <div className="flex items-center gap-5">
+                      <CardHeader className="p-2.5 sm:p-4 border-b border-border bg-muted/10">
+                        <div className="flex items-center gap-2.5 sm:gap-5">
                           <div className="flex-shrink-0 flex items-center justify-center">
-                            <Icon name={typeMeta.icon} size={64} />
+                            <Icon name={typeMeta.icon} className="w-9 h-9 sm:w-14 sm:h-14" size={36} />
                           </div>
                           
                           <div className="flex flex-col min-w-0 flex-1 justify-center">
-                            <span className="text-xl font-bold text-foreground truncate">
+                            <span className="text-sm sm:text-lg font-bold text-foreground truncate leading-snug">
                               {typeMeta.label}
                             </span>
-                            <span className="text-sm text-muted-foreground mt-1 truncate">
+                            <span className="text-xs sm:text-sm text-muted-foreground mt-0.5 truncate">
                               {scheduleDesc}
                             </span>
                           </div>
 
-                          <div className="flex flex-col items-stretch gap-1.5 flex-shrink-0 w-28">
+                          <div className="flex flex-col items-stretch gap-1 sm:gap-1.5 flex-shrink-0 w-20 sm:w-28">
                             <Button
                               variant="outline"
                               size="sm"
-                              className="text-xs h-7 text-primary hover:bg-primary/10 w-full justify-start"
+                              className="text-[11px] sm:text-xs h-6 sm:h-7 px-2 text-primary hover:bg-primary/10 w-full justify-start"
                               onClick={() => handleRunJob(job)}
                               disabled={runningJobId === job.id}
                               loading={runningJobId === job.id}
@@ -1747,7 +1753,7 @@ function ScheduleView({
                               variant={isEditing ? 'default' : 'outline'}
                               size="sm"
                               className={cn(
-                                'text-xs h-7 w-full justify-start',
+                                'text-[11px] sm:text-xs h-6 sm:h-7 px-2 w-full justify-start',
                                 !isEditing && 'text-primary hover:bg-primary/10'
                               )}
                               onClick={() => {

@@ -1412,7 +1412,7 @@ export const App = ({ startupModeHint = 'inline' }: AppProps) => {
     };
 
     return (
-      <div className="flex items-center justify-center min-h-full bg-white p-3 sm:p-4">
+      <div className="flex items-center justify-center min-h-full bg-white p-1.5 sm:p-2">
         <div className="w-full max-w-lg">
           <MetricPostWidget
             context="METRIC_POST"
